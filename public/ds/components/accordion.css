@@ -1,0 +1,50 @@
+/* =========================================================================
+   ACCORDION — .pds-accordion
+   Native <details>/<summary>. 1px grey-200 bottom border per item.
+   Header is Figtree 600. Chevron rotates 180° on open.
+   For exclusive (radio) behavior, give every <details> the same name="x".
+   .card-accordion modifier wraps the list in a 16px-radius surface card.
+   ========================================================================= */
+
+.pds-accordion { box-sizing: border-box; width: 100%; max-width: 560px; }
+.pds-accordion details          { border-bottom: 1px solid var(--grey-200); }
+.pds-accordion details > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex; gap: 8px;
+  padding: 16px 8px 16px 0;
+  align-items: center;
+}
+.pds-accordion summary::-webkit-details-marker { display: none; }
+.pds-accordion summary > .text {
+  flex: 1;
+  font-weight: 600; font-size: 16px; line-height: 24px;
+  color: var(--fg-1);
+}
+.pds-accordion summary > .chev {
+  width: 20px; height: 20px; flex: none;
+  transition: transform 200ms var(--ease-out);
+  transform: rotate(0deg);
+  user-select: none;
+  color: var(--fg-1);
+}
+.pds-accordion details[open] summary > .chev { transform: rotate(180deg); }
+.pds-accordion summary:focus-visible {
+  outline: 2px solid var(--grey-900); outline-offset: 2px; border-radius: 4px;
+}
+.pds-accordion .content {
+  padding: 0 8px 16px 0;
+  font-size: 14px; line-height: 20px; color: var(--fg-1);
+}
+.pds-accordion .content p           { margin: 0 0 10px; }
+.pds-accordion .content p:last-child { margin-bottom: 0; }
+
+/* Card-style accordion variant */
+.card-accordion {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: 16px;
+  padding: 0 16px;
+  max-width: 560px;
+}
+.card-accordion details:last-child { border-bottom: 0; }

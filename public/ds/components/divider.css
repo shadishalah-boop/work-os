@@ -1,0 +1,20 @@
+/* =========================================================================
+   DIVIDER — .pds-divider
+   1px subtle line. Use --strong for grey-200, --ink for grey-900.
+   Vertical via --vertical (paired with explicit height in context).
+   ========================================================================= */
+
+.pds-divider {
+  border: 0;
+  height: 1px;
+  background: var(--border-subtle);
+  width: 100%;
+  margin: 0;
+}
+.pds-divider--strong { background: var(--border-default); }
+.pds-divider--ink    { background: var(--grey-900); }
+.pds-divider--vertical {
+  width: 1px;
+  height: 100%;
+  display: inline-block;
+}

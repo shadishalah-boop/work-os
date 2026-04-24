@@ -1,0 +1,12 @@
+# Private dashboard exclusion list — NOT exported in plugin bundles.
+# Copy this file to ~/.claude/dashboard-filters.local and add patterns you want
+# stripped from the dashboard (matched case-insensitively against sender, subject,
+# title, and meta fields in gmail/slack/granola agent output).
+#
+# One pattern per line. Lines starting with `#` are comments. Blank lines ignored.
+#
+# Examples:
+#   some-company
+#   personal-project-name
+#   some.person@example.com
+

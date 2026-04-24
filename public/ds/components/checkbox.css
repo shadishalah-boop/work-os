@@ -1,0 +1,38 @@
+/* =========================================================================
+   CHECKBOX — .pds-cb
+   20×20, 2px border, 4px radius. Black fill when checked / indeterminate.
+   Wrap a real <input type="checkbox"> with two SVG glyphs (.check / .dash)
+   inside .pds-cb. Use input.indeterminate = true via JS for tri-state.
+   ========================================================================= */
+
+.pds-cb {
+  box-sizing: border-box;
+  width: 20px; height: 20px; min-width: 20px; min-height: 20px;
+  background-color: var(--grey-0);
+  border: 2px solid var(--grey-300);
+  border-radius: 4px;
+  display: inline-flex; align-items: center; justify-content: center;
+  position: relative;
+  transition: background-color 140ms var(--ease-out),
+              border-color 140ms var(--ease-out);
+}
+.pds-cb input {
+  cursor: pointer; opacity: 0; margin: 0;
+  position: absolute; inset: 0;
+}
+.pds-cb svg { display: none; pointer-events: none; }
+.pds-cb:has(input:checked)        { background-color: var(--grey-900); border-color: var(--grey-900); }
+.pds-cb:has(input:checked) .check { display: block; }
+.pds-cb:has(input:indeterminate)        { background-color: var(--grey-900); border-color: var(--grey-900); }
+.pds-cb:has(input:indeterminate) .dash  { display: block; }
+.pds-cb:has(input[aria-invalid="true"]) { border-color: var(--red-500); }
+.pds-cb:has(input[aria-invalid="true"]:checked),
+.pds-cb:has(input[aria-invalid="true"]:indeterminate) { background-color: var(--red-600); border-color: var(--red-500); }
+.pds-cb:focus-within { outline: 2px solid var(--grey-900); outline-offset: 2px; }
+.pds-cb:has(input:disabled) {
+  background-color: var(--grey-50); border-color: var(--grey-200); cursor: not-allowed;
+}
+.pds-cb:has(input:disabled:checked),
+.pds-cb:has(input:disabled:indeterminate) { background-color: var(--grey-200); border-color: var(--grey-200); }
+.pds-cb:has(input:disabled:checked) .check,
+.pds-cb:has(input:disabled:indeterminate) .dash { fill: var(--grey-400); }

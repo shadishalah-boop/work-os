@@ -1,0 +1,32 @@
+/* =========================================================================
+   BUBBLE COUNTER — .bubble
+   Pill, caption-semibold. Sizes: small (16), medium (20), large (24).
+   Variants: dark (default, near-black bg) · light (grey-100 bg).
+   Use [data-multichar] to add horizontal padding for 2+ digit values.
+   Wrap in .bubble-overlay[data-cutout="true"] to overlay top-right of an icon
+   or avatar with a page-coloured cutout.
+   ========================================================================= */
+
+.bubble {
+  display: inline-flex; justify-content: center; align-items: center;
+  width: fit-content; border-radius: 999px; flex-shrink: 0;
+  font-family: var(--font-ui);
+  font-size: 12px; font-weight: 600; line-height: 1.2;
+  letter-spacing: 0.01em;
+}
+.bubble[data-size="small"]  { height: 16px; min-width: 16px; padding-inline: 0; }
+.bubble[data-size="medium"] { height: 20px; min-width: 20px; padding-inline: 0; font-size: 12px; }
+.bubble[data-size="large"]  { height: 24px; min-width: 24px; padding-inline: 0; font-size: 13px; }
+.bubble[data-multichar]                    { padding-inline: 6px; }
+.bubble[data-size="small"][data-multichar] { padding-inline: 4px; }
+.bubble[data-size="large"][data-multichar] { padding-inline: 8px; }
+.bubble[data-variant="dark"]  { background: var(--grey-900); color: var(--grey-0); }
+.bubble[data-variant="light"] { background: var(--grey-100); color: var(--fg-1); }
+
+.bubble-overlay { position: relative; isolation: isolate; width: fit-content; }
+.bubble-overlay > .bubble {
+  position: absolute; top: 0; right: 0; z-index: 1;
+  translate: 50% -50%;
+  outline: 2px solid transparent;
+}
+.bubble-overlay[data-cutout="true"] > .bubble { outline-color: var(--bg-page); }

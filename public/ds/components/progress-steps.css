@@ -1,0 +1,27 @@
+/* =========================================================================
+   PROGRESS STEPS — .pds-steps
+   Discrete step pills. Each .step is 32×8 with 2px border. Mark completed
+   steps with data-active="true". Mark the current one with aria-current="step"
+   (and data-active="true").
+   ========================================================================= */
+
+.pds-steps { display: flex; gap: 4px; flex-wrap: wrap; }
+.pds-steps > .step {
+  position: relative; box-sizing: border-box;
+  width: 32px; height: 8px;
+  border: 2px solid var(--grey-900);
+  background: transparent;
+  overflow: hidden;
+}
+.pds-steps > .step:first-of-type { border-top-left-radius: 999px; border-bottom-left-radius: 999px; }
+.pds-steps > .step:last-of-type  { border-top-right-radius: 999px; border-bottom-right-radius: 999px; }
+.pds-steps > .step::after {
+  content: ''; position: absolute; inset: 0;
+  background: var(--grey-900);
+  transform-origin: left; transform: scaleX(0);
+}
+.pds-steps > .step[aria-current="step"]::after,
+.pds-steps > .step[aria-current="step"] + .step[data-active="false"]::after {
+  transition: transform 240ms var(--ease-out);
+}
+.pds-steps > .step[data-active="true"]::after { transform: scaleX(1); }

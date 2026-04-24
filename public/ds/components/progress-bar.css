@@ -1,0 +1,19 @@
+/* =========================================================================
+   PROGRESS BAR — .pds-bar
+   8px tall, 2px border, pill ends. Drive fill with --pct (0% – 100%).
+   ========================================================================= */
+
+.pds-bar {
+  --pct: 0%;
+  display: block; height: 8px; position: relative;
+  border: 2px solid var(--grey-900);
+  border-radius: 999px;
+  box-sizing: border-box;
+}
+.pds-bar::before {
+  content: ''; position: absolute; top: 0; left: 0;
+  height: 100%; width: var(--pct);
+  background-color: var(--grey-900);
+  transition: width 240ms var(--ease-out);
+  border-radius: inherit;
+}

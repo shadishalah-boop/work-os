@@ -1,0 +1,101 @@
+/* =========================================================================
+   BUTTON — .btn
+   Pill-square, 8px radius, 2px border, Figtree semibold.
+   Sizes: default (medium/large = 48px), --sm (32px), --xs (24px).
+   Variants: --primary (pink, default), --primary-b2b (blue),
+             --primary-tutor (teal), --secondary, --tertiary, --ghost,
+             --critical, --inverted, --link, --icon (icon-only).
+   ========================================================================= */
+
+.btn {
+  font-family: var(--font-ui);
+  font-weight: 600;
+  line-height: 24px;
+  border-radius: var(--btn-radius);
+  border: var(--btn-bw-2) solid transparent;
+  background: transparent;
+  color: var(--btn-text-default);
+  cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  transition: background-color 140ms var(--ease-out),
+              border-color 140ms var(--ease-out),
+              color 140ms var(--ease-out);
+  padding: 6px 20px;
+  min-height: 48px;        /* medium === large in Tokyo-UI */
+  font-size: 18px;
+  letter-spacing: 0.005em;
+}
+.btn--sm { min-height: 32px; font-size: 14px; line-height: 16px; padding: 6px 14px; letter-spacing: 0.0125em; }
+.btn--xs { min-height: 24px; font-size: 12px; line-height: 12px; padding: 4px 10px; letter-spacing: 0.015em; border-radius: 4px; }
+.btn:focus-visible { outline: var(--btn-bw-2) solid var(--btn-focus-ring); outline-offset: 2px; }
+
+/* PRIMARY (B2C pink) — default primary */
+.btn--primary        { background: var(--btn-bg-primary-rest); color: var(--btn-text-default); border-color: var(--btn-border-primary); }
+.btn--primary:hover  { background: var(--btn-bg-primary-hover); }
+.btn--primary:active { background: var(--btn-bg-primary-active); color: var(--btn-text-inverted); }
+
+/* PRIMARY (B2B blue) */
+.btn--primary-b2b        { background: var(--btn-bg-primary-b2b-rest); color: var(--btn-text-default); border-color: var(--btn-border-primary); }
+.btn--primary-b2b:hover  { background: var(--btn-bg-primary-b2b-hover); }
+.btn--primary-b2b:active { background: var(--btn-bg-primary-b2b-active); color: var(--btn-text-inverted); }
+
+/* PRIMARY (Tutor teal) */
+.btn--primary-tutor        { background: var(--btn-bg-primary-tutor-rest); color: var(--btn-text-default); border-color: var(--btn-border-primary); }
+.btn--primary-tutor:hover  { background: var(--btn-bg-primary-tutor-hover); }
+.btn--primary-tutor:active { background: var(--btn-bg-primary-tutor-active); color: var(--btn-text-inverted); }
+
+/* SECONDARY — grey-900 border, transparent fill */
+.btn--secondary        { background: transparent; color: var(--btn-text-default); border-color: var(--btn-border-secondary); }
+.btn--secondary:hover  { background: var(--btn-bg-secondary-hover); }
+.btn--secondary:active { background: var(--btn-bg-secondary-active); }
+
+/* TERTIARY — light border, hover deepens border */
+.btn--tertiary        { background: transparent; color: var(--btn-text-default); border-color: var(--btn-border-tertiary-rest); }
+.btn--tertiary:hover  { background: var(--btn-bg-tertiary-hover); border-color: var(--btn-border-tertiary-hover); }
+.btn--tertiary:active { background: var(--btn-bg-tertiary-active); border-color: var(--btn-border-tertiary-hover); }
+
+/* GHOST — no border */
+.btn--ghost        { background: transparent; color: var(--btn-text-default); border-color: transparent; }
+.btn--ghost:hover  { background: var(--btn-bg-ghost-hover); }
+.btn--ghost:active { background: var(--btn-bg-ghost-active); }
+
+/* CRITICAL */
+.btn--critical        { background: var(--btn-bg-critical-rest); color: var(--btn-text-inverted); border-color: var(--btn-border-critical); }
+.btn--critical:hover  { background: var(--btn-bg-critical-hover); }
+.btn--critical:active { background: var(--btn-bg-critical-active); }
+
+/* INVERTED — for dark backgrounds */
+.btn--inverted        { background: transparent; color: var(--btn-text-inverted); border-color: var(--grey-0); }
+.btn--inverted:hover  { background: rgba(18,17,23,0.56); }
+.btn--inverted:active { background: var(--grey-800); }
+
+/* DISABLED — overrides any variant */
+.btn:disabled, .btn[aria-disabled="true"] {
+  background: var(--btn-bg-disabled) !important;
+  color: var(--btn-text-disabled) !important;
+  border-color: var(--btn-border-disabled) !important;
+  cursor: not-allowed;
+}
+
+/* LINK variant — inline, underlined, no padding */
+.btn--link {
+  background: transparent; border-color: transparent;
+  text-decoration: underline; text-underline-offset: 3px;
+  padding: 4px 6px; min-height: unset;
+  border-radius: 4px; color: var(--grey-900);
+  font-size: inherit; line-height: inherit;
+}
+.btn--link:hover { background: var(--btn-bg-ghost-hover); }
+.btn--link:active { background: var(--btn-bg-ghost-active); }
+
+/* ICON-ONLY — square, no horizontal padding */
+.btn--icon { padding: 0; width: 48px; min-height: 48px; flex-shrink: 0; }
+.btn--icon.btn--sm { width: 32px; min-height: 32px; }
+.btn--icon.btn--xs { width: 24px; min-height: 24px; }
+.btn img, .btn svg { width: 20px; height: 20px; flex-shrink: 0; }
+.btn--sm img, .btn--sm svg { width: 16px; height: 16px; }
+.btn--xs img, .btn--xs svg { width: 12px; height: 12px; }
+
+/* Invert icons on dark fill states */
+.btn--primary:active img, .btn--primary-b2b:active img, .btn--primary-tutor:active img,
+.btn--critical img, .btn--inverted img { filter: invert(1); }

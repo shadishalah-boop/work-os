@@ -1,0 +1,16 @@
+/* =========================================================================
+   COUNTRY FLAG — .pds-flag
+   4:3 image with 2px radius and 0.5px ink border. Sizes: sm (16), md (24), lg (32).
+   Source images from flagcdn.com (e.g. https://flagcdn.com/w40/es.png).
+   ========================================================================= */
+
+.pds-flag {
+  display: inline-block; vertical-align: middle;
+  border-radius: 2px;
+  border: 0.5px solid rgba(18,17,23,0.56);
+  object-fit: cover;
+  background: var(--grey-100);
+}
+.pds-flag.size-sm { width: 16px; height: 12px; }
+.pds-flag.size-md { width: 24px; height: 18px; }
+.pds-flag.size-lg { width: 32px; height: 24px; }

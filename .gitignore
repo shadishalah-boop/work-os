@@ -1,0 +1,32 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Node (if anyone ever adds a toolchain)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# User-local config — MUST never be committed
+# (these live in ~/.claude/ on the user's machine, but the filename pattern
+#  is reserved in case someone symlinks them into the repo)
+*.local
+dashboard-config.local
+dashboard-filters.local
+
+# Build artifacts (none yet — plugin ships pre-built)
+dist/
+build/
+
+# Claude Code session junk
+.claude/settings.local.json

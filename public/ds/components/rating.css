@@ -1,0 +1,56 @@
+/* =========================================================================
+   RATING — .pds-rating (display) / .pds-rating-input (interactive)
+   Two stacked layers: empty stars + clipped filled stars.
+   Drive percentage with --filled-pct (0–100%).
+   Sizes: --sm (24), --md (32), --lg (48). Default --lg.
+   See preview/components-rating.html for the JS that injects star SVGs.
+   ========================================================================= */
+
+.pds-rating {
+  --star-size: 48px;
+  --filled-pct: 0%;
+  position: relative; isolation: isolate; overflow: hidden;
+  width: calc(var(--star-size) * 5);
+  height: var(--star-size);
+  color: var(--grey-200);
+}
+.pds-rating--sm { --star-size: 24px; }
+.pds-rating--md { --star-size: 32px; }
+.pds-rating--lg { --star-size: 48px; }
+
+.pds-rating .layer { position: absolute; inset: 0; display: flex; pointer-events: none; }
+.pds-rating .layer svg {
+  min-width: var(--star-size); min-height: var(--star-size);
+  width: var(--star-size); height: var(--star-size);
+  fill: currentColor;
+}
+.pds-rating .empty  { z-index: 1; width: 100%; }
+.pds-rating .filled {
+  z-index: 2; overflow: hidden; flex-wrap: nowrap;
+  width: var(--filled-pct);
+  color: var(--grey-900);
+}
+
+.pds-rating-input {
+  --star-size: 32px;
+  --filled-pct: 0%;
+  position: relative; isolation: isolate;
+  width: calc(var(--star-size) * 5);
+  height: var(--star-size);
+  color: var(--grey-200);
+  border-radius: 12px;
+  cursor: pointer;
+}
+.pds-rating-input .layer { position: absolute; inset: 0; display: flex; pointer-events: none; }
+.pds-rating-input .layer svg { width: var(--star-size); height: var(--star-size); fill: currentColor; }
+.pds-rating-input .empty  { z-index: 1; width: 100%; }
+.pds-rating-input .filled { z-index: 2; overflow: hidden; flex-wrap: nowrap; width: var(--filled-pct); color: var(--grey-900); }
+.pds-rating-input:hover .filled { color: var(--grey-600); }
+.pds-rating-input.has-error .filled { color: var(--red-500); }
+.pds-rating-input input[type=range] {
+  appearance: none; -webkit-appearance: none;
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  background: transparent; margin: 0; padding: 0;
+  z-index: 3; cursor: pointer; opacity: 0;
+}
+.pds-rating-input:focus-within { outline: 2px solid var(--grey-900); outline-offset: 2px; }

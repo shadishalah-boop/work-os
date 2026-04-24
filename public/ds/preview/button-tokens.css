@@ -1,0 +1,62 @@
+/* Button tokens, lifted from design-tokens.json.
+   Theme context: pink.400 = #FF7AAC is the primary fill.
+   Primary buttons have a black (grey.900) 1px border, grey.900 active bg (flips dark on press).
+*/
+
+:root {
+  /* Radii */
+  --btn-radius: 8px;
+
+  /* Border widths */
+  --btn-bw-1: 1px;
+  --btn-bw-2: 2px;
+
+  /* PRIMARY — B2C (pink) */
+  --btn-bg-primary-rest:   var(--pink-400);   /* #FF7AAC */
+  --btn-bg-primary-hover:  var(--pink-300);   /* #FE9FC3 */
+  --btn-bg-primary-active: var(--grey-900);   /* #121117 */
+  --btn-border-primary:    var(--grey-900);
+
+  /* PRIMARY — B2B (blue) */
+  --btn-bg-primary-b2b-rest:   var(--blue-400);
+  --btn-bg-primary-b2b-hover:  var(--blue-300);
+  --btn-bg-primary-b2b-active: var(--grey-900);
+
+  /* PRIMARY — Tutor (teal) */
+  --btn-bg-primary-tutor-rest:   var(--teal-400);
+  --btn-bg-primary-tutor-hover:  var(--teal-300);
+  --btn-bg-primary-tutor-active: var(--grey-900);
+
+  /* SECONDARY — transparent w/ grey-900 border, hover tint */
+  --btn-border-secondary:  var(--grey-900);
+  --btn-bg-secondary-hover:  rgba(0, 0, 82, 0.06);
+  --btn-bg-secondary-active: rgba(0, 0, 82, 0.12);
+
+  /* TERTIARY — light border, hover tint */
+  --btn-border-tertiary-rest:   var(--grey-200);
+  --btn-border-tertiary-hover:  var(--grey-300);
+  --btn-bg-tertiary-hover:      rgba(0, 0, 82, 0.06);
+  --btn-bg-tertiary-active:     rgba(0, 0, 82, 0.12);
+
+  /* GHOST — no border, hover tint only */
+  --btn-bg-ghost-hover:  rgba(0, 0, 82, 0.06);
+  --btn-bg-ghost-active: rgba(0, 0, 82, 0.12);
+
+  /* CRITICAL */
+  --btn-bg-critical-rest:   var(--red-500);
+  --btn-bg-critical-hover:  var(--red-600);
+  --btn-bg-critical-active: var(--red-700);
+  --btn-border-critical:    var(--red-800);
+
+  /* DISABLED */
+  --btn-bg-disabled:     var(--grey-200);
+  --btn-border-disabled: var(--grey-400);
+  --btn-text-disabled:   var(--grey-500);
+
+  /* TEXT */
+  --btn-text-default:  var(--grey-900);
+  --btn-text-inverted: var(--grey-0);
+
+  /* FOCUS ring — blue.500 */
+  --btn-focus-ring: var(--blue-500);
+}

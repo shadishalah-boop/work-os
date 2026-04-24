@@ -1,0 +1,54 @@
+/* =========================================================================
+   CHIP — .chip
+   Interactive filter / selection / dismissible tag. 2px border, 8px radius.
+   States: rest · hover · selected (aria-selected="true") · disabled.
+   Variants: data-variant="dismissible" for applied-filter pills with X.
+   For non-interactive labels use Badge instead.
+   ========================================================================= */
+
+.chips-list {
+  all: unset; list-style: none;
+  display: flex; gap: 12px; flex-wrap: wrap;
+}
+
+.chip {
+  --rest-bg: var(--grey-0);
+  --hover-bg: var(--grey-50);
+  --active-bg: var(--grey-100);
+  --border-color: var(--grey-200);
+
+  display: inline-flex; align-items: center; gap: 4px;
+  font-family: var(--font-ui);
+  font-size: 14px; font-weight: 600; line-height: 1.2;
+  color: var(--fg-1);
+  background: var(--rest-bg);
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: border-color 120ms var(--ease-out),
+              background-color 120ms var(--ease-out);
+}
+.chip:hover  { background: var(--hover-bg); }
+.chip:active { background: var(--active-bg); }
+.chip:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
+
+.chip[aria-selected="true"],
+.chip[data-variant="dismissible"] {
+  background: rgba(18, 17, 23, 0.06);
+  color: var(--fg-1);
+  border-color: var(--grey-900);
+}
+.chip[aria-selected="true"] .chip-icon,
+.chip[data-variant="dismissible"] .chip-dismiss { color: var(--grey-900); }
+
+.chip[disabled] {
+  --rest-bg: var(--grey-50);
+  color: var(--fg-disabled);
+  border-color: var(--grey-200);
+  cursor: not-allowed;
+}
+
+.chip .chip-label { padding-inline: 4px; display: inline-flex; align-items: center; gap: 6px; }
+.chip .chip-icon  { width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; color: var(--grey-900); }
+.chip .chip-dismiss { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; margin-left: 2px; color: var(--grey-900); }

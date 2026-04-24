@@ -1,0 +1,104 @@
+/* =========================================================================
+   SLIDER — .pds-slider (single thumb) / .pds-range (two thumbs)
+   4px track, 32×32 thumb (2px border, 8px radius). Drive with CSS vars:
+     .pds-slider: --val, --min, --max  (the input mirrors these)
+     .pds-range:  --lo, --hi          (percentages 0–100)
+   See preview/components-slider.html for full JS wiring.
+   ========================================================================= */
+
+.pds-slider {
+  --val: 50;
+  --min: 0;
+  --max: 100;
+  --pct: calc((var(--val) - var(--min)) / (var(--max) - var(--min)) * 100%);
+  --thumb: 32px;
+  --pad: calc(var(--thumb) / 2);
+  height: 32px; position: relative; display: flex; align-items: center;
+  width: 100%; user-select: none; touch-action: none; cursor: grab;
+  padding: 0 var(--pad);
+  box-sizing: border-box;
+}
+.pds-slider .track {
+  background: var(--grey-200);
+  position: relative; flex-grow: 1; height: 4px; border-radius: 2px;
+}
+.pds-slider .range {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  background: var(--grey-900); border-radius: 2px;
+  width: var(--pct);
+}
+.pds-slider input[type=range] {
+  -webkit-appearance: none; appearance: none;
+  position: absolute; left: 0; right: 0; top: 0; bottom: 0;
+  width: 100%; height: 100%;
+  background: transparent; margin: 0;
+  padding: 0 var(--pad);
+  box-sizing: border-box;
+  cursor: inherit;
+}
+.pds-slider input[type=range]:focus { outline: none; }
+.pds-slider input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 32px; height: 32px;
+  background: var(--grey-0);
+  border: 2px solid var(--grey-900);
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(18,17,23,0.08);
+  cursor: grab;
+}
+.pds-slider input[type=range]:active::-webkit-slider-thumb { cursor: grabbing; }
+.pds-slider input[type=range]:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid var(--grey-900); outline-offset: 2px;
+}
+.pds-slider input[type=range]::-moz-range-thumb {
+  width: 32px; height: 32px;
+  background: var(--grey-0);
+  border: 2px solid var(--grey-900);
+  border-radius: 8px;
+  cursor: grab;
+}
+.pds-slider input[type=range]::-moz-range-track { background: transparent; }
+
+.pds-slider.is-disabled { cursor: not-allowed; }
+.pds-slider.is-disabled .range { background: var(--grey-300); }
+.pds-slider.is-disabled input[type=range]::-webkit-slider-thumb {
+  border-color: var(--grey-300); cursor: not-allowed; box-shadow: none;
+}
+
+/* Two-thumb range */
+.pds-range {
+  --thumb: 32px;
+  --pad: calc(var(--thumb) / 2);
+  position: relative; height: 32px; display: flex; align-items: center;
+  width: 100%; padding: 0 var(--pad); box-sizing: border-box;
+}
+.pds-range .track {
+  position: relative; flex-grow: 1; height: 4px;
+  background: var(--grey-200); border-radius: 2px;
+}
+.pds-range .range {
+  position: absolute; height: 4px; background: var(--grey-900); border-radius: 2px;
+  left: calc(var(--pad) + var(--lo) * (100% - 2 * var(--pad)) / 100);
+  width: calc((var(--hi) - var(--lo)) * (100% - 2 * var(--pad)) / 100);
+}
+.pds-range input[type=range] {
+  -webkit-appearance: none; appearance: none;
+  position: absolute; left: 0; right: 0; top: 0; bottom: 0;
+  width: 100%; height: 100%;
+  background: transparent; margin: 0;
+  padding: 0 var(--pad);
+  box-sizing: border-box;
+  pointer-events: none;
+}
+.pds-range input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 32px; height: 32px; background: var(--grey-0);
+  border: 2px solid var(--grey-900); border-radius: 8px;
+  pointer-events: auto; cursor: grab;
+  box-shadow: 0 1px 2px rgba(18,17,23,0.08);
+}
+.pds-range input[type=range]::-moz-range-thumb {
+  width: 32px; height: 32px; background: var(--grey-0);
+  border: 2px solid var(--grey-900); border-radius: 8px;
+  pointer-events: auto; cursor: grab;
+}

@@ -1,0 +1,36 @@
+/* =========================================================================
+   BADGE — .badge
+   Display-only label. NOT interactive — for interactive use Chip.
+   Sizes: small (20px), medium (24px), large (32px).
+   Types: neutral, positive, warning, info, critical, ai.
+   Radius: 4px (always).
+   ========================================================================= */
+
+.badge {
+  display: inline-flex; align-items: center;
+  border-radius: 4px;
+  padding-inline: 8px;
+  color: var(--fg-1);
+  max-width: max-content;
+  font-family: var(--font-ui);
+}
+.badge .badge-icon { display: inline-flex; flex-shrink: 0; }
+.badge .badge-label { padding: 8px; }
+
+/* Sizes */
+.badge[data-size="small"]  { min-height: 20px; padding-inline: 8px; }
+.badge[data-size="small"]  .badge-label { padding: 4px 2px; font-size: 12px; font-weight: 600; line-height: 1.2; }
+
+.badge[data-size="medium"] { min-height: 24px; padding-inline: 16px; }
+.badge[data-size="medium"] .badge-label { padding: 4px 2px; font-size: 13px; font-weight: 600; line-height: 1.2; }
+
+.badge[data-size="large"]  { min-height: 32px; padding-inline: 16px; }
+.badge[data-size="large"]  .badge-label { padding: 4px; font-size: 15px; font-weight: 600; line-height: 1.25; }
+
+/* Types — *Light backgrounds; text is always primary */
+.badge[data-type="neutral"]   { background: var(--bg-sunken); }
+.badge[data-type="positive"]  { background: var(--teal-100); }
+.badge[data-type="warning"]   { background: var(--yellow-100); }
+.badge[data-type="info"]      { background: var(--blue-100); }
+.badge[data-type="critical"]  { background: var(--red-100); }
+.badge[data-type="ai"]        { background: linear-gradient(92deg, #F0E5FF 0%, #FFE5F2 50%, #FFE9CC 100%); }

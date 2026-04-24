@@ -1,0 +1,76 @@
+{
+  "_README": [
+    "COPY this file to ~/.claude/dashboard-config.local and edit the values.",
+    "The dashboard skill reads this on every refresh. Restart is not needed — edits apply on the next /dashboard run.",
+    "All fields are optional; omit any you don't care about and sensible defaults will be used.",
+    "This file is NEVER bundled into a plugin share — it stays on your machine."
+  ],
+
+  "user": {
+    "name": "Alex",
+    "fullName": "Alex Rivera",
+    "role": "Senior PM",
+    "email": "alex@example.com",
+    "timezone": "Europe/Madrid",
+    "workingHours": { "start": "09:00", "end": "18:30", "days": ["Mon", "Tue", "Wed", "Thu", "Fri"] }
+  },
+
+  "org": {
+    "company": "Acme",
+    "manager": {
+      "name": "Morgan Chen",
+      "email": "morgan@example.com",
+      "role": "VP Product"
+    },
+    "seniorStakeholders": ["Sam", "Priya", "Theo", "Mia"],
+    "team": {
+      "attention": "Note surfaced in the Team module (HTML allowed, keep short).",
+      "people": [
+        { "name": "Morgan Chen",   "note": "Manager · VP Product",     "manager": true,  "ooo": false, "status": "active" },
+        { "name": "Priya Shah",    "note": "Sr. PM · Growth",          "manager": false, "ooo": false, "status": "active" },
+        { "name": "Theo Rodrigues","note": "Brand Lead",                "manager": false, "ooo": false, "status": "active" },
+        { "name": "Mia Koleva",    "note": "Pricing Strategy",          "manager": false, "ooo": true,  "status": "active" }
+      ]
+    }
+  },
+
+  "slack": {
+    "workspace": "acme",
+    "userId": "",
+    "highSignalChannels": ["#incident-*", "#proj-*", "#leadership"]
+  },
+
+  "dashboard": {
+    "workstreams": [
+      "Pricing v3",
+      "Onboarding v2",
+      "Enterprise SSO",
+      "Brand refresh"
+    ],
+    "classificationKeywords": ["pricing", "onboarding", "SSO", "brand", "Q2", "strategy"],
+
+    "okrs": [
+      { "id": "k1", "name": "Pricing v3 — ship by May 6", "pct": 40, "trend": "on-pace" },
+      { "id": "k2", "name": "Onboarding v2 — 100% rollout", "pct": 90, "trend": "on-pace" },
+      { "id": "k3", "name": "Enterprise SSO — design review",       "pct": 25, "trend": "behind" }
+    ],
+
+    "pins": [
+      { "id": "pn1", "label": "Q2 OKRs sheet",   "sub": "Sheets",       "letter": "O", "bg": "var(--teal-100)",   "href": "https://docs.google.com/spreadsheets/d/REPLACE/edit" },
+      { "id": "pn2", "label": "Granola",         "sub": "Meeting notes","letter": "G", "bg": "var(--pink-100)",   "href": "https://app.granola.ai" },
+      { "id": "pn3", "label": "Gmail",           "sub": "Inbox",        "letter": "M", "bg": "var(--red-100)",    "href": "https://mail.google.com/mail/u/0/#inbox" },
+      { "id": "pn4", "label": "Google Calendar", "sub": "Week view",    "letter": "C", "bg": "var(--blue-100)",   "href": "https://calendar.google.com/calendar/u/0/r/week" },
+      { "id": "pn5", "label": "Slack",           "sub": "Workspace",    "letter": "#", "bg": "var(--yellow-100)", "href": "https://acme.slack.com" },
+      { "id": "pn6", "label": "Google Drive",    "sub": "Files",        "letter": "D", "bg": "var(--grey-100)",   "href": "https://drive.google.com" }
+    ],
+
+    "weather": { "city": "Barcelona" },
+
+    "focusTarget": 4
+  },
+
+  "output": {
+    "dashboardDir": "~/Documents/work-dashboard",
+    "dataCacheDir": "~/.claude/dashboard-data"
+  }
+}

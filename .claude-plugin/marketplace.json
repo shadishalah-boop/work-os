@@ -1,0 +1,13 @@
+{
+  "name": "work-dashboard",
+  "owner": {
+    "name": "Shadi Shalah"
+  },
+  "plugins": [
+    {
+      "name": "work-dashboard",
+      "source": "./",
+      "description": "A personal work dashboard that merges Google Calendar, Gmail, Slack, Drive, and Granola meeting notes into a local React-in-browser view. Parallelized orchestrator skill + 6 data agents + static HTML bundle."
+    }
+  ]
+}

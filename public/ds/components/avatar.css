@@ -1,0 +1,30 @@
+/* =========================================================================
+   AVATAR — .pds-avatar
+   Always 4px radius. NEVER round. Sizes are LOCKED to: 24, 32, 48, 64, 96, 160.
+   Renders <picture><img/></picture>. Falls back to assets/avatar-default.svg
+   when no src is provided.
+   ========================================================================= */
+
+.pds-avatar {
+  display: inline-block;
+  vertical-align: bottom;
+  line-height: 0;
+}
+.pds-avatar > img {
+  display: block;
+  object-fit: cover;
+  border-radius: 4px;            /* ALWAYS 4px. Never round, never square. */
+  background-color: var(--grey-50);
+  box-sizing: border-box;
+  border: 0;
+}
+
+/* Locked size enum — DO NOT add custom sizes. */
+.pds-avatar.size-24  > img { width: 24px;  height: 24px;  }
+.pds-avatar.size-32  > img { width: 32px;  height: 32px;  }
+.pds-avatar.size-48  > img { width: 48px;  height: 48px;  }
+.pds-avatar.size-64  > img { width: 64px;  height: 64px;  }
+.pds-avatar.size-96  > img { width: 96px;  height: 96px;  }
+.pds-avatar.size-160 > img { width: 160px; height: 160px; }
+
+
