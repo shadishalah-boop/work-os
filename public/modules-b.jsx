@@ -13,8 +13,36 @@ function SlackMod({ data }) {
   const [askState, setAskState] = useStateB({ status: 'idle', results: [], error: null, query: '' });
   const [replyText, setReplyText] = useStateB({});
 
-  const workspace = data.workspace || 'app';
+  const workspace = data.workspace || 'preply';
   const openInSlack = (url) => { if (url) window.open(url, '_blank', 'noopener'); };
+
+  // Helper-service awareness: when the local dashboard-helper is up, clicks
+  // become real one-click Slack sends with undo. When it's down, we fall back
+  // to copy-to-clipboard + open-in-Slack (the original Path A behavior).
+  const [helperOnline, setHelperOnline] = useStateB(false);
+  useEffectB(() => {
+    if (!window.DashboardHelper) return;
+    return window.DashboardHelper.onStatus(setHelperOnline);
+  }, []);
+  const slackSendOrFallback = async (text, permalink, where) => {
+    const helper = window.DashboardHelper;
+    const trimmed = (text || '').trim();
+    if (helper && helper.online && permalink && trimmed) {
+      const { channel, thread_ts } = helper.parsePermalink(permalink);
+      if (channel) {
+        try {
+          await helper.sendWithUndo({ channel, text: trimmed, thread_ts, where });
+          return;
+        } catch (e) {
+          helper.toast('Send failed: ' + (e.message || 'unknown error'), { kind: 'error', durationMs: 4000 });
+        }
+      }
+    }
+    if (trimmed && navigator.clipboard) {
+      try { await navigator.clipboard.writeText(trimmed); } catch {}
+    }
+    if (permalink) window.open(permalink, '_blank', 'noopener');
+  };
   const searchSlackNative = (q) => {
     const query = encodeURIComponent(q || '');
     window.open(`https://${workspace}.slack.com/search/${query}`, '_blank', 'noopener');
@@ -53,9 +81,17 @@ function SlackMod({ data }) {
   return (
     <Module
       title={<span style={{display:'inline-flex', alignItems:'center', gap:8}}><span className="slack-brand"/>Slack · what you missed</span>}
-      sub={`${data.channels.length} tracked · ${(data.activeThreads||[]).length} active threads in ${workspace}`}
+      sub={`${data.channels.length} tracked · ${(data.activeThreads||[]).length} active threads across Preply`}
       right={
-        <button className="icon-btn" aria-label="Open Slack" onClick={()=>openInSlack(`https://${workspace}.slack.com`)}><Icon name="external-link" size={16}/></button>
+        <div style={{display:'flex', alignItems:'center', gap:8}}>
+          <span
+            className={'helper-status ' + (helperOnline ? 'on' : 'off')}
+            title={helperOnline ? 'dashboard-helper online · clicks send instantly' : 'dashboard-helper offline · clicks copy to clipboard + open Slack'}
+          >
+            {helperOnline ? '⚡ live send' : 'open-in-Slack'}
+          </span>
+          <button className="icon-btn" aria-label="Open Slack" onClick={()=>openInSlack(`https://${workspace}.slack.com`)}><Icon name="external-link" size={16}/></button>
+        </div>
       }
       className="slack-mod">
 
@@ -189,22 +225,43 @@ function SlackMod({ data }) {
                       <button
                         key={i}
                         className={'sug' + (s.primary ? ' primary' : '')}
-                        title="Opens the thread in Slack so you can send it"
-                        onClick={()=>{ navigator.clipboard && navigator.clipboard.writeText(s.label); openInSlack(c.permalink); }}>
+                        title={helperOnline ? `Send to ${c.channel}` : 'Copies to clipboard and opens in Slack'}
+                        onClick={()=>slackSendOrFallback(s.label, c.permalink, c.channel)}>
                         {s.primary && <Icon name="sparkle" size={12} style={{filter: s.primary ? 'invert(1)' : 'none'}}/>}
                         {s.label}
+                        {helperOnline && <span className="sug-bolt" aria-label="instant send" title="instant send">⚡</span>}
                       </button>
                     ))}
                   </div>
                   <div className="slack-compose">
                     <Icon name="reply" size={14}/>
                     <input
-                      placeholder={`Draft reply — opens in Slack to send`}
+                      placeholder={helperOnline ? `Type and press Enter to send to ${c.channel}` : `Draft reply — opens in Slack to send`}
                       value={replyText[c.id] || ''}
                       onChange={e=>setReplyText({...replyText, [c.id]: e.target.value})}
-                      onKeyDown={e => { if (e.key === 'Enter') { navigator.clipboard && navigator.clipboard.writeText(replyText[c.id] || ''); openInSlack(c.permalink); } }}
+                      onKeyDown={async e => {
+                        if (e.key !== 'Enter') return;
+                        const t = replyText[c.id] || '';
+                        if (!t.trim()) return;
+                        await slackSendOrFallback(t, c.permalink, c.channel);
+                        if (window.DashboardHelper && window.DashboardHelper.online) {
+                          setReplyText({...replyText, [c.id]: ''});
+                        }
+                      }}
                     />
-                    <button className="icon-btn" aria-label="Open in Slack" title="Copies draft to clipboard and opens the thread in Slack" onClick={()=>{ navigator.clipboard && navigator.clipboard.writeText(replyText[c.id] || ''); openInSlack(c.permalink); }}><Icon name="send" size={14}/></button>
+                    <button
+                      className="icon-btn"
+                      aria-label={helperOnline ? 'Send' : 'Open in Slack'}
+                      title={helperOnline ? `Send to ${c.channel}` : 'Copies draft to clipboard and opens the thread in Slack'}
+                      onClick={async ()=>{
+                        const t = replyText[c.id] || '';
+                        if (!t.trim()) return;
+                        await slackSendOrFallback(t, c.permalink, c.channel);
+                        if (window.DashboardHelper && window.DashboardHelper.online) {
+                          setReplyText({...replyText, [c.id]: ''});
+                        }
+                      }}
+                    ><Icon name="send" size={14}/></button>
                   </div>
                 </div>
               )}
@@ -224,7 +281,7 @@ function SlackMod({ data }) {
             display: 'flex', alignItems: 'center', gap: 6,
           }}>
             <Icon name="sparkle" size={12}/>
-            Most active threads — today
+            Most active threads across Preply — today
           </div>
           {data.activeThreads.map(t => (
             <div key={t.id} onClick={()=>openInSlack(t.permalink)} style={{
@@ -252,13 +309,35 @@ function SlackMod({ data }) {
 }
 
 // --- Projects Module ---
-function ProjectsMod({ data, okrs, decisions }) {
+function ProjectsMod({ data, okrs, decisions, okrApi }) {
   const [decList, setDecList] = useStateB(decisions);
+  const [expanded, setExpanded] = useStateB({}); // okr id → bool
   useEffectB(() => { setDecList(decisions); }, [decisions]);
   const skipDec = (id) => setDecList(decList.filter(x => x.id !== id));
   const decideDec = (d) => {
     if (d.href) window.open(d.href, '_blank', 'noreferrer');
   };
+  const toggleOkr = (id) => setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
+
+  const generateNotes = async () => {
+    if (!okrApi || !okrApi.generateReviewMarkdown) return;
+    const md = okrApi.generateReviewMarkdown();
+    try {
+      await navigator.clipboard.writeText(md);
+      if (window.DashboardHelper && window.DashboardHelper.toast) {
+        window.DashboardHelper.toast('Review notes copied to clipboard', { kind: 'success', durationMs: 4000 });
+      } else {
+        alert('Review notes copied to clipboard');
+      }
+    } catch (e) {
+      // fallback: open the markdown in a new tab
+      const w = window.open();
+      if (w) { w.document.write('<pre>' + md.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'})[c]) + '</pre>'); }
+    }
+  };
+
+  const Tagger = window.OkrTagger; // shared component from modules-a.jsx
+
   return (
     <Module title="Projects & goals" sub={`${data.length} active · ${data.filter(p=>p.status!=='on-track').length} need attention`}
             icon={<span style={{width:28, height:28, borderRadius:8, background:'var(--grey-100)', display:'grid', placeItems:'center'}}><Icon name="progress" size={16}/></span>}
@@ -282,27 +361,84 @@ function ProjectsMod({ data, okrs, decisions }) {
           </div>
         </div>
       ))}
-      <div className="sub-section-head">Q2 OKRs<span className="bar"/></div>
-      {okrs.map(o => (
-        <div key={o.id} style={{display:'grid', gridTemplateColumns:'1fr auto', gap:12, padding:'10px 8px', alignItems:'center', borderTop:'1px solid var(--border-subtle)'}}>
-          <div>
-            <div style={{fontSize:13, fontWeight:600}}>{o.name}</div>
-            <div style={{marginTop:6, height:4, background:'var(--grey-100)', borderRadius:999, position:'relative', overflow:'hidden'}}>
-              <span style={{position:'absolute', inset:0, width:o.pct+'%', background: o.trend==='ahead'?'var(--teal-500)':o.trend==='behind'?'var(--red-500)':'var(--grey-900)', borderRadius:999}}/>
+      <div className="sub-section-head">
+        Q2 OKRs<span className="bar"/>
+        {okrApi && (
+          <button
+            className="okr-generate-btn"
+            onClick={generateNotes}
+            title="Compile this week's tagged + auto-suggested items into a markdown review and copy to clipboard"
+          >Generate review notes →</button>
+        )}
+      </div>
+      {okrs.map(o => {
+        const isOpen = !!expanded[o.id];
+        const ev = okrApi ? okrApi.collectEvidence(o.id) : { confirmed: [], suggested: [] };
+        const meta = (okrApi && okrApi.META && okrApi.META[o.id]) || {};
+        const linkedCount = ev.confirmed.length + ev.suggested.length;
+        return (
+          <div key={o.id} className={'okr-row' + (isOpen ? ' is-open' : '')}>
+            <div className="okr-row-head" onClick={() => toggleOkr(o.id)} role="button">
+              <div className="okr-row-body">
+                <div className="okr-row-title">
+                  {meta.short && <span className="okr-row-pill" style={{background: meta.bg, color: meta.ink}}>{meta.short}</span>}
+                  <span>{o.name}</span>
+                  {linkedCount > 0 && (
+                    <span className="okr-row-count" title={`${ev.confirmed.length} tagged · ${ev.suggested.length} auto-suggested`}>
+                      {linkedCount} linked
+                    </span>
+                  )}
+                </div>
+                <div className="okr-row-bar">
+                  <span style={{width: o.pct+'%', background: o.trend==='ahead'?'var(--teal-500)':o.trend==='behind'?'var(--red-500)':'var(--grey-900)'}}/>
+                </div>
+              </div>
+              <div className="okr-row-trend" style={{color: o.trend==='ahead'?'var(--teal-600)':o.trend==='behind'?'var(--red-600)':'var(--fg-2)'}}>
+                {o.pct}% · {o.trend}
+                <span className="okr-row-chev" aria-hidden="true">{isOpen ? '▾' : '▸'}</span>
+              </div>
             </div>
+            {isOpen && (
+              <div className="okr-row-evidence">
+                {ev.confirmed.length === 0 && ev.suggested.length === 0 && (
+                  <div className="okr-row-empty">No linked items yet. Tag a task with <span className="okr-row-pill" style={{background: meta.bg, color: meta.ink}}>{meta.short}</span> to start building evidence.</div>
+                )}
+                {ev.confirmed.length > 0 && (
+                  <ul className="okr-evidence-list">
+                    {ev.confirmed.map((it, i) => (
+                      <li key={'c'+i}>
+                        <span className="okr-evidence-kind">{it._kind}</span>
+                        <span>{it.label}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {ev.suggested.length > 0 && (
+                  <>
+                    <div className="okr-evidence-subhead">Auto-suggested · click <code>?</code> chip on the row to confirm</div>
+                    <ul className="okr-evidence-list okr-evidence-list-suggested">
+                      {ev.suggested.map((it, i) => (
+                        <li key={'s'+i}>
+                          <span className="okr-evidence-kind">{it._kind}</span>
+                          <span>{it.label}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </div>
+            )}
           </div>
-          <div style={{display:'flex', alignItems:'center', gap:6, fontSize:12, fontWeight:600, color: o.trend==='ahead'?'var(--teal-600)':o.trend==='behind'?'var(--red-600)':'var(--fg-2)'}}>
-            {o.pct}% · {o.trend}
-          </div>
-        </div>
-      ))}
+        );
+      })}
       <div className="sub-section-head">Pending your decision<span className="bar"/><span>{decList.length}</span></div>
       {decList.map(d => (
-        <div key={d.id} style={{display:'grid', gridTemplateColumns:'1fr auto auto', gap:10, alignItems:'center', padding:'10px 4px', borderTop:'1px solid var(--border-subtle)'}}>
+        <div key={d.id} style={{display:'grid', gridTemplateColumns:'1fr auto auto auto', gap:10, alignItems:'center', padding:'10px 4px', borderTop:'1px solid var(--border-subtle)'}}>
           <div>
             <div style={{fontSize:13, fontWeight:600}}>{d.title}</div>
             <div style={{fontSize:12, color:'var(--fg-3)'}}>{d.who} · {d.meta}</div>
           </div>
+          {Tagger && <Tagger label={d.title} meta={d.meta} okrApi={okrApi}/>}
           <button className="btn btn--tertiary btn--xs" onClick={() => skipDec(d.id)}>Skip</button>
           <button className="btn btn--primary btn--xs" onClick={() => decideDec(d)}>Decide</button>
         </div>
@@ -544,11 +680,10 @@ function WellnessMod({ data }) {
     // Convert ISO-with-offset to the "YYYYMMDDTHHMMSS" form Google Calendar
     // templates expect, preserving the local wall-clock time.
     const toCalStr = (iso) => iso.replace(/[-:]/g, '').replace(/([+-]\d{4}|Z)$/, '').slice(0, 15);
-    const tz = (window.SEED && window.SEED.user && window.SEED.user.tz) || 'UTC';
     const url = `https://calendar.google.com/calendar/render?action=TEMPLATE`
       + `&text=${encodeURIComponent('Focus block')}`
       + `&dates=${toCalStr(slot.startISO)}/${toCalStr(slot.endISO)}`
-      + `&ctz=${encodeURIComponent(tz)}`
+      + `&ctz=Europe/Madrid`
       + `&details=${encodeURIComponent('Blocked from Work Dashboard')}`;
     window.open(url, '_blank', 'noreferrer');
   };
@@ -679,7 +814,7 @@ function searchDashboard(q) {
       type:'person', key:'per-'+i, icon:'user-group',
       title:p.name + (p.manager ? ' · MGR' : ''),
       subtitle:p.note || (p.ooo ? 'Out of office' : ''),
-      badge: p.ooo ? 'OOO' : ((window.SEED && window.SEED.org && window.SEED.org.company) || 'Team'),
+      badge: p.ooo ? 'OOO' : 'Preply',
     });
   });
   (S.blockers || []).forEach((b, i) => {
@@ -737,7 +872,7 @@ function FindModal({ open, onClose, prefillQuery }) {
   const groups  = useMemoB(() => groupResults(results), [results]);
   const flat    = useMemoB(() => groups.flatMap(g => g.items), [groups]);
 
-  const workspace = (window.SEED && window.SEED.slack && window.SEED.slack.workspace) || 'app';
+  const workspace = (window.SEED && window.SEED.slack && window.SEED.slack.workspace) || 'preply';
   const tools = [
     { id:'gmail',    label:'Gmail',    url:(x)=>x?`https://mail.google.com/mail/u/0/#search/${encodeURIComponent(x)}`:'https://mail.google.com/mail/u/0/' },
     { id:'slack',    label:'Slack',    url:(x)=>x?`https://${workspace}.slack.com/search/${encodeURIComponent(x)}`:`https://${workspace}.slack.com` },

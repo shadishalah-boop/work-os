@@ -14,6 +14,91 @@ function Icon({ name, size = 16, style }) {
   });
 }
 
+// --- OkrTagger: shared chip + picker used on tasks, top3, decisions, shipped ---
+// Three states:
+//   confirmed (manual tag) → solid colored chip · click opens picker to change/remove
+//   suggested (auto-match) → dashed faint chip with "?"  · click confirms it
+//   untagged + no suggestion → tiny "+" appears on row hover · click opens picker
+function OkrTagger({ label, meta, okrApi }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef(null);
+  if (!okrApi) return null;
+  const tag = okrApi.getTag(label);
+  const suggested = !tag ? okrApi.getSuggestion(label, meta) : null;
+  const effective = tag || suggested;
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => {
+      if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const okrs = (window.SEED && window.SEED.okrs) || [];
+  const okrName = (id) => (okrs.find(o => o.id === id) || {}).name || id;
+  const M = okrApi.META || {};
+
+  const onChipClick = (e) => {
+    e.stopPropagation();
+    if (suggested && !tag) {
+      // confirm suggestion
+      okrApi.setTag(label, suggested);
+    } else {
+      setOpen(o => !o);
+    }
+  };
+  const onAddClick = (e) => { e.stopPropagation(); setOpen(o => !o); };
+
+  return (
+    <span ref={rootRef} className="okr-tagger" onClick={e => e.stopPropagation()}>
+      {effective ? (
+        <button
+          className={'okr-chip' + (tag ? ' confirmed' : ' suggested')}
+          onClick={onChipClick}
+          title={tag
+            ? `Tagged · ${okrName(tag)} · click to change`
+            : `Suggested · ${okrName(suggested)} · click to confirm`}
+          style={{
+            background: M[effective] && M[effective].bg,
+            color:      M[effective] && M[effective].ink,
+            borderColor: M[effective] && M[effective].color,
+          }}
+        >
+          {(M[effective] && M[effective].short) || effective}{!tag && '?'}
+        </button>
+      ) : (
+        <button className="okr-add-btn" onClick={onAddClick} title="Tag to OKR">→</button>
+      )}
+      {open && (
+        <div className="okr-picker">
+          {['k1', 'k2', 'k3'].map(k => (
+            <button
+              key={k}
+              className={'okr-picker-row' + (tag === k ? ' is-current' : '')}
+              onClick={(e) => { e.stopPropagation(); okrApi.setTag(label, k); setOpen(false); }}
+            >
+              <span className="okr-picker-dot" style={{background: M[k] && M[k].color}}/>
+              <span className="okr-picker-short">{M[k] && M[k].short}</span>
+              <span className="okr-picker-name">{okrName(k)}</span>
+            </button>
+          ))}
+          {tag && (
+            <button
+              className="okr-picker-row okr-picker-untag"
+              onClick={(e) => { e.stopPropagation(); okrApi.setTag(label, null); setOpen(false); }}
+            >
+              <span className="okr-picker-dot okr-picker-dot-x">×</span>
+              <span className="okr-picker-name">untag</span>
+            </button>
+          )}
+        </div>
+      )}
+    </span>
+  );
+}
+
 // --- Module shell ---
 function Module({ title, count, sub, action, actionHref, onAction, right, icon, className, children, ...rest }) {
   return (
@@ -62,7 +147,7 @@ function useDraggable(initial) {
 }
 
 // --- Top-3 Today (hero priority block) ---
-function Top3({ data, onToggle, density }) {
+function Top3({ data, onToggle, density, okrApi }) {
   const drag = useDraggable(data);
   useEffect(() => { drag.setItems(data); }, [data]);
   const now = new Date();
@@ -90,7 +175,10 @@ function Top3({ data, onToggle, density }) {
               <div className="top3-label">{it.label}</div>
               <div className="top3-meta">{it.meta}</div>
             </div>
-            <div className="top3-check" onClick={() => onToggle(it.id)} role="button" aria-label={it.done ? 'Mark incomplete' : 'Mark complete'}/>
+            <div style={{display:'flex', alignItems:'center', gap:8}}>
+              <OkrTagger label={it.label} meta={it.meta} okrApi={okrApi}/>
+              <div className="top3-check" onClick={() => onToggle(it.id)} role="button" aria-label={it.done ? 'Mark incomplete' : 'Mark complete'}/>
+            </div>
           </div>
         ))}
       </div>
@@ -99,7 +187,7 @@ function Top3({ data, onToggle, density }) {
 }
 
 // --- Simple task row used in tasks module (overdue / due-soon / blocked) ---
-function TaskRow({ t, onToggle, projectColor }) {
+function TaskRow({ t, onToggle, onDismiss, okrApi, projectColor }) {
   return (
     <div className={'task-row' + (t.done ? ' done' : '')}>
       <div className="task-tick" data-done={t.done} onClick={() => onToggle(t.id)} role="button" aria-label="Toggle"/>
@@ -111,7 +199,18 @@ function TaskRow({ t, onToggle, projectColor }) {
         </div>
       </div>
       <div style={{display:'flex', alignItems:'center', gap:8}}>
-        <span className="priority-flag" data-p={t.p}>P{t.p}</span>
+        {!t.done && <OkrTagger label={t.label} meta={t.meta} okrApi={okrApi}/>}
+        {t.done
+          ? <span className="done-flag" aria-label="Done">✓ done</span>
+          : <span className="priority-flag" data-p={t.p}>P{t.p}</span>}
+        {onDismiss && !t.done && (
+          <button
+            className="task-dismiss"
+            onClick={(e) => { e.stopPropagation(); onDismiss(t.label); }}
+            title="Dismiss for 14 days"
+            aria-label="Dismiss task"
+          >×</button>
+        )}
         <img className="drag-grip" src="ds/assets/icons/drag-and-drop.svg" alt=""/>
       </div>
     </div>
@@ -127,17 +226,26 @@ function TasksMod({ state, onToggle }) {
     };
     return map[id] || 'var(--grey-300)';
   };
+  const dismiss = state.dismissTask;
+  const restore = state.restoreDismissed;
+  const dismissedCount = state.dismissedCount || 0;
   return (
     <Module title="Tasks" sub="Only what moves today" action="Open list"
             icon={<span className="mod-icon-dot" style={{width:28, height:28, borderRadius:8, background:'var(--grey-100)', display:'grid', placeItems:'center'}}><Icon name="check-circle" size={16}/></span>}>
+      {dismissedCount > 0 && (
+        <div className="tasks-restore-strip">
+          {dismissedCount} hidden
+          <button onClick={restore}>restore</button>
+        </div>
+      )}
       {state.overdue.length > 0 && <>
         <div className="sub-section-head"><span style={{color:'var(--red-600)'}}>Overdue</span><span className="bar"/><span>{state.overdue.length}</span></div>
-        {state.overdue.map(t => <TaskRow key={t.id} t={t} onToggle={onToggle} projectColor={projColor(t.project)}/>)}
+        {state.overdue.map(t => <TaskRow key={t.id + (t.done ? '-done' : '')} t={t} onToggle={onToggle} onDismiss={dismiss} okrApi={state.okrApi} projectColor={projColor(t.project)}/>)}
       </>}
       <div className="sub-section-head">Due soon<span className="bar"/><span>{state.dueSoon.length}</span></div>
-      {state.dueSoon.map(t => <TaskRow key={t.id} t={t} onToggle={onToggle} projectColor={projColor(t.project)}/>)}
+      {state.dueSoon.map(t => <TaskRow key={t.id + (t.done ? '-done' : '')} t={t} onToggle={onToggle} onDismiss={dismiss} okrApi={state.okrApi} projectColor={projColor(t.project)}/>)}
       <div className="sub-section-head">Blocked on others<span className="bar"/><span>{state.blocked.length}</span></div>
-      {state.blocked.map(t => <TaskRow key={t.id} t={t} onToggle={onToggle} projectColor={projColor(t.project)}/>)}
+      {state.blocked.map(t => <TaskRow key={t.id + (t.done ? '-done' : '')} t={t} onToggle={onToggle} onDismiss={dismiss} okrApi={state.okrApi} projectColor={projColor(t.project)}/>)}
       <div className="sub-section-head">Recently shipped<span className="bar"/><span>{state.shipped.length}</span></div>
       {state.shipped.map(s => (
         <div key={s.id} className="ship-row">
@@ -146,6 +254,15 @@ function TasksMod({ state, onToggle }) {
             <div className="ship-title">{s.title}</div>
           </div>
           <div className="ship-meta">{s.meta}</div>
+          <OkrTagger label={s.title} meta={s.meta} okrApi={state.okrApi}/>
+          {dismiss && (
+            <button
+              className="task-dismiss"
+              onClick={(e) => { e.stopPropagation(); dismiss(s.title); }}
+              title="Dismiss"
+              aria-label="Dismiss"
+            >×</button>
+          )}
         </div>
       ))}
     </Module>
@@ -348,4 +465,4 @@ function DraggableBox({ id, box, onChange, onDragStart, onDragEnd, children }) {
   );
 }
 
-Object.assign(window, { Icon, Module, Top3, TaskRow, TasksMod, CalendarMod, MeetingLoad, InboxMod, useDraggable, DraggableBox, BOX_MIN_W, BOX_MIN_H });
+Object.assign(window, { Icon, Module, Top3, TaskRow, TasksMod, CalendarMod, MeetingLoad, InboxMod, useDraggable, DraggableBox, BOX_MIN_W, BOX_MIN_H, OkrTagger });

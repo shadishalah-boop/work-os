@@ -1,6 +1,6 @@
 /* ============================================================
    Work Dashboard — layout + module-specific styles
-   Built on DS tokens. Nothing here invents new colors.
+   Built on Preply DS tokens. Nothing here invents new colors.
    ============================================================ */
 
 :root {
@@ -194,7 +194,42 @@
 }
 .task-row:first-of-type { border-top: none; }
 .task-row.drag-over { background: var(--accent-bg); }
+
+/* Done state — green flash on toggle + persistent dimmed look */
+.task-row.done {
+  opacity: 0.55;
+  animation: taskDonePulse 800ms ease-out;
+  border-radius: 8px;
+}
 .task-row.done .task-title { text-decoration: line-through; color: var(--fg-3); }
+.task-row.done .task-meta  { text-decoration: line-through; opacity: 0.65; }
+.task-row.done .task-tick {
+  background: var(--teal-500);
+  border-color: var(--teal-500);
+}
+.task-row.done .task-tick[data-done="true"]::after {
+  border-color: white;
+}
+@keyframes taskDonePulse {
+  0%   { background: var(--teal-100); opacity: 1; transform: scale(1.005); }
+  40%  { background: var(--teal-50);  opacity: 0.8; }
+  100% { background: transparent; opacity: 0.55; transform: scale(1); }
+}
+
+/* "✓ done" pill — replaces the P-flag when complete */
+.done-flag {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: var(--teal-100);
+  color: var(--teal-700);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
 .task-tick {
   width: 22px; height: 22px;
   border-radius: 6px;
@@ -222,6 +257,43 @@
   opacity: 0; transition: opacity 140ms;
 }
 .task-row:hover .drag-grip { opacity: 1; }
+
+/* Dismiss × button — hover-revealed on task and ship rows */
+.task-dismiss {
+  background: transparent;
+  border: none;
+  color: var(--grey-400);
+  font-size: 18px;
+  line-height: 1;
+  width: 22px; height: 22px;
+  border-radius: 6px;
+  display: grid; place-items: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 140ms, background 140ms, color 140ms;
+  flex-shrink: 0;
+  padding: 0;
+}
+.task-row:hover .task-dismiss,
+.ship-row:hover .task-dismiss { opacity: 0.55; }
+.task-dismiss:hover { opacity: 1 !important; background: var(--grey-100); color: var(--red-600); }
+.task-dismiss:focus-visible { opacity: 1; outline: 2px solid var(--accent-bg); outline-offset: 1px; }
+
+/* Restore strip — shown above the OVERDUE header when items have been dismissed */
+.tasks-restore-strip {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 11px; color: var(--fg-3);
+  padding: 6px 4px 2px;
+  letter-spacing: 0.02em;
+}
+.tasks-restore-strip button {
+  background: none; border: none; padding: 0;
+  font: inherit; color: var(--fg-2);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.tasks-restore-strip button:hover { color: var(--fg-1); }
 
 .priority-flag {
   width: 20px; height: 20px; border-radius: 6px;
@@ -934,4 +1006,288 @@
 .hl {
   background: color-mix(in srgb, var(--accent) 26%, transparent);
   color: var(--fg-1); padding: 0 1px; border-radius: 2px;
+}
+
+/* =============================================================================
+   Dashboard helper service — toast + status pill + bolt indicator on suggestions
+   ============================================================================= */
+
+/* Status pill in Slack module header */
+.helper-status {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 3px 8px; border-radius: 999px;
+  white-space: nowrap;
+  user-select: none;
+}
+.helper-status.on  { background: var(--teal-100); color: var(--teal-700); }
+.helper-status.off { background: var(--grey-100); color: var(--fg-3, var(--fg-2)); }
+
+/* Bolt next to suggested-action labels when helper is live */
+.sug-bolt {
+  margin-left: 6px;
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+/* Toast (bottom-right) */
+.dh-toast {
+  position: fixed;
+  right: 24px; bottom: 24px;
+  display: flex; align-items: center; gap: 12px;
+  background: var(--grey-900);
+  color: white;
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 13px; font-weight: 500;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25), 0 2px 8px rgba(0, 0, 0, 0.15);
+  opacity: 0; transform: translateY(8px);
+  transition: opacity 200ms ease, transform 200ms ease;
+  pointer-events: none;
+  z-index: 10000;
+  max-width: min(420px, calc(100vw - 48px));
+}
+.dh-toast.dh-toast-show { opacity: 1; transform: translateY(0); pointer-events: auto; }
+.dh-toast-success { background: var(--teal-700); }
+.dh-toast-error   { background: #B00020; }
+.dh-toast-msg { flex: 1; line-height: 1.4; }
+.dh-toast-undo {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  color: white;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 12px; font-weight: 600;
+  cursor: pointer;
+  transition: background 140ms;
+}
+.dh-toast-undo:hover { background: rgba(255, 255, 255, 0.15); }
+
+/* =============================================================================
+   OKR linking — chips, picker, expanded evidence panel
+   ============================================================================= */
+
+.okr-tagger { position: relative; display: inline-flex; align-items: center; }
+
+.okr-chip {
+  display: inline-flex; align-items: center;
+  height: 20px; padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font-size: 11px; font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: filter 120ms, transform 80ms;
+}
+.okr-chip:hover  { filter: brightness(0.96); }
+.okr-chip:active { transform: scale(0.97); }
+.okr-chip.suggested {
+  background: transparent !important;
+  color: var(--fg-3) !important;
+  border-style: dashed;
+  border-color: var(--border-default);
+}
+
+.okr-add-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px;
+  border: 1px dashed var(--border-default);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--fg-3);
+  font-size: 11px; line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 140ms, color 140ms, border-color 140ms;
+  padding: 0;
+}
+.task-row:hover .okr-add-btn,
+.ship-row:hover .okr-add-btn,
+.top3-item:hover .okr-add-btn,
+.okr-tagger:focus-within .okr-add-btn { opacity: 0.6; }
+.okr-add-btn:hover { opacity: 1 !important; color: var(--fg-1); border-color: var(--fg-2); border-style: solid; }
+
+.okr-picker {
+  position: absolute;
+  top: calc(100% + 4px); right: 0;
+  z-index: 100;
+  min-width: 220px;
+  background: var(--bg-surface, white);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.06);
+  padding: 4px;
+  animation: okrPickerIn 140ms ease-out;
+}
+@keyframes okrPickerIn {
+  from { opacity: 0; transform: translateY(-2px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.okr-picker-row {
+  display: grid;
+  grid-template-columns: 14px 30px 1fr;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  background: transparent;
+  border: none;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  text-align: left;
+  color: var(--fg-1);
+}
+.okr-picker-row:hover     { background: var(--grey-50); }
+.okr-picker-row.is-current { background: var(--grey-100); font-weight: 600; }
+.okr-picker-dot {
+  width: 10px; height: 10px;
+  border-radius: 3px;
+  display: inline-block;
+}
+.okr-picker-dot-x {
+  display: grid; place-items: center;
+  background: var(--grey-100);
+  color: var(--fg-3);
+  font-weight: 700;
+}
+.okr-picker-short { font-size: 11px; font-weight: 700; color: var(--fg-2); letter-spacing: 0.04em; }
+.okr-picker-name  { color: var(--fg-2); font-size: 12px; line-height: 1.3; }
+.okr-picker-untag .okr-picker-name { color: var(--fg-3); }
+
+/* =============================================================================
+   OKR row in Projects module — expandable evidence panel
+   ============================================================================= */
+
+.okr-row { border-top: 1px solid var(--border-subtle); }
+.okr-row-head {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  padding: 10px 8px;
+  align-items: center;
+  cursor: pointer;
+  transition: background 120ms;
+}
+.okr-row-head:hover { background: var(--grey-50); }
+.okr-row.is-open .okr-row-head { background: var(--grey-50); }
+.okr-row-body { min-width: 0; }
+.okr-row-title {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 600;
+  flex-wrap: wrap;
+}
+.okr-row-pill {
+  display: inline-flex; align-items: center;
+  height: 18px; padding: 0 6px;
+  border-radius: 4px;
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.okr-row-count {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--fg-3);
+  background: var(--grey-100);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.okr-row-bar {
+  margin-top: 6px;
+  height: 4px;
+  background: var(--grey-100);
+  border-radius: 999px;
+  position: relative;
+  overflow: hidden;
+}
+.okr-row-bar > span {
+  position: absolute; inset: 0;
+  border-radius: 999px;
+  transition: width 200ms;
+}
+.okr-row-trend {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 600;
+}
+.okr-row-chev {
+  font-size: 10px;
+  opacity: 0.5;
+}
+.okr-row-evidence {
+  padding: 8px 12px 14px 12px;
+  background: var(--grey-50);
+  border-top: 1px dashed var(--border-subtle);
+  animation: okrExpandIn 220ms ease-out;
+}
+@keyframes okrExpandIn {
+  from { opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; }
+  to   { opacity: 1; max-height: 600px; }
+}
+.okr-row-empty {
+  font-size: 12px;
+  color: var(--fg-3);
+  padding: 4px 0;
+  line-height: 1.6;
+}
+.okr-evidence-list {
+  list-style: none;
+  margin: 4px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.okr-evidence-list li {
+  display: grid;
+  grid-template-columns: 70px 1fr;
+  gap: 10px;
+  padding: 6px 0;
+  font-size: 12px;
+  color: var(--fg-1);
+  border-bottom: 1px dotted var(--border-subtle);
+  line-height: 1.4;
+}
+.okr-evidence-list li:last-child { border-bottom: none; }
+.okr-evidence-kind {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--fg-3);
+}
+.okr-evidence-list-suggested li {
+  color: var(--fg-2);
+  font-style: italic;
+}
+.okr-evidence-subhead {
+  font-size: 11px;
+  color: var(--fg-3);
+  margin: 12px 0 4px;
+  font-weight: 600;
+}
+.okr-evidence-subhead code {
+  font-size: 11px;
+  background: var(--grey-100);
+  padding: 0 4px;
+  border-radius: 3px;
+}
+
+.okr-generate-btn {
+  background: transparent;
+  border: 1px solid var(--border-default);
+  color: var(--fg-2);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-left: auto;
+  transition: background 140ms, color 140ms, border-color 140ms;
+}
+.okr-generate-btn:hover {
+  background: var(--grey-900);
+  color: white;
+  border-color: var(--grey-900);
 }

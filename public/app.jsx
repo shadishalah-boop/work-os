@@ -30,7 +30,7 @@ function Rail() {
       <div className="rail-spacer"/>
       <div className="rail-item"><Icon name="settings" size={22}/></div>
       <div style={{marginTop:8}}>
-        <span className="pds-avatar size-32"><img src="ds/assets/avatar-default.svg" alt={(window.SEED && window.SEED.user && window.SEED.user.name) || 'User'}/></span>
+        <span className="pds-avatar size-32"><img src="ds/assets/shadi.jpg?v=1" alt="Shadi"/></span>
       </div>
     </aside>
   );
@@ -69,18 +69,72 @@ function LiveClock() {
 // =============================================================================
 // Time-aware greeting hero
 // =============================================================================
-function Hero({ timeOfDay, data, capacityPct }) {
+
+// Auto-detect time of day from the current hour.
+// 5am–12pm = morning · 12pm–6pm = afternoon · 6pm–5am = evening
+function detectTimeOfDay() {
+  const h = new Date().getHours();
+  if (h >= 5  && h < 12) return 'morning';
+  if (h >= 12 && h < 18) return 'afternoon';
+  return 'evening';
+}
+
+// Build a live subtitle from state — picks the most relevant 1–3 stats for the
+// time of day. Updates as state changes (priorities checked off, etc).
+function buildHeroSubtitle(tod, state) {
+  const top3       = (state && state.top3) || [];
+  const overdue    = (state && state.overdue) || [];
+  const shipped    = (state && state.shipped) || [];
+  const calendar   = (state && state.calendar) || [];
+  const decisions  = (window.SEED && window.SEED.decisions) || [];
+  const slackTabs  = (window.SEED && window.SEED.slack && window.SEED.slack.tabs) || [];
+  const blockers   = (window.SEED && window.SEED.blockers) || [];
+  const mentions   = (slackTabs.find(t => t.id === 'mentions') || {}).count || 0;
+  const repliesOwed= (slackTabs.find(t => t.id === 'owed') || {}).count || 0;
+  const highBlock  = blockers.filter(b => b.sev === 'high').length;
+  const remaining  = top3.filter(t => !t.done).length;
+  const shippedToday = shipped.length;
+  const now = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const meetingsLeft = calendar.filter(e => {
+    if (e.type === 'focus') return false;
+    const [h, m] = (e.time || '00:00').split(':').map(Number);
+    return (h * 60 + m) > nowMin;
+  }).length;
+
+  const parts = [];
+  const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+  if (tod === 'morning') {
+    if (remaining > 0)         parts.push(`${plural(remaining, 'priority').replace('prioritys','priorities')} for today`);
+    if (overdue.length > 0)    parts.push(`${overdue.length} overdue carrying over`);
+    else if (meetingsLeft > 0) parts.push(`${plural(meetingsLeft, 'meeting')} ahead`);
+    if (parts.length === 0)    parts.push("Calendar's clear — pick one big thing and ship it.");
+  } else if (tod === 'afternoon') {
+    if (remaining > 0)        parts.push(`${plural(remaining, 'priority').replace('prioritys','priorities')} left`);
+    if (decisions.length > 0) parts.push(`${plural(decisions.length, 'decision')} pending`);
+    else if (highBlock > 0)   parts.push(`${plural(highBlock, 'blocker')} stalled`);
+    else if (mentions > 0)    parts.push(`${plural(mentions, 'Slack mention')}`);
+    if (parts.length === 0)   parts.push("On top of it. Push one stretch goal.");
+  } else {
+    if (shippedToday > 0)     parts.push(`${shippedToday} shipped`);
+    if (overdue.length > 0)   parts.push(`${overdue.length} carrying into tomorrow`);
+    else if (decisions.length > 0) parts.push(`${plural(decisions.length, 'decision')} still queued`);
+    if (repliesOwed > 0)      parts.push(`${plural(repliesOwed, 'reply')} owed`);
+    if (parts.length === 0)   parts.push("Clear runway — sign off and rest.");
+  }
+  return parts.join(' · ');
+}
+
+function Hero({ timeOfDay, data, capacityPct, state }) {
   const openFind    = () => window.dispatchEvent(new Event('dash:open-find'));
   const openAddTask = () => window.dispatchEvent(new Event('dash:open-add-task'));
   const g = (window.SEED && window.SEED.greeting) || {};
   const greeting =
-    timeOfDay === 'morning'   ? (g.morning   || `Morning, <em>${(window.SEED && window.SEED.user && window.SEED.user.name) || 'there'}</em>.`)   :
-    timeOfDay === 'afternoon' ? (g.afternoon || `Afternoon, <em>${(window.SEED && window.SEED.user && window.SEED.user.name) || 'there'}</em>.`) :
-                                (g.evening   || `Evening, <em>${(window.SEED && window.SEED.user && window.SEED.user.name) || 'there'}</em>.`);
-  const sub =
-    timeOfDay === 'morning'   ? 'You\'ve got a full day. Start with the hard one.' :
-    timeOfDay === 'afternoon' ? 'Halfway there. 2 priorities left, and a hot decision in Slack.' :
-                                'Winding down. Park what\'s left — tomorrow\'s calendar already has 3 meetings.';
+    timeOfDay === 'morning'   ? (g.morning   || 'Morning, <em>Alex</em>.')   :
+    timeOfDay === 'afternoon' ? (g.afternoon || 'Afternoon, <em>Alex</em>.') :
+                                (g.evening   || 'Evening, <em>Alex</em>.');
+  const sub = buildHeroSubtitle(timeOfDay, state);
   const w = (window.SEED && window.SEED.weather) || null;
   return (
     <div className="hero">
@@ -176,25 +230,217 @@ function TweaksPanel({ open, setOpen, accent, setAccent, density, setDensity, fo
 }
 
 // =============================================================================
+// Hidden-task stores (localStorage · per-store TTL)
+// Two stores, both keyed on normalized task title so they survive /dashboard
+// refreshes (which re-id every run):
+//   • dismissed — user hit the × · 14-day TTL
+//   • done      — user checked it off · auto-archives 4s after click · 12h TTL
+// =============================================================================
+const DISMISS_KEY = 'dashboard.dismissedTasks.v1';
+const DONE_KEY = 'dashboard.doneTasks.v1';
+const DISMISS_TTL_MS = 14 * 24 * 60 * 60 * 1000;
+const DONE_TTL_MS    = 12 * 60 * 60 * 1000;
+const DONE_LINGER_MS = 4000; // how long a done task stays visible before auto-archiving
+function normalizeTaskKey(s) {
+  return (s || '').toString().toLowerCase().replace(/\s+/g, ' ').trim();
+}
+function loadStore(key, ttl) {
+  try {
+    const raw = JSON.parse(localStorage.getItem(key) || '{}');
+    const now = Date.now();
+    const fresh = {};
+    Object.entries(raw).forEach(([k, ts]) => {
+      if (typeof ts === 'number' && now - ts < ttl) fresh[k] = ts;
+    });
+    if (Object.keys(fresh).length !== Object.keys(raw).length) {
+      try { localStorage.setItem(key, JSON.stringify(fresh)); } catch {}
+    }
+    return fresh;
+  } catch { return {}; }
+}
+const loadDismissedTasks = () => loadStore(DISMISS_KEY, DISMISS_TTL_MS);
+const loadDoneTasks      = () => loadStore(DONE_KEY,    DONE_TTL_MS);
+
+// =============================================================================
+// User-added tasks store (localStorage · no TTL · survives /dashboard refreshes)
+// "New task" button persists here so manually-added tasks don't vanish when the
+// agent JSONs get rewritten. Dismissing a user-added task fully deletes it
+// (vs the 14-day-TTL dismiss for agent-sourced tasks).
+// =============================================================================
+const USER_TASKS_KEY = 'dashboard.userAddedTasks.v1';
+function loadUserAddedTasks() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(USER_TASKS_KEY) || '{}');
+    return {
+      overdue: Array.isArray(raw.overdue) ? raw.overdue : [],
+      dueSoon: Array.isArray(raw.dueSoon) ? raw.dueSoon : [],
+      blocked: Array.isArray(raw.blocked) ? raw.blocked : [],
+    };
+  } catch { return { overdue: [], dueSoon: [], blocked: [] }; }
+}
+function saveUserAddedTasks(tasks) {
+  try { localStorage.setItem(USER_TASKS_KEY, JSON.stringify(tasks)); } catch {}
+}
+
+// =============================================================================
+// OKR linking — Layers 1+2+3 of the OKR-tracking system.
+//   • localStorage persists manual tags across /dashboard refreshes
+//   • suggestOkr() runs Layer-3 keyword auto-suggestion at render time
+//   • evidenceForOkr() collects everything tied to an OKR for the expanded view
+//   • generateReviewMarkdown() composes the Friday review notes
+// =============================================================================
+const OKR_LINKS_KEY = 'dashboard.okrLinks.v1';
+const OKR_META = {
+  k1: { short: 'AI',  color: 'var(--pink-400)', bg: 'var(--pink-100)', ink: 'var(--pink-700)' },
+  k2: { short: 'Fin', color: 'var(--teal-500)', bg: 'var(--teal-100)', ink: 'var(--teal-700)' },
+  k3: { short: 'CEO', color: 'var(--blue-400)', bg: 'var(--blue-100)', ink: 'var(--blue-700)' },
+};
+const OKR_KEYWORDS = {
+  k1: ['ai ', 'claude', ' mcp', 'skill', 'plugin', 'agent', 'workflow', 'automation', 'dashboard', 'work os', 'template', 'export', 'personal os', 'content creation', 'kb updater'],
+  k2: ['payment', 'fintech', 'payout', 'paypal', 'tipalti', ' fx', 'treasury', 'checkout', 'bin ', 'corridor', 'currency', 'mor ', 'provider', 'rogan', 'charlie', 'konstantinos', 'sagat', 'ezequiel', 'paula', 'pablo', 'mathew', 'jarl', 'craig', 'merchant', 'fintech', 'compliance', 'float', 'wise'],
+  k3: ['france', 'b2b', 'fr ', 'ceo', 'corp dev', 'm&a', 'acquisition', 'hendrix', 'flexi', 'mirjam', 'bertrand', 'tristan', 'onetoone', 'alejo', 'ken kubec', 'fe international'],
+};
+function loadOkrLinks() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(OKR_LINKS_KEY) || '{}');
+    const fresh = {};
+    Object.entries(raw).forEach(([k, v]) => { if (v === 'k1' || v === 'k2' || v === 'k3') fresh[k] = v; });
+    return fresh;
+  } catch { return {}; }
+}
+function suggestOkrFromText(title, meta) {
+  const text = ' ' + (title || '').toLowerCase() + ' ' + (meta || '').toLowerCase() + ' ';
+  const scores = { k1: 0, k2: 0, k3: 0 };
+  for (const [okr, kws] of Object.entries(OKR_KEYWORDS)) {
+    for (const kw of kws) if (text.includes(kw)) scores[okr] += 1;
+  }
+  let best = null, bestScore = 0;
+  for (const [okr, sc] of Object.entries(scores)) if (sc > bestScore) { best = okr; bestScore = sc; }
+  return best;
+}
+
+// =============================================================================
 // Shared state — single source of truth for the dashboard
 // =============================================================================
 function useDashboardState() {
+  // Initialize task buckets with localStorage user-added tasks merged in front
+  // of the agent-sourced SEED tasks. This ensures hand-added tasks survive
+  // both page reloads and /dashboard refreshes (which rewrite SEED).
+  const _userTasks = loadUserAddedTasks();
   const [top3, setTop3] = uS(SEED.top3);
-  const [overdue, setOverdue] = uS(SEED.overdue);
-  const [dueSoon, setDueSoon] = uS(SEED.dueSoon);
-  const [blocked, setBlocked] = uS(SEED.blocked);
+  const [overdue, setOverdue] = uS([..._userTasks.overdue, ...(SEED.overdue || [])]);
+  const [dueSoon, setDueSoon] = uS([..._userTasks.dueSoon, ...(SEED.dueSoon || [])]);
+  const [blocked, setBlocked] = uS([..._userTasks.blocked, ...(SEED.blocked || [])]);
   const [calendar, setCalendar] = uS(SEED.calendar);
+  const [dismissed, setDismissed] = uS(loadDismissedTasks);
+  const [doneStore, setDoneStore] = uS(loadDoneTasks);
+  const [okrLinks, setOkrLinks]   = uS(loadOkrLinks);
+  const pendingArchiveTimers = React.useRef({});
+
+  const isDismissed = (s) => normalizeTaskKey(s) in dismissed;
+  const isArchived  = (s) => normalizeTaskKey(s) in doneStore;
+  const isHidden    = (s) => isDismissed(s) || isArchived(s);
+
+  const writeStore = (key, setFn, label) => {
+    const k = normalizeTaskKey(label);
+    if (!k) return;
+    setFn(prev => {
+      const next = { ...prev, [k]: Date.now() };
+      try { localStorage.setItem(key, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+  const dismissTask = (s) => {
+    const k = normalizeTaskKey(s);
+    if (!k) return;
+    // If this is a user-added task, fully delete it from the localStorage store
+    // (no point hiding it for 14 days when the user explicitly wants it gone).
+    const stored = loadUserAddedTasks();
+    let foundInUserStore = false;
+    ['overdue', 'dueSoon', 'blocked'].forEach(bucket => {
+      const before = stored[bucket].length;
+      stored[bucket] = stored[bucket].filter(t => normalizeTaskKey(t.label) !== k);
+      if (stored[bucket].length !== before) foundInUserStore = true;
+    });
+    if (foundInUserStore) {
+      saveUserAddedTasks(stored);
+      // Also remove from React state for immediate UI feedback
+      setOverdue(prev => prev.filter(t => normalizeTaskKey(t.label) !== k));
+      setDueSoon(prev => prev.filter(t => normalizeTaskKey(t.label) !== k));
+      setBlocked(prev => prev.filter(t => normalizeTaskKey(t.label) !== k));
+      return;
+    }
+    // Otherwise: regular dismiss (14-day TTL, can resurface)
+    writeStore(DISMISS_KEY, setDismissed, s);
+  };
+  const archiveDoneTask = (s) => {
+    const k = normalizeTaskKey(s);
+    // If it's a user-added task, fully delete it from the user store (so it
+    // doesn't resurface in 12h when DONE_KEY expires).
+    const stored = loadUserAddedTasks();
+    let touchedUserStore = false;
+    ['overdue', 'dueSoon', 'blocked'].forEach(bucket => {
+      const before = stored[bucket].length;
+      stored[bucket] = stored[bucket].filter(t => normalizeTaskKey(t.label) !== k);
+      if (stored[bucket].length !== before) touchedUserStore = true;
+    });
+    if (touchedUserStore) saveUserAddedTasks(stored);
+    writeStore(DONE_KEY, setDoneStore, s);
+  };
+  const restoreHidden = () => {
+    try {
+      localStorage.removeItem(DISMISS_KEY);
+      localStorage.removeItem(DONE_KEY);
+    } catch {}
+    setDismissed({});
+    setDoneStore({});
+    Object.values(pendingArchiveTimers.current).forEach(clearTimeout);
+    pendingArchiveTimers.current = {};
+  };
 
   const toggleAny = (id) => {
+    let label = null;
+    let willBeDone = false;
     [[top3, setTop3], [overdue, setOverdue], [dueSoon, setDueSoon], [blocked, setBlocked]].forEach(([l, s]) => {
-      if (l.some(t => t.id === id)) s(l.map(t => t.id === id ? {...t, done: !t.done} : t));
+      const task = l.find(t => t.id === id);
+      if (task) {
+        label = task.label;
+        willBeDone = !task.done;
+        s(l.map(t => t.id === id ? {...t, done: !t.done} : t));
+      }
     });
+
+    if (willBeDone && label) {
+      // Schedule auto-archive after the linger window. Cancel if user un-toggles before then.
+      if (pendingArchiveTimers.current[id]) clearTimeout(pendingArchiveTimers.current[id]);
+      pendingArchiveTimers.current[id] = setTimeout(() => {
+        archiveDoneTask(label);
+        delete pendingArchiveTimers.current[id];
+      }, DONE_LINGER_MS);
+    } else if (!willBeDone && pendingArchiveTimers.current[id]) {
+      clearTimeout(pendingArchiveTimers.current[id]);
+      delete pendingArchiveTimers.current[id];
+    }
   };
   const addTask = (task) => {
     const bucket = task.bucket || 'dueSoon';
-    const entry = { id: task.id || ('task-' + Date.now()), label: task.label, meta: task.meta || 'Just added', p: task.p || 2, project: task.project || 'ops', done: false };
-    if (bucket === 'overdue') setOverdue(prev => [entry, ...prev]);
-    else if (bucket === 'blocked') setBlocked(prev => [entry, ...prev]);
+    const validBucket = (bucket === 'overdue' || bucket === 'blocked') ? bucket : 'dueSoon';
+    const entry = {
+      id: task.id || ('user-task-' + Date.now()),
+      label: task.label,
+      meta: task.meta || 'Just added',
+      p: task.p || 2,
+      project: task.project || 'ops',
+      done: false,
+      _user: true, // marker so dismiss can fully delete vs hide
+    };
+    // Persist to localStorage so it survives /dashboard refreshes
+    const stored = loadUserAddedTasks();
+    stored[validBucket].unshift(entry);
+    saveUserAddedTasks(stored);
+    // Also update React state for immediate UI feedback
+    if (validBucket === 'overdue') setOverdue(prev => [entry, ...prev]);
+    else if (validBucket === 'blocked') setBlocked(prev => [entry, ...prev]);
     else setDueSoon(prev => [entry, ...prev]);
   };
   const addMeeting = (m) => {
@@ -225,7 +471,92 @@ function useDashboardState() {
       window.removeEventListener('dash:meeting-added', onMeetingAdded);
     };
   }, []);
-  return { top3, overdue, dueSoon, blocked, calendar, shipped: SEED.shipped, setTop3, toggleAny, addTask, addMeeting };
+  // --- OKR linking API ---------------------------------------------------
+  const getTag = (label) => okrLinks[normalizeTaskKey(label)] || null;
+  const getSuggestion = (label, meta) => suggestOkrFromText(label, meta);
+  const setTag = (label, okrId) => {
+    const k = normalizeTaskKey(label);
+    if (!k) return;
+    setOkrLinks(prev => {
+      const next = { ...prev };
+      if (okrId) next[k] = okrId;
+      else delete next[k];
+      try { localStorage.setItem(OKR_LINKS_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+  const collectEvidence = (okrId) => {
+    const visibleOverdue = overdue.filter(t => !isHidden(t.label));
+    const visibleDueSoon = dueSoon.filter(t => !isHidden(t.label));
+    const visibleBlocked = blocked.filter(t => !isHidden(t.label));
+    const visibleTop3    = top3.filter(t => !isHidden(t.label));
+    const visibleShipped = (SEED.shipped || []).filter(s => !isHidden(s.title));
+    const allItems = [
+      ...visibleTop3.map(t    => ({ label: t.label, meta: t.meta, _kind: 'Top-3'    })),
+      ...visibleOverdue.map(t => ({ label: t.label, meta: t.meta, _kind: 'Overdue'  })),
+      ...visibleDueSoon.map(t => ({ label: t.label, meta: t.meta, _kind: 'Due soon' })),
+      ...visibleBlocked.map(t => ({ label: t.label, meta: t.meta, _kind: 'Blocked'  })),
+      ...visibleShipped.map(s => ({ label: s.title, meta: s.meta, _kind: 'Shipped'  })),
+      ...(SEED.decisions || []).map(d => ({ label: d.title, meta: d.meta, _kind: 'Decision' })),
+    ];
+    const confirmed = [];
+    const suggested = [];
+    for (const it of allItems) {
+      const tag = getTag(it.label);
+      if (tag === okrId) confirmed.push(it);
+      else if (!tag && suggestOkrFromText(it.label, it.meta) === okrId) suggested.push(it);
+    }
+    return { confirmed, suggested };
+  };
+  const generateReviewMarkdown = () => {
+    const okrs = SEED.okrs || [];
+    const lines = [];
+    const today = new Date();
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+    const fmt = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    lines.push(`## OKR Review · Week of ${fmt(monday)}–${fmt(today)}`);
+    lines.push('');
+    okrs.forEach(o => {
+      const meta = OKR_META[o.id] || { short: o.id };
+      const ev = collectEvidence(o.id);
+      lines.push(`### ${o.id} · ${o.name} · ${o.pct}% · ${o.trend}`);
+      if (ev.confirmed.length === 0 && ev.suggested.length === 0) {
+        lines.push('_(no linked items yet — tag tasks to this OKR throughout the week)_');
+      } else {
+        ev.confirmed.forEach(it => lines.push(`- ${it.label} _(${it._kind})_`));
+        if (ev.suggested.length > 0) {
+          lines.push('');
+          lines.push('_Auto-suggested (review and confirm):_');
+          ev.suggested.forEach(it => lines.push(`- ${it.label} _(${it._kind} · auto)_`));
+        }
+      }
+      lines.push('');
+    });
+    return lines.join('\n');
+  };
+  const okrApi = {
+    getTag, getSuggestion, setTag,
+    collectEvidence, generateReviewMarkdown,
+    META: OKR_META,
+  };
+
+  return {
+    top3:    top3.filter(t => !isHidden(t.label)),
+    overdue: overdue.filter(t => !isHidden(t.label)),
+    dueSoon: dueSoon.filter(t => !isHidden(t.label)),
+    blocked: blocked.filter(t => !isHidden(t.label)),
+    calendar,
+    shipped: (SEED.shipped || []).filter(s => !isHidden(s.title)),
+    setTop3, toggleAny, addTask, addMeeting,
+    dismissTask,
+    restoreHidden,
+    // backward-compat alias used by existing callers
+    restoreDismissed: restoreHidden,
+    hiddenCount: Object.keys(dismissed).length + Object.keys(doneStore).length,
+    dismissedCount: Object.keys(dismissed).length + Object.keys(doneStore).length,
+    okrApi,
+  };
 }
 
 // =============================================================================
@@ -237,11 +568,11 @@ function LayoutCommandCenter({ tod }) {
   const capacity = 78;
   return (
     <>
-      <Hero timeOfDay={tod} data={SEED} capacityPct={capacity}/>
+      <Hero timeOfDay={tod} data={SEED} capacityPct={capacity} state={state}/>
 
       <div className="grid g-cols-12" style={{marginBottom:16}}>
         <div className="c-span-8">
-          <Top3 data={state.top3} onToggle={state.toggleAny}/>
+          <Top3 data={state.top3} onToggle={state.toggleAny} okrApi={state.okrApi}/>
         </div>
         <div className="c-span-4" style={{display:'flex', flexDirection:'column', gap:12}}>
           <WellnessMod data={SEED.personalSignals}/>
@@ -263,7 +594,7 @@ function LayoutCommandCenter({ tod }) {
 
         {/* Right — projects, KPIs, blockers, team, pins */}
         <div className="c-span-3" style={{display:'flex', flexDirection:'column', gap:16}}>
-          <ProjectsMod data={SEED.projects} okrs={SEED.okrs} decisions={SEED.decisions}/>
+          <ProjectsMod data={SEED.projects} okrs={SEED.okrs} decisions={SEED.decisions} okrApi={state.okrApi}/>
           <KpiMod data={SEED.kpis}/>
           <BlockersMod data={SEED.blockers}/>
           <TeamMod data={SEED.team}/>
@@ -282,14 +613,14 @@ function LayoutFocusFlow({ tod }) {
   const state = useDashboardState();
   return (
     <>
-      <Hero timeOfDay={tod} data={SEED} capacityPct={78}/>
+      <Hero timeOfDay={tod} data={SEED} capacityPct={78} state={state}/>
       <div className="grid g-cols-12">
         <div className="c-span-8" style={{display:'flex', flexDirection:'column', gap:20}}>
-          <Top3 data={state.top3} onToggle={state.toggleAny}/>
+          <Top3 data={state.top3} onToggle={state.toggleAny} okrApi={state.okrApi}/>
           <SlackMod data={SEED.slack}/>
           <TasksMod state={state} onToggle={state.toggleAny}/>
           <CalendarMod data={state.calendar} next={SEED.nextMeeting}/>
-          <ProjectsMod data={SEED.projects} okrs={SEED.okrs} decisions={SEED.decisions}/>
+          <ProjectsMod data={SEED.projects} okrs={SEED.okrs} decisions={SEED.decisions} okrApi={state.okrApi}/>
           <KpiMod data={SEED.kpis}/>
         </div>
         <div className="c-span-4" style={{display:'flex', flexDirection:'column', gap:16, position:'sticky', top:16, alignSelf:'flex-start'}}>
@@ -325,10 +656,10 @@ function ModernRail({ active = 'home' }) {
   return (
     <aside className="d-rail">
       <div className="d-rail-logo">
-        <div className="d-rail-logo-mark">{((window.SEED && window.SEED.user && window.SEED.user.name) || 'U').charAt(0).toUpperCase()}</div>
+        <div className="d-rail-logo-mark">S</div>
         <div className="d-rail-logo-text">
-          {(window.SEED && window.SEED.user && window.SEED.user.name) || 'User'}
-          <small>{(window.SEED && window.SEED.user && window.SEED.user.role) || ''}</small>
+          Shadi
+          <small>Strategy & Planning</small>
         </div>
       </div>
       {sections.map((s, i) => (
@@ -344,10 +675,10 @@ function ModernRail({ active = 'home' }) {
         </React.Fragment>
       ))}
       <div className="d-rail-user">
-        <span className="pds-avatar size-32"><img src="ds/assets/avatar-default.svg" alt={(window.SEED && window.SEED.user && window.SEED.user.fullName) || 'User'}/></span>
+        <span className="pds-avatar size-32"><img src="ds/assets/shadi.jpg?v=1" alt="Shadi"/></span>
         <div className="d-rail-user-meta">
-          <div className="d-rail-user-name">{(window.SEED && window.SEED.user && window.SEED.user.fullName) || (window.SEED && window.SEED.user && window.SEED.user.name) || 'User'}</div>
-          <div className="d-rail-user-role">{(window.SEED && window.SEED.user && window.SEED.user.managerLine) || ''}</div>
+          <div className="d-rail-user-name">Shadi Shalah</div>
+          <div className="d-rail-user-role">Reports to Jose Ferreira</div>
         </div>
         <button className="icon-btn" title="Settings"><Icon name="settings" size={14}/></button>
       </div>
@@ -441,10 +772,7 @@ function VoiceButton() {
         if (/^(google\s+)?drive$/.test(what))         return { url: 'https://drive.google.com', label: 'Drive' };
         if (/^(gmail|email|inbox|mail)$/.test(what))  return { url: 'https://mail.google.com/mail/u/0/#inbox', label: 'Gmail' };
         if (/^(google\s+)?calendar$/.test(what))      return { url: 'https://calendar.google.com/calendar/u/0/r/week', label: 'Google Calendar' };
-        if (/^slack$/.test(what)) {
-          const ws = (window.SEED && window.SEED.slack && window.SEED.slack.workspace) || 'app';
-          return { url: `https://${ws}.slack.com`, label: 'Slack' };
-        }
+        if (/^slack$/.test(what))                     return { url: 'https://preply.slack.com', label: 'Slack' };
         if (/^granola$/.test(what))                   return { url: 'https://app.granola.ai', label: 'Granola' };
         if (/^(okrs?|okr\s+sheet)$/.test(what))       return { url: 'https://docs.google.com/spreadsheets/d/1JCV36oLjUwu0orX2ZVxGN-jJe5DodNiwPkc2e_ofGX0/edit', label: 'Q2 OKRs sheet' };
         return null;
@@ -805,11 +1133,11 @@ function LayoutModernSaaS({ tod }) {
 
   const renderModule = (id) => {
     switch (id) {
-      case 'top3':     return <Top3 data={state.top3} onToggle={state.toggleAny}/>;
+      case 'top3':     return <Top3 data={state.top3} onToggle={state.toggleAny} okrApi={state.okrApi}/>;
       case 'calendar': return <CalendarMod data={state.calendar} next={SEED.nextMeeting}/>;
       case 'tasks':    return <TasksMod state={state} onToggle={state.toggleAny}/>;
       case 'kpi':      return <KpiMod data={SEED.kpis}/>;
-      case 'projects': return <ProjectsMod data={SEED.projects} okrs={SEED.okrs} decisions={SEED.decisions}/>;
+      case 'projects': return <ProjectsMod data={SEED.projects} okrs={SEED.okrs} decisions={SEED.decisions} okrApi={state.okrApi}/>;
       case 'blockers': return <BlockersMod data={SEED.blockers}/>;
       case 'slack':    return <SlackMod data={SEED.slack}/>;
       case 'inbox':    return <InboxMod data={SEED.inbox}/>;
@@ -821,15 +1149,11 @@ function LayoutModernSaaS({ tod }) {
   };
 
   const g = (window.SEED && window.SEED.greeting) || {};
-  const uName = (window.SEED && window.SEED.user && window.SEED.user.name) || 'there';
   const greetingRaw =
-    tod === 'morning'   ? (g.morning   || `Morning, <em>${uName}</em>.`)   :
-    tod === 'afternoon' ? (g.afternoon || `Afternoon, <em>${uName}</em>.`) :
-                          (g.evening   || `Evening, <em>${uName}</em>.`);
-  const sub =
-    tod === 'morning'   ? 'You have a full day. Start with the hard one.' :
-    tod === 'afternoon' ? 'Halfway through — 2 priorities left, one decision hot in Slack.' :
-                          'Winding down. Park what\'s left — tomorrow has 3 meetings queued.';
+    tod === 'morning'   ? (g.morning   || 'Morning, <em>Shadi</em>.')   :
+    tod === 'afternoon' ? (g.afternoon || 'Afternoon, <em>Shadi</em>.') :
+                          (g.evening   || 'Evening, <em>Shadi</em>.');
+  const sub = buildHeroSubtitle(tod, state);
 
   const top3Count     = state.top3.length;
   const top3Done      = state.top3.filter(t => t.done).length;
@@ -1033,11 +1357,11 @@ function LayoutSplitBrain({ tod }) {
 
   const renderModule = (id) => {
     switch (id) {
-      case 'top3':     return <Top3 data={state.top3} onToggle={state.toggleAny}/>;
+      case 'top3':     return <Top3 data={state.top3} onToggle={state.toggleAny} okrApi={state.okrApi}/>;
       case 'calendar': return <CalendarMod data={state.calendar} next={SEED.nextMeeting}/>;
       case 'tasks':    return <TasksMod state={state} onToggle={state.toggleAny}/>;
       case 'kpi':      return <KpiMod data={SEED.kpis}/>;
-      case 'projects': return <ProjectsMod data={SEED.projects} okrs={SEED.okrs} decisions={SEED.decisions}/>;
+      case 'projects': return <ProjectsMod data={SEED.projects} okrs={SEED.okrs} decisions={SEED.decisions} okrApi={state.okrApi}/>;
       case 'blockers': return <BlockersMod data={SEED.blockers}/>;
       case 'slack':    return <SlackMod data={SEED.slack}/>;
       case 'inbox':    return <InboxMod data={SEED.inbox}/>;
@@ -1050,7 +1374,7 @@ function LayoutSplitBrain({ tod }) {
 
   return (
     <>
-      <Hero timeOfDay={tod} data={SEED} capacityPct={78}/>
+      <Hero timeOfDay={tod} data={SEED} capacityPct={78} state={state}/>
       <div className="layout-toolbar">
         <span className="layout-toolbar-hint">
           <Icon name="drag-and-drop" size={12}/>
@@ -1123,7 +1447,15 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 function DashboardApp() {
   const [accent, setAccent]   = uS(TWEAK_DEFAULTS.accent);
   const [density, setDensity] = uS(TWEAK_DEFAULTS.density);
-  const [tod, setTod]         = uS(TWEAK_DEFAULTS.timeOfDay);
+  const [tod, setTod]         = uS(detectTimeOfDay());
+  // Re-check the wall clock every 5 min so the greeting flips morning→afternoon→evening on its own
+  uE(() => {
+    const interval = setInterval(() => {
+      const next = detectTimeOfDay();
+      setTod(prev => prev === next ? prev : next);
+    }, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
   const [focus, setFocus]     = uS(TWEAK_DEFAULTS.focusMode);
   const [layout, setLayout]   = uS(TWEAK_DEFAULTS.layout); // 'canvas' | 'A' | 'B' | 'C'
   const [tweaksOpen, setTweaksOpen] = uS(false);
