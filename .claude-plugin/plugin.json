@@ -1,13 +1,13 @@
 {
-  "name": "work-dashboard",
+  "name": "work-os",
   "version": "0.2.0",
-  "description": "A personal work dashboard that merges Google Calendar, Gmail, Slack, Drive, and Granola meeting notes into a local React-in-browser view. Includes a parallelized orchestrator skill, six data agents, and a static HTML bundle. User identity, team roster, OKRs, and pins live in a local config file the recipient fills in.",
+  "description": "A personal Work OS that merges Google Calendar, Gmail, Slack, Drive, and Granola meeting notes into a local React-in-browser view. Includes OKR linking, smart task management, a parallelized orchestrator skill, six data agents, and a static HTML bundle. User identity, team roster, OKRs, and pins live in a local config file the recipient fills in.",
   "author": {
     "name": "Shadi Shalah"
   },
   "license": "MIT",
-  "homepage": "https://github.com/shadishalah-boop/work-dashboard",
-  "repository": "https://github.com/shadishalah-boop/work-dashboard",
+  "homepage": "https://github.com/shadishalah-boop/work-os",
+  "repository": "https://github.com/shadishalah-boop/work-os",
   "keywords": [
     "dashboard",
     "productivity",

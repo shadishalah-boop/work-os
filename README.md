@@ -2,7 +2,7 @@
 
 A personal work dashboard plugin for [Claude Code](https://claude.com/claude-code) that merges your **Google Calendar, Gmail, Slack, Google Drive, and Granola meeting notes** into a local React-in-browser view.
 
-Invoke `/work-dashboard:dashboard` and the plugin fans out to six parallel agents, pulls fresh data from your MCP servers, merges it, and writes it into a static HTML bundle you keep open in a browser tab. Reload the tab to see the new data.
+Invoke `/work-os:dashboard` and the plugin fans out to six parallel agents, pulls fresh data from your MCP servers, merges it, and writes it into a static HTML bundle you keep open in a browser tab. Reload the tab to see the new data.
 
 All user-specific content (your name, manager, team roster, OKRs, pins, Slack workspace) lives in a private config file on your machine — **nothing personal is bundled with the plugin.**
 
@@ -58,8 +58,8 @@ Want to swap in a different MCP? Override entries in your own `~/.claude.json` u
 In Claude Code, run:
 
 ```
-/plugin marketplace add shadishalah-boop/work-dashboard
-/plugin install work-dashboard@work-dashboard
+/plugin marketplace add shadishalah-boop/work-os
+/plugin install work-os@work-os
 ```
 
 Then run the guided setup — it writes your config file, creates the output directories, copies the bundle, and prints per-MCP auth instructions:
@@ -94,11 +94,11 @@ If you don't want to use `/dashboard-setup`:
 
 ```bash
 # 1. Copy the config template and edit it
-cp "$(claude plugin root work-dashboard)/templates/dashboard-config.local.example" \
+cp "$(claude plugin root work-os)/templates/dashboard-config.local.example" \
    ~/.claude/dashboard-config.local
 
 # 2. (Optional) Copy the filter template
-cp "$(claude plugin root work-dashboard)/templates/dashboard-filters.local.example" \
+cp "$(claude plugin root work-os)/templates/dashboard-filters.local.example" \
    ~/.claude/dashboard-filters.local
 
 # 3. Edit the config — fill in user / org / slack / dashboard / output sections
@@ -121,7 +121,7 @@ This file **stays on your machine** — it's never bundled into anything you sha
 ## Daily use
 
 ```
-/work-dashboard:dashboard
+/work-os:dashboard
 ```
 
 Every subsequent run reuses the bundle that's already on your machine — only the dynamic JSX files get rewritten. Reload the browser tab to see updates.
@@ -137,16 +137,16 @@ Plugins cannot ship scheduled tasks (they run per-user-machine), so you set this
 ### macOS — launchd
 
 ```xml
-<!-- ~/Library/LaunchAgents/com.you.work-dashboard.plist -->
+<!-- ~/Library/LaunchAgents/com.you.work-os.plist -->
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>Label</key>             <string>com.you.work-dashboard</string>
+  <key>Label</key>             <string>com.you.work-os</string>
   <key>ProgramArguments</key>  <array>
     <string>/bin/zsh</string>
     <string>-lc</string>
-    <string>claude -p "/work-dashboard:dashboard"</string>
+    <string>claude -p "/work-os:dashboard"</string>
   </array>
   <key>StartCalendarInterval</key>
   <array>
@@ -157,12 +157,12 @@ Plugins cannot ship scheduled tasks (they run per-user-machine), so you set this
 </plist>
 ```
 
-Load with `launchctl load ~/Library/LaunchAgents/com.you.work-dashboard.plist`.
+Load with `launchctl load ~/Library/LaunchAgents/com.you.work-os.plist`.
 
 ### Any OS — cron
 
 ```cron
-0 8,13,17 * * 1-5   claude -p "/work-dashboard:dashboard" >> ~/.claude/dashboard-cron.log 2>&1
+0 8,13,17 * * 1-5   claude -p "/work-os:dashboard" >> ~/.claude/dashboard-cron.log 2>&1
 ```
 
 ### Claude Code scheduled-tasks MCP
@@ -204,7 +204,7 @@ Each agent lives in `agents/dashboard-<name>.md`. To change what an agent does, 
 
 **Empty calendar / events missing** — Some calendar MCPs require you to pass a specific calendar ID. Check that your `calendar` MCP can see the user's default calendar; if not, update the `dashboard-calendar` agent to pass the right calendar ID.
 
-**Want to run the skill from a different Claude Code project** — As long as the plugin is installed and `~/.claude/dashboard-config.local` exists, `/work-dashboard:dashboard` works from any project.
+**Want to run the skill from a different Claude Code project** — As long as the plugin is installed and `~/.claude/dashboard-config.local` exists, `/work-os:dashboard` works from any project.
 
 ---
 
