@@ -1,13 +1,13 @@
 {
-  "name": "work-dashboard",
+  "name": "work-os",
   "owner": {
     "name": "Shadi Shalah"
   },
   "plugins": [
     {
-      "name": "work-dashboard",
+      "name": "work-os",
       "source": "./",
-      "description": "A personal work dashboard that merges Google Calendar, Gmail, Slack, Drive, and Granola meeting notes into a local React-in-browser view. Parallelized orchestrator skill + 6 data agents + static HTML bundle."
+      "description": "Personal Work OS — merges Google Calendar, Gmail, Slack, Drive, and Granola meeting notes into a local React-in-browser dashboard. Stakeholder Lens, Quick Capture, OKR linking, decision archive, commitments tracker. Parallelized orchestrator skill + 6 data agents + static HTML bundle."
     }
   ]
 }

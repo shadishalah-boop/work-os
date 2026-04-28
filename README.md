@@ -74,6 +74,29 @@ If you prefer manual setup, see **Manual install** below.
 
 ---
 
+## Upgrading (no uninstall needed)
+
+When a new version ships, just:
+
+```
+/plugin update work-os
+/dashboard
+```
+
+Then **hard-reload the dashboard tab** (⌘⇧R / Ctrl+Shift+R) to pick up new JSX/CSS.
+Your `~/.claude/dashboard-config.local`, `data-override.jsx` task state, and saved
+canvas layout all persist across upgrades — nothing to redo.
+
+If `/plugin update` says "already on the latest" but you know there's a newer
+version, run `/plugin marketplace update work-os` first to refresh the source,
+then retry the update.
+
+For breaking changes (rare, called out in the changelog), check
+`templates/dashboard-config.local.example` for new config fields and merge
+them into your local config.
+
+---
+
 ## First run
 
 After `/dashboard-setup` completes, open `<dashboardDir>/Work Dashboard.html` in your browser (the setup wizard prints the exact path). Keep the tab pinned.
