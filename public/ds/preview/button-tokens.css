@@ -1,5 +1,5 @@
-/* Button tokens, lifted from design-tokens.json.
-   Theme context: pink.400 = #FF7AAC is the primary fill.
+/* Tokyo-UI button tokens, lifted from design-tokens.json in preply/design-system.
+   Theme context: pink.400 = #FF7AAC is the B2C primary fill.
    Primary buttons have a black (grey.900) 1px border, grey.900 active bg (flips dark on press).
 */
 

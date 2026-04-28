@@ -73,6 +73,7 @@ Some SEED fields are produced by a single agent; others merge two. Apply this ma
 | `SEED.blockers` | granola.blockers + slack.blockers | Concatenate. Sort by sev: `high` before `medium`. Cap 5. |
 | `SEED.projects` | granola.projects | Pass through; cap 8. |
 | `SEED.decisions` | granola.decisions + gmail.decisions | Concatenate; re-id `dec1..`; cap 5. Prefer gmail decisions (they include `href`). |
+| `SEED.meetingHistory` | granola.meetingHistory | Pass through; cap 30. Sort newest-first. Powers Stakeholder Lens "Recent meetings together". |
 | `SEED.inbox` | gmail.inbox | Pass through; cap 6. |
 | `SEED.slack` | slack.{workspace,tabs,channels,activeThreads} | Pass through. |
 | `SEED.personalSignals` | wellness.* | Pass through all fields. |
@@ -80,6 +81,7 @@ Some SEED fields are produced by a single agent; others merge two. Apply this ma
 
 Static fields preserved by this skill (hardcoded in Step 4 template — they rarely change):
 - `SEED.user` · `SEED.greeting` · `SEED.team` · `SEED.okrs` · `SEED.pins` · `SEED.weather`
+- `SEED.knownPeople` (powers click-a-name → Stakeholder Lens) · `SEED.pinnedPeople` (topbar quick-access avatars)
 
 If any agent's JSON has `sourceOk: false`, treat its fields as empty arrays for the merge (fall back to seed values from `data.jsx`).
 
@@ -168,6 +170,16 @@ Build the file contents as one string using `JSON.stringify(mergedValue, null, 2
 
   // --- Decisions pending (granola + gmail merged) -----------------------
   window.SEED.decisions = {{DECISIONS_JSON}};
+
+  // --- Recent meetings together (from granola.meetingHistory) ----------
+  // Powers the Stakeholder Lens "Recent meetings together" + "Last met" sections.
+  window.SEED.meetingHistory = {{MEETING_HISTORY_JSON}};
+
+  // --- Known people for click-a-name → Lens + topbar pinned avatars -----
+  // Per-user config — populate with the people you actually work with so the
+  // Stakeholder Lens activates on name mentions in tasks/decisions/inbox.
+  window.SEED.knownPeople = {{KNOWN_PEOPLE_JSON}};
+  window.SEED.pinnedPeople = {{PINNED_PEOPLE_JSON}};
 
   // --- Pins / Quick access (static · Shadi's daily tools) ---------------
   window.SEED.pins = [

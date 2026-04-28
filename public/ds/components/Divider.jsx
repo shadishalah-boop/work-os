@@ -1,6 +1,6 @@
 /* global React */
 // =============================================================================
-// DS — Divider
+// PREPLY DS — Divider
 // 1px line. Default uses --border-subtle. `strong` -> --border-default.
 // `ink` -> full ink rule. `vertical` -> 1px-wide span instead of <hr>.
 // =============================================================================

@@ -1,6 +1,6 @@
 /* global React */
 // =============================================================================
-// DS — Chip
+// PREPLY DS — Chip
 // Interactive tag for filters / multi-select / applied filters.
 // Use aria-selected="true|false" for selected state, or `dismissible` for
 // X-able pills. Pass `count` to render a trailing bubble badge.

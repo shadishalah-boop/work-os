@@ -2,9 +2,10 @@
    BUTTON — .btn
    Pill-square, 8px radius, 2px border, Figtree semibold.
    Sizes: default (medium/large = 48px), --sm (32px), --xs (24px).
-   Variants: --primary (pink, default), --primary-b2b (blue),
+   Variants: --primary (B2C pink, default), --primary-b2b (blue),
              --primary-tutor (teal), --secondary, --tertiary, --ghost,
              --critical, --inverted, --link, --icon (icon-only).
+   Source: preply/design-system → Button tokens.
    ========================================================================= */
 
 .btn {

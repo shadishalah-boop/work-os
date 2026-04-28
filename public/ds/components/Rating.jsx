@@ -1,6 +1,6 @@
 /* global React */
 // =============================================================================
-// DS — Rating (display only)
+// PREPLY DS — Rating (display only)
 // Five stars, drive with `value` (0–5). The CSS uses --filled-pct to clip
 // the filled layer over the empty layer. Sizes sm | md | lg.
 // =============================================================================

@@ -1,6 +1,6 @@
 /* global React */
 // =============================================================================
-// DS — Slider & RangeSlider
+// PREPLY DS — Slider & RangeSlider
 // 4px track, 32×32 thumb. Single-thumb drives via --val/--min/--max;
 // range drives via --lo/--hi (as %). Both use real <input type=range> for
 // keyboard accessibility, with the visual track painted by CSS.

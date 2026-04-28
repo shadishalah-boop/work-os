@@ -1,6 +1,6 @@
 /* global React */
 // =============================================================================
-// DS — IconButton
+// PREPLY DS — IconButton
 // Convenience wrapper around <Button iconOnly>. Always supply ariaLabel.
 // =============================================================================
 

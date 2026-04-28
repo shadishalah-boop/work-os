@@ -1,7 +1,7 @@
 /* ============================================================
    Work Dashboard — Layout D · Modern SaaS aesthetic
    Scoped under .layout-d so it never leaks into A/B/C.
-   Builds on DS tokens + accent/density overrides.
+   Builds on Preply DS tokens + accent/density overrides.
    ============================================================ */
 
 .layout-d {
@@ -174,9 +174,13 @@
 .layout-d .d-greeting-sub { font-size: 13px; color: var(--fg-2); }
 .layout-d .d-greeting-actions { display: flex; gap: 8px; align-items: center; }
 
-/* Stat chip row */
+/* Stat chip row — auto-fit: as many ~220px columns as the row can hold, then
+   wrap. So 4 tiles render side-by-side on wide screens, drop to 3, then 2,
+   then 1 as the viewport narrows — no horizontal overflow at any width. */
 .layout-d .d-stats {
-  display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
   margin-bottom: 28px;
 }
 .layout-d .d-stat {
@@ -540,4 +544,447 @@
 .attendee-status {
   margin-top: 6px; font-size: 11px; color: var(--fg-3);
   min-height: 14px;
+}
+
+/* -------- Meeting prep card (imminent-meeting context) -------- */
+.layout-d .meeting-prep-card {
+  margin: 0 0 20px;
+  padding: 14px 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--d-border);
+  border-left: 3px solid var(--blue-600, #4a6cf7);
+  border-radius: var(--d-radius-sm);
+  box-shadow: var(--d-shadow);
+}
+.layout-d .mp-header {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+.layout-d .mp-pill {
+  background: var(--blue-100, #e6ecff);
+  color: var(--blue-700, #2945c4);
+  padding: 3px 9px; border-radius: 999px;
+  font-size: 11px; font-weight: 600;
+  font-feature-settings: "tnum";
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+.layout-d .mp-title {
+  font-weight: 600; color: var(--fg-1);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  min-width: 0;
+}
+.layout-d .mp-attendees {
+  color: var(--fg-2); font-weight: 500;
+  margin-left: auto;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  min-width: 0;
+}
+.layout-d .mp-grid {
+  display: grid; gap: 18px;
+  padding-top: 10px;
+  border-top: 1px solid var(--d-border);
+}
+.layout-d .mp-col { min-width: 0; }
+.layout-d .mp-col-label {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--fg-3); font-weight: 600;
+  margin-bottom: 6px;
+}
+.layout-d .mp-item {
+  display: block;
+  font-size: 12px; color: var(--fg-1);
+  padding: 3px 0; line-height: 1.35;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  text-decoration: none;
+}
+.layout-d a.mp-item:hover { color: var(--blue-700, #2945c4); }
+.layout-d .mp-item strong { font-weight: 600; }
+.layout-d .mp-item .dim { color: var(--fg-2); font-weight: 500; }
+.layout-d .mp-empty {
+  padding-top: 10px;
+  border-top: 1px solid var(--d-border);
+  font-size: 12px; color: var(--fg-3);
+  font-style: italic;
+}
+
+/* -------- Read-only mode (?view=read) -------- */
+.readonly-banner {
+  position: fixed; top: 0; left: 0; right: 0;
+  height: 36px; z-index: 1100;
+  display: flex; align-items: center; justify-content: center; gap: 14px;
+  background: linear-gradient(90deg, #4a6cf7, #6e8bf5);
+  color: white;
+  font-size: 12px; font-weight: 600; letter-spacing: 0.03em;
+  box-shadow: 0 1px 4px rgba(15, 15, 25, 0.15);
+}
+.readonly-banner a {
+  color: white;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  opacity: 0.9;
+}
+.readonly-banner a:hover { opacity: 1; }
+
+body[data-readonly="true"] { padding-top: 36px; }
+
+/* Hide all edit / drag / mutation affordances when in read-only mode */
+body[data-readonly="true"] .hide-when-readonly,
+body[data-readonly="true"] .d-greeting-actions,
+body[data-readonly="true"] .d-canvas-bar,
+body[data-readonly="true"] .layout-toolbar,
+body[data-readonly="true"] .top3-check,
+body[data-readonly="true"] .task-tick,
+body[data-readonly="true"] .task-actions,
+body[data-readonly="true"] .top3-suggest,
+body[data-readonly="true"] .wc-mark-seen { display: none !important; }
+
+/* Disable drag handles + cursor cues — modules become static cards */
+body[data-readonly="true"] .top3-item,
+body[data-readonly="true"] .mod-h,
+body[data-readonly="true"] .top3-h { cursor: default !important; }
+body[data-readonly="true"] .box-canvas .box {
+  pointer-events: auto;
+}
+body[data-readonly="true"] .box-canvas .box .box-rh,
+body[data-readonly="true"] .box-canvas .box [class*="resize"] { display: none !important; }
+
+/* Pinned People strip — keep clickable so viewer can browse the lens */
+
+/* -------- Pinned People strip in topbar -------- */
+.layout-d .d-pinned-people {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 12px;
+  padding-left: 12px;
+  border-left: 1px solid var(--d-border);
+}
+.layout-d .d-pinned-avatar {
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.96);
+  letter-spacing: 0.02em;
+  display: grid; place-items: center;
+  box-shadow: 0 1px 2px rgba(15, 15, 25, 0.10);
+  transition: transform 120ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 120ms;
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+}
+.layout-d .d-pinned-avatar:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(15, 15, 25, 0.18);
+}
+.layout-d .d-pinned-avatar:focus-visible {
+  outline-color: var(--blue-600, #4a6cf7);
+}
+
+/* -------- Last-met hint inside the lens header -------- */
+.lens-lastmet {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--fg-3);
+  font-feature-settings: "tnum";
+}
+.lens-lastmet strong {
+  color: var(--fg-2);
+  font-weight: 600;
+}
+
+/* -------- Team rows are clickable (open Stakeholder Lens) -------- */
+.layout-d .team-person {
+  cursor: pointer;
+  transition: background-color 120ms, transform 80ms;
+}
+.layout-d .team-person:hover { background: var(--d-bg-muted); }
+.layout-d .team-person:active { transform: scale(0.99); }
+.layout-d .team-person:focus-visible {
+  outline: 2px solid var(--blue-600, #4a6cf7);
+  outline-offset: 2px;
+}
+
+/* -------- Stakeholder Lens — right-side drawer overlay -------- */
+.lens-overlay {
+  position: fixed; inset: 0;
+  background: rgba(15, 15, 25, 0.45);
+  z-index: 1000;
+  animation: lens-fade 140ms ease-out;
+}
+.lens-drawer {
+  position: fixed; top: 0; right: 0; bottom: 0;
+  width: 480px; max-width: 100vw;
+  background: var(--bg-surface, #fff);
+  border-left: 1px solid var(--d-border);
+  display: flex; flex-direction: column;
+  animation: lens-slide 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  box-shadow: -8px 0 32px rgba(15, 15, 25, 0.18);
+}
+@keyframes lens-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes lens-slide { from { transform: translateX(100%); } to { transform: translateX(0); } }
+
+.lens-header {
+  display: flex; gap: 12px; align-items: center;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--d-border);
+  flex-shrink: 0;
+}
+.lens-id { min-width: 0; flex: 1; }
+.lens-name {
+  font-size: 16px; font-weight: 600; color: var(--fg-1);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.lens-manager {
+  font-size: 9px; margin-left: 8px;
+  color: var(--fg-3); font-weight: 600;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  background: var(--d-bg-muted); padding: 1px 6px; border-radius: 4px;
+  vertical-align: middle;
+}
+.lens-role { font-size: 12px; color: var(--fg-2); margin-top: 3px; }
+.lens-close {
+  background: transparent; border: none;
+  font-size: 22px; line-height: 1; cursor: pointer;
+  color: var(--fg-2); padding: 4px 10px;
+  border-radius: 6px;
+  font-weight: 300;
+}
+.lens-close:hover { background: var(--d-bg-muted); color: var(--fg-1); }
+
+.lens-actions {
+  display: flex; gap: 8px; align-items: center;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--d-border);
+  flex-shrink: 0;
+}
+.lens-stamp {
+  margin-left: auto;
+  font-size: 11px; color: var(--fg-3);
+  font-feature-settings: "tnum";
+}
+
+.lens-body {
+  flex: 1; overflow-y: auto;
+  padding: 16px 20px 24px;
+}
+
+.lens-section { margin-bottom: 22px; }
+.lens-section:last-child { margin-bottom: 0; }
+.lens-section h3 {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--fg-3); font-weight: 600; margin: 0 0 10px;
+  display: flex; align-items: center; gap: 8px;
+}
+.lens-count {
+  background: var(--d-bg-muted);
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 10px;
+  color: var(--fg-2);
+  font-feature-settings: "tnum";
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.lens-item {
+  padding: 10px 12px; margin-bottom: 6px;
+  background: var(--bg-surface, #fff);
+  border: 1px solid var(--d-border);
+  border-radius: 8px;
+  transition: border-color 120ms;
+}
+.lens-item:hover { border-color: var(--d-border-strong); }
+.lens-item-label {
+  font-size: 13px; color: var(--fg-1); line-height: 1.4;
+  font-weight: 500;
+}
+.lens-item-meta {
+  font-size: 11px; color: var(--fg-2); margin-top: 4px; line-height: 1.4;
+}
+.lens-item-link {
+  display: inline-block; margin-top: 6px;
+  font-size: 11px; color: var(--blue-600, #4a6cf7);
+  text-decoration: none; font-weight: 500;
+}
+.lens-item-link:hover { text-decoration: underline; }
+
+.lens-empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--fg-3);
+  font-style: italic;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* ============================================================================
+   Responsive layout — keeps the dashboard usable from 1440px down to ~360px.
+   Strategy:
+     ≥1280px : pixel-perfect canvas as designed
+     <1280px : sidebar narrows; canvas gains horizontal scroll inside d-content
+     <1100px : 4-col stat grid → 2-col; topbar voice/notif icons trim
+     <900px  : sidebar collapses to icon-only (64px); pinned-people hide;
+               greeting + toolbar stack vertically
+     <700px  : stats single-col; topbar search shrinks to icon; lens drawer
+               becomes full-screen
+   The absolute-positioned canvas can't reflow without losing user-saved
+   layouts, so on narrow screens we let it scroll horizontally inside d-content
+   instead of breaking the whole page.
+   ============================================================================ */
+
+/* Collapsed sidebar — driven by the rail's data-collapsed attribute, set by
+   the LayoutModernSaaS state. Hides labels + section headers + user meta so
+   only the icons + toggle button remain. */
+.layout-d .d-rail { position: relative; }
+.layout-d .d-rail[data-collapsed="true"] { padding: 12px 6px; }
+.layout-d .d-rail[data-collapsed="true"] .d-rail-logo-text,
+.layout-d .d-rail[data-collapsed="true"] .d-rail-section,
+.layout-d .d-rail[data-collapsed="true"] .d-rail-item span:not(.pill),
+.layout-d .d-rail[data-collapsed="true"] .d-rail-item .pill,
+.layout-d .d-rail[data-collapsed="true"] .d-rail-user-meta,
+.layout-d .d-rail[data-collapsed="true"] .d-rail-user button { display: none; }
+.layout-d .d-rail[data-collapsed="true"] .d-rail-item { justify-content: center; padding: 10px 0; }
+.layout-d .d-rail[data-collapsed="true"] .d-rail-user { justify-content: center; padding: 6px 4px; }
+.layout-d .d-rail[data-collapsed="true"] .d-rail-logo { justify-content: center; padding: 4px 0 14px; }
+.layout-d .d-rail[data-collapsed="true"] .d-rail-logo-mark { margin: 0; }
+
+/* Toggle button — small chevron pinned to the rail's right edge */
+.layout-d .d-rail-toggle {
+  position: absolute;
+  top: 18px; right: -11px;
+  width: 22px; height: 22px;
+  background: var(--bg-surface);
+  border: 1px solid var(--d-border);
+  border-radius: 50%;
+  display: grid; place-items: center;
+  font-size: 14px; font-weight: 600;
+  color: var(--fg-2);
+  cursor: pointer;
+  z-index: 10;
+  box-shadow: 0 2px 6px rgba(15, 15, 25, 0.10);
+  transition: transform 120ms cubic-bezier(0.2, 0.8, 0.2, 1), color 120ms, box-shadow 120ms;
+  font-family: var(--font-ui);
+  line-height: 1;
+  padding: 0;
+}
+.layout-d .d-rail-toggle:hover {
+  color: var(--accent);
+  transform: scale(1.12);
+  box-shadow: 0 3px 10px rgba(15, 15, 25, 0.14);
+}
+.layout-d .d-rail-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Right-edge drag handle for free resize. 4px wide, full rail height. */
+.layout-d .d-rail-resize-handle {
+  position: absolute;
+  top: 0; right: 0;
+  width: 4px; height: 100%;
+  cursor: ew-resize;
+  z-index: 5;
+  background: transparent;
+  transition: background-color 100ms;
+}
+.layout-d .d-rail-resize-handle:hover {
+  background: var(--accent);
+  opacity: 0.35;
+}
+
+/* < 1280px — REFLOW the canvas into a stacked column so everything fits.
+   The canvas was designed for ≥1280px with absolute-positioned boxes; below
+   that, we override the inline left/top/width/height (set by React) with
+   !important so each box becomes a full-width stacked card. Vertical scroll
+   only — no horizontal scroll, no scaled tiny content. */
+@media (max-width: 1279px) {
+  .layout-d .d-content { padding: 24px 24px 56px; overflow-x: visible; }
+
+  .layout-d .box-canvas {
+    position: static !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    height: auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 14px;
+  }
+  .layout-d .box-canvas .box {
+    position: static !important;
+    left: auto !important;
+    top: auto !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+  }
+  /* Inner content drives height instead of being clamped to a fixed parent height */
+  .layout-d .box-canvas .box .box-inner {
+    height: auto !important;
+    overflow: visible !important;
+  }
+  .layout-d .box-canvas .box .box-inner > .mod,
+  .layout-d .box-canvas .box .box-inner > .top3,
+  .layout-d .box-canvas .box .box-inner > .wellness {
+    min-height: 0 !important;
+  }
+  /* Drag/resize handles + drag toolbar are meaningless when stacked */
+  .layout-d .box-canvas .box-rh,
+  .layout-d .layout-toolbar,
+  .layout-d .d-canvas-bar { display: none !important; }
+  .layout-d .box-canvas .box { cursor: default; }
+  .layout-d .box-canvas .box .mod-h,
+  .layout-d .box-canvas .box .top3-h { cursor: default; }
+}
+
+/* < 1100px — stats 2-up; topbar tightens */
+@media (max-width: 1100px) {
+  .layout-d .d-stats { grid-template-columns: repeat(2, 1fr) !important; }
+  .layout-d .d-pinned-people { gap: 4px; margin-left: 8px; padding-left: 8px; }
+  .layout-d .d-pinned-avatar { width: 26px; height: 26px; }
+}
+
+/* < 900px — greeting stacks, hide pinned-people (sidebar already icon-only) */
+@media (max-width: 900px) {
+
+  .layout-d .d-content { padding: 18px 16px 56px; }
+  .layout-d .d-greeting {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .layout-d .d-greeting-actions { width: 100%; flex-wrap: wrap; }
+  .layout-d .d-greeting h1 { font-size: 24px; line-height: 28px; }
+  .layout-d .d-pinned-people { display: none; }
+  .layout-d .d-topbar { gap: 8px; padding: 0 12px; }
+}
+
+/* < 700px — stats single-col, topbar minimal, full-screen lens */
+@media (max-width: 700px) {
+  .layout-d .d-stats { grid-template-columns: 1fr !important; }
+  .layout-d .d-stats { margin-bottom: 18px; }
+  .layout-d .d-search-placeholder,
+  .layout-d .d-topbar kbd { display: none; }
+  .layout-d .d-topbar .d-search { padding: 6px 10px; min-width: 0; }
+  .layout-d .d-topbar { padding: 0 8px; }
+  .lens-drawer { width: 100vw; }
+  .meeting-prep-card .mp-grid { grid-template-columns: 1fr !important; }
+  .meeting-prep-card .mp-header { gap: 6px; font-size: 12px; }
+  .meeting-prep-card .mp-attendees { margin-left: 0; }
+}
+
+/* Read-only banner shrinks too */
+@media (max-width: 700px) {
+  .readonly-banner { font-size: 10px; gap: 8px; padding: 0 8px; }
+}
+
+/* Modal panels — slightly tighter on small screens */
+@media (max-width: 700px) {
+  .modal-panel,
+  .share-modal { width: 96vw; }
+  .share-sections { grid-template-columns: 1fr; }
 }

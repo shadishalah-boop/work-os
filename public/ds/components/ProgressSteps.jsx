@@ -1,6 +1,6 @@
 /* global React */
 // =============================================================================
-// DS — ProgressSteps
+// PREPLY DS — ProgressSteps
 // Discrete pill steps. Each step gets data-active, the current also gets
 // aria-current="step".
 // =============================================================================

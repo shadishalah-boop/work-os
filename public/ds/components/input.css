@@ -21,7 +21,7 @@
   color: var(--fg-1);
   transition: border-color 120ms var(--ease-out);
 }
-.input:focus { border-color: var(--brand-black); }
+.input:focus { border-color: var(--preply-black); }
 .input.error { border-color: var(--red-500); background: var(--red-100); }
 .input:disabled {
   background: var(--grey-50);

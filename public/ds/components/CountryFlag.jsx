@@ -1,6 +1,6 @@
 /* global React */
 // =============================================================================
-// DS — CountryFlag
+// PREPLY DS — CountryFlag
 // 4:3 image, 2px radius, 0.5px ink border. Sizes sm (16w), md (24w), lg (32w).
 // Source: flagcdn.com.
 // =============================================================================

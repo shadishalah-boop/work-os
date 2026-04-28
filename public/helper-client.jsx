@@ -49,6 +49,44 @@
   setInterval(checkHealth, STATUS_POLL_MS);
   checkHealth();
 
+  // --- Quick Capture polling ------------------------------------------------
+  // The Quick Capture .app POSTs to /quickcapture; we drain pending items here
+  // and dispatch dash:task-added for each so they land in the dueSoon bucket.
+  // 4-second interval = fast enough to feel instant, slow enough to be free.
+  const QC_POLL_MS = 4000;
+  async function drainQuickCapture() {
+    if (!online) return;
+    try {
+      const res = await fetch(HELPER_URL + '/quickcapture/pending');
+      if (!res.ok) return;
+      const data = await res.json().catch(() => null);
+      const items = (data && Array.isArray(data.items)) ? data.items : [];
+      for (const it of items) {
+        try {
+          window.dispatchEvent(new CustomEvent('dash:task-added', { detail: {
+            id:      it.id ? ('qc-' + it.id) : ('task-' + Date.now()),
+            label:   it.label,
+            meta:    it.meta || 'Quick capture',
+            p:       Number.isFinite(it.p) ? it.p : 2,
+            bucket:  it.bucket || 'dueSoon',
+            project: it.project || 'ops',
+            done:    false,
+          }}));
+          // Confirmation toast — clip long labels so the toast stays single-line
+          const labelShort = (it.label || '').length > 60 ? (it.label.slice(0, 57) + '…') : (it.label || 'task');
+          window.dispatchEvent(new CustomEvent('dash:toast', { detail: {
+            msg: '✓ Quick capture: ' + labelShort,
+            kind: 'success',
+          }}));
+        } catch {}
+      }
+    } catch {}
+  }
+  setInterval(drainQuickCapture, QC_POLL_MS);
+  // First drain ~1s after load so anything queued while the dashboard wasn't
+  // open lands quickly on next visit.
+  setTimeout(drainQuickCapture, 1000);
+
   // --- Slack URL parsing -----------------------------------------------------
   function parsePermalink(url) {
     if (!url) return { channel: null, thread_ts: null };

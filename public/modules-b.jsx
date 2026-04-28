@@ -312,10 +312,36 @@ function SlackMod({ data }) {
 function ProjectsMod({ data, okrs, decisions, okrApi }) {
   const [decList, setDecList] = useStateB(decisions);
   const [expanded, setExpanded] = useStateB({}); // okr id → bool
+  const [view, setView] = useStateB('pending'); // 'pending' | 'archive'
+  const [archive, setArchive] = useStateB(() => {
+    try { return JSON.parse(localStorage.getItem('dashboard.decisionArchive.v1') || '[]'); }
+    catch { return []; }
+  });
+  const [openArchiveId, setOpenArchiveId] = useStateB(null);
   useEffectB(() => { setDecList(decisions); }, [decisions]);
+  // Re-read the archive on every save so the view stays fresh.
+  useEffectB(() => {
+    const onArchived = () => {
+      try { setArchive(JSON.parse(localStorage.getItem('dashboard.decisionArchive.v1') || '[]')); }
+      catch { setArchive([]); }
+    };
+    window.addEventListener('dash:decision-archived', onArchived);
+    return () => window.removeEventListener('dash:decision-archived', onArchived);
+  }, []);
   const skipDec = (id) => setDecList(decList.filter(x => x.id !== id));
   const decideDec = (d) => {
     if (d.href) window.open(d.href, '_blank', 'noreferrer');
+  };
+  const logDec = (d) => {
+    window.dispatchEvent(new CustomEvent('dash:log-decision', { detail: {
+      title: d.title || d.label || '',
+      who: d.who || null,
+      source: 'decision',
+      sourceMeta: d.meta || null,
+      sourceId: d.id || null,
+    }}));
+    // Optimistically remove from pending — the modal handles persisting to archive.
+    setDecList(decList.filter(x => x.id !== d.id));
   };
   const toggleOkr = (id) => setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
 
@@ -431,18 +457,86 @@ function ProjectsMod({ data, okrs, decisions, okrApi }) {
           </div>
         );
       })}
-      <div className="sub-section-head">Pending your decision<span className="bar"/><span>{decList.length}</span></div>
-      {decList.map(d => (
-        <div key={d.id} style={{display:'grid', gridTemplateColumns:'1fr auto auto auto', gap:10, alignItems:'center', padding:'10px 4px', borderTop:'1px solid var(--border-subtle)'}}>
+      <div className="sub-section-head dec-head">
+        <button
+          className={'dec-tab' + (view === 'pending' ? ' is-active' : '')}
+          onClick={() => setView('pending')}
+        >Pending<span className="dec-tab-count">{decList.length}</span></button>
+        <button
+          className={'dec-tab' + (view === 'archive' ? ' is-active' : '')}
+          onClick={() => setView('archive')}
+        >Archive<span className="dec-tab-count">{archive.length}</span></button>
+        <span className="bar"/>
+      </div>
+
+      {view === 'pending' && decList.map(d => (
+        <div key={d.id} style={{display:'grid', gridTemplateColumns:'1fr auto auto auto auto', gap:10, alignItems:'center', padding:'10px 4px', borderTop:'1px solid var(--border-subtle)'}}>
           <div>
             <div style={{fontSize:13, fontWeight:600}}>{d.title}</div>
             <div style={{fontSize:12, color:'var(--fg-3)'}}>{d.who} · {d.meta}</div>
           </div>
           {Tagger && <Tagger label={d.title} meta={d.meta} okrApi={okrApi}/>}
           <button className="btn btn--tertiary btn--xs" onClick={() => skipDec(d.id)}>Skip</button>
+          <button className="btn btn--tertiary btn--xs" onClick={() => logDec(d)} title="Log this decision with reasoning">Log</button>
           <button className="btn btn--primary btn--xs" onClick={() => decideDec(d)}>Decide</button>
         </div>
       ))}
+
+      {view === 'archive' && archive.length === 0 && (
+        <div className="dec-empty">
+          No decisions logged yet. Click <strong>Log</strong> on any pending decision (or use <strong>Log decision</strong> from the Stakeholder Lens) to start capturing your reasoning.
+        </div>
+      )}
+
+      {view === 'archive' && archive.map(d => {
+        const isOpen = openArchiveId === d.id;
+        const date = (d.ts || '').slice(0, 10);
+        const outcomeLabel = d.outcome === 'declined' ? 'Declined' : d.outcome === 'deferred' ? 'Deferred' : 'Approved';
+        return (
+          <div key={d.id} className={'dec-archive-row' + (isOpen ? ' is-open' : '')}>
+            <button
+              className="dec-archive-head"
+              onClick={() => setOpenArchiveId(isOpen ? null : d.id)}
+            >
+              <span className={'dec-archive-outcome out-' + (d.outcome || 'approved')}>{outcomeLabel}</span>
+              <span className="dec-archive-title">{d.title}</span>
+              <span className="dec-archive-date">{date}</span>
+              <span className="dec-archive-chev">{isOpen ? '▾' : '▸'}</span>
+            </button>
+            {isOpen && (
+              <div className="dec-archive-detail">
+                {d.who && <div className="dec-archive-meta"><strong>Stakeholder:</strong> {d.who}</div>}
+                {d.sourceMeta && <div className="dec-archive-meta"><strong>Source:</strong> {d.sourceMeta}</div>}
+                <div className="dec-archive-reasoning">
+                  {d.reasoning ? d.reasoning : <em style={{color:'var(--fg-3)'}}>No reasoning recorded.</em>}
+                </div>
+                <div className="dec-archive-actions">
+                  <button
+                    className="btn btn--ghost btn--xs"
+                    onClick={() => {
+                      const text = `[${date}] ${outcomeLabel}: ${d.title}\n${d.reasoning || ''}\n${d.who ? 'Stakeholder: ' + d.who : ''}`.trim();
+                      navigator.clipboard.writeText(text).then(() => {
+                        window.dispatchEvent(new CustomEvent('dash:toast', { detail: { msg: 'Decision copied', kind: 'success' }}));
+                      });
+                    }}
+                  >Copy</button>
+                  <button
+                    className="btn btn--ghost btn--xs"
+                    onClick={() => {
+                      if (confirm('Delete this archived decision?')) {
+                        const list = archive.filter(x => x.id !== d.id);
+                        try { localStorage.setItem('dashboard.decisionArchive.v1', JSON.stringify(list)); } catch {}
+                        setArchive(list);
+                        if (openArchiveId === d.id) setOpenArchiveId(null);
+                      }
+                    }}
+                  >Delete</button>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
     </Module>
   );
 }
@@ -510,7 +604,11 @@ function TeamMod({ data }) {
       )}
       <div className="team-grid">
         {people.map((p, i) => (
-          <div key={i} className="team-person" data-out={p.ooo}>
+          <div key={i} className="team-person" data-out={p.ooo}
+               onClick={() => window.dispatchEvent(new CustomEvent('dash:open-lens', { detail: { person: p } }))}
+               role="button" tabIndex={0}
+               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); window.dispatchEvent(new CustomEvent('dash:open-lens', { detail: { person: p } })); } }}
+               title={`Open stakeholder lens for ${p.name}`}>
             <span className="pds-avatar size-32"><img src="ds/assets/avatar-default.svg" alt={p.name}/></span>
             <div className="who">
               <div className="team-name">{p.name}{p.manager && <span style={{fontSize:10, marginLeft:6, color:'var(--fg-3)'}}>MGR</span>}</div>
@@ -520,6 +618,103 @@ function TeamMod({ data }) {
           </div>
         ))}
       </div>
+    </Module>
+  );
+}
+
+// --- Commitments Module ---
+// Surfaces every open task/decision where a known stakeholder is the audience,
+// grouped by recipient with aging badges. Source: top3 + overdue + dueSoon +
+// blocked, filtered through KNOWN_PEOPLE name-matching against meta and label.
+// Click a recipient row → opens the Stakeholder Lens for them.
+function CommitmentsMod({ state }) {
+  const known = window.KNOWN_PEOPLE || [];
+
+  // Pull from all open work-item buckets
+  const all = []
+    .concat((state.top3    || []).map(t => ({ ...t, _bucket: 'top3'    })))
+    .concat((state.overdue || []).map(t => ({ ...t, _bucket: 'overdue' })))
+    .concat((state.dueSoon || []).map(t => ({ ...t, _bucket: 'dueSoon' })))
+    .concat((state.blocked || []).map(t => ({ ...t, _bucket: 'blocked' })))
+    .filter(t => !t.done);
+
+  // Detect the AUDIENCE — meta first (more reliable, e.g. "Granola · Jose 1:1"),
+  // then label. Use the same longest-match-wins ordering as TextWithPeople.
+  const sortedKnown = [...known].sort((a, b) => b.match.length - a.match.length);
+  const detect = (text) => {
+    if (!text) return null;
+    for (const p of sortedKnown) {
+      const re = new RegExp(`\\b${p.match.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+      if (re.test(text)) return p;
+    }
+    return null;
+  };
+
+  const commitments = all
+    .map(t => {
+      const audience = detect(t.meta) || detect(t.label);
+      return audience ? { ...t, _audience: audience } : null;
+    })
+    .filter(Boolean);
+
+  // Sort by bucket urgency: overdue > top3 > dueSoon > blocked
+  const bucketRank = { overdue: 0, top3: 1, dueSoon: 2, blocked: 3 };
+  commitments.sort((a, b) => bucketRank[a._bucket] - bucketRank[b._bucket]);
+
+  // Group by audience
+  const byAudience = new Map();
+  commitments.forEach(c => {
+    const key = c._audience.name;
+    if (!byAudience.has(key)) byAudience.set(key, { person: c._audience, items: [] });
+    byAudience.get(key).items.push(c);
+  });
+  const groups = Array.from(byAudience.values());
+
+  const overdueCount = commitments.filter(c => c._bucket === 'overdue').length;
+  const blockedCount = commitments.filter(c => c._bucket === 'blocked').length;
+
+  const bucketLabel = { overdue: 'Overdue', top3: 'Today', dueSoon: 'Due soon', blocked: 'Blocked' };
+
+  return (
+    <Module
+      title="Commitments"
+      sub={`${commitments.length} open · ${overdueCount} overdue · ${blockedCount} blocked`}
+      icon={<span style={{width:28, height:28, borderRadius:8, background:'var(--pink-100)', display:'grid', placeItems:'center'}}><Icon name="lightning" size={16}/></span>}
+      className="commitments-mod"
+    >
+      {groups.length === 0 ? (
+        <div className="commit-empty">
+          No open commitments to known stakeholders. Items mentioning <em>Jose</em>, <em>Christopher</em>, <em>Bertrand</em>, etc. will appear here as they show up in tasks.
+        </div>
+      ) : (
+        <div className="commit-list">
+          {groups.map((g, gi) => {
+            const initials = g.person.name.split(/\s+/).filter(Boolean).map(s => s[0]).slice(0, 2).join('').toUpperCase();
+            return (
+              <div key={gi} className="commit-group">
+                <button
+                  className="commit-group-h"
+                  onClick={() => window.dispatchEvent(new CustomEvent('dash:open-lens', { detail: { person: g.person } }))}
+                  title={`Open lens for ${g.person.name}`}
+                >
+                  <span className="commit-avatar">{initials}</span>
+                  <span className="commit-to">{g.person.name}</span>
+                  <span className="commit-count">{g.items.length}</span>
+                </button>
+                {g.items.map((c, ci) => (
+                  <div key={ci} className="commit-row" data-bucket={c._bucket}>
+                    <span className={'commit-badge bucket-' + c._bucket}>{bucketLabel[c._bucket]}</span>
+                    <div className="commit-body">
+                      <div className="commit-text">{c.label}</div>
+                      {c.meta && <div className="commit-meta">{c.meta}</div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </Module>
   );
 }
@@ -1274,7 +1469,7 @@ function AddMeetingModal({ open, onClose, prefillTitle }) {
       <div className="modal-panel" onClick={e=>e.stopPropagation()}>
         <div className="modal-search">
           <Icon name="calendar" size={16}/>
-          <input autoFocus placeholder="Meeting title (e.g. Payments review w/ Konstantinos)"
+          <input autoFocus placeholder="Meeting title (e.g. Strategy review)"
                  value={title} onChange={e=>setTitle(e.target.value)}
                  onKeyDown={e=>{ if (e.key === 'Enter') submit(); }}/>
           <button className="btn btn--ghost btn--sm" onClick={onClose}>ESC</button>
@@ -1619,4 +1814,4 @@ function VoiceSummaryModal({ open, topic, payload, onClose }) {
   );
 }
 
-Object.assign(window, { SlackMod, ProjectsMod, KpiMod, Sparkline, TeamMod, BlockersMod, ShippedMod, PinsMod, WellnessMod, FindModal, AddTaskModal, AddMeetingModal, VoiceSummaryModal, buildVoiceSummary });
+Object.assign(window, { SlackMod, ProjectsMod, KpiMod, Sparkline, TeamMod, BlockersMod, ShippedMod, PinsMod, WellnessMod, CommitmentsMod, FindModal, AddTaskModal, AddMeetingModal, VoiceSummaryModal, buildVoiceSummary });

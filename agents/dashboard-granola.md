@@ -24,7 +24,8 @@ The kickoff prompt includes: user name, senior stakeholders list, and the output
    - `high` — blocks a deadline this week or a contract/payment flow
    - `medium` — blocks a deliverable but no near-term deadline
 6. Extract **decisions owed by the user** — explicit "yes/no" calls surfaced in meetings that the user hasn't resolved yet.
-7. For every item, preserve the source meeting context in the `meta` field so the user can trace it back (e.g. `Granola · Checkout sync · arrives today`).
+7. **Build `meetingHistory`** — a flat list of every meeting from the last 14 days that the user attended. For each: `date` (YYYY-MM-DD), `title` (truncate to 60 chars), `attendees` (array of first names, max 8 entries — drop the user themselves). Sort newest-first. Cap at 30 entries. This powers the Stakeholder Lens "Recent meetings together" + "Last met" hints.
+8. For every action/blocker item, preserve the source meeting context in the `meta` field so the user can trace it back (e.g. `Granola · Checkout sync · arrives today`).
 
 ## Output
 
@@ -52,6 +53,11 @@ Write to `<output_dir>/granola.json`. Schema:
   ],
   "decisions": [
     { "id": "dec1", "title": "Grant or decline share request", "who": "Colleague", "meta": "Granola · today" }
+  ],
+  "meetingHistory": [
+    { "date": "2026-04-22", "title": "Vendor pricing review",      "attendees": ["Manager", "Peer"] },
+    { "date": "2026-04-21", "title": "Manager 1:1",                "attendees": ["Manager"] },
+    { "date": "2026-04-18", "title": "New-hire onboarding sync",   "attendees": ["NewHire", "Manager"] }
   ],
   "generatedAt": "2026-04-23T19:08:00+02:00",
   "sourceOk": true,

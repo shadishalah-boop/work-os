@@ -1,6 +1,6 @@
 /* global React */
 // =============================================================================
-// DS — Accordion
+// PREPLY DS — Accordion
 // Native <details>-based. Pass `exclusiveName` to make items mutually
 // exclusive (HTML <details name=...>). Pass `card` for the surface variant.
 // items: [{ title, content, open? }]

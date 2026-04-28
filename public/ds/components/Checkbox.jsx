@@ -1,6 +1,6 @@
 /* global React */
 // =============================================================================
-// DS — Checkbox
+// PREPLY DS — Checkbox
 // 20×20, 2px border, 4px radius. Wrap a real <input> with two SVG glyphs.
 // `indeterminate` flips on the mixed-state dash glyph.
 // =============================================================================

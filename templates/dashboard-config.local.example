@@ -66,7 +66,20 @@
 
     "weather": { "city": "Barcelona" },
 
-    "focusTarget": 4
+    "focusTarget": 4,
+
+    "knownPeople": [
+      { "match": "Morgan Chen", "name": "Morgan Chen", "note": "Manager · VP Product", "manager": true },
+      { "match": "Priya Shah",  "name": "Priya Shah",  "note": "Sr. PM · Growth" },
+      { "match": "Morgan",      "name": "Morgan Chen", "note": "Manager · VP Product", "manager": true },
+      { "match": "Priya",       "name": "Priya Shah",  "note": "Sr. PM · Growth" }
+    ],
+
+    "pinnedPeople": [
+      { "name": "Morgan Chen", "note": "Manager · VP Product",   "manager": true, "bg": "linear-gradient(135deg, #4a6cf7, #6e8bf5)" },
+      { "name": "Priya Shah",  "note": "Sr. PM · Growth",                          "bg": "linear-gradient(135deg, #1abc9c, #2ed8b6)" },
+      { "name": "Theo Rodrigues", "note": "Brand Lead",                            "bg": "linear-gradient(135deg, #f7a14a, #fcb96b)" }
+    ]
   },
 
   "output": {

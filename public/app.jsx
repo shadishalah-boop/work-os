@@ -1,8 +1,57 @@
 /* global React, ReactDOM, SEED, Icon, Module, Top3, TasksMod, CalendarMod, MeetingLoad, InboxMod,
-          SlackMod, ProjectsMod, KpiMod, TeamMod, BlockersMod, ShippedMod, PinsMod, WellnessMod,
+          SlackMod, ProjectsMod, KpiMod, TeamMod, BlockersMod, ShippedMod, PinsMod, WellnessMod, CommitmentsMod,
           DraggableBox, FindModal, AddTaskModal, AddMeetingModal, VoiceSummaryModal */
 
 const { useState: uS, useEffect: uE, useMemo: uM } = React;
+
+// Read-only view mode — append ?view=read to the dashboard URL to share a clean
+// snapshot. Hides edit/drag affordances; the data, lens, and what-changed strip
+// remain visible. The body attribute is read by CSS rules in dashboard-d.css.
+(function detectReadOnlyMode() {
+  try {
+    const url = new URL(window.location.href);
+    const isRead = url.searchParams.get('view') === 'read';
+    if (!isRead) return;
+    document.body.dataset.readonly = 'true';
+    window.__DASHBOARD_READ_ONLY__ = true;
+
+    // Inject a banner so the viewer always knows they're in a read-only snapshot
+    // and has a one-click escape back to the live dashboard.
+    const exitUrl = (() => {
+      const u = new URL(window.location.href);
+      u.searchParams.delete('view');
+      return u.pathname + (u.search ? u.search : '');
+    })();
+    const banner = document.createElement('div');
+    banner.className = 'readonly-banner';
+    banner.innerHTML = '<span>Read-only view · shared snapshot of Shadi\'s dashboard</span><a href="' + exitUrl + '">Exit read-only →</a>';
+    document.body.insertBefore(banner, document.body.firstChild);
+  } catch (e) { /* no-op */ }
+})();
+
+// Test mode for the meeting-prep card: append ?prep-test=1 to the dashboard URL
+// to inject a synthetic event 15 min from now. Uses attendee first-names that
+// appear in the live data so the prep columns populate. Zero impact when off.
+(function maybeInjectTestMeeting() {
+  try {
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has('prep-test')) return;
+    const now = new Date();
+    const start = new Date(now.getTime() + 15 * 60 * 1000);
+    const time = `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`;
+    window.SEED = window.SEED || {};
+    window.SEED.calendar = window.SEED.calendar || [];
+    window.SEED.calendar.unshift({
+      id: 'test-prep',
+      time,
+      duration: 30,
+      title: 'Test prep · imminent meeting',
+      type: 'meeting',
+      who: ['Christopher', 'Jose', 'Eze'],
+    });
+    console.log('[prep-test] injected synthetic meeting at', time, '— remove ?prep-test=1 to clear');
+  } catch (e) { /* no-op */ }
+})();
 
 // =============================================================================
 // Sidebar rail (shared)
@@ -124,6 +173,702 @@ function buildHeroSubtitle(tod, state) {
     if (parts.length === 0)   parts.push("Clear runway — sign off and rest.");
   }
   return parts.join(' · ');
+}
+
+// Strip atop the dashboard showing deltas since last view (count-based diff).
+// Click "Mark seen" → resets snapshot to current. Resets daily automatically.
+function WhatChangedStrip({ state }) {
+  const [snapshot, setSnapshot] = uS(loadSnapshot);
+  const current = buildDashboardSnapshot(state);
+
+  uE(() => {
+    if (!snapshot) {
+      // First view today → silently capture baseline.
+      saveSnapshot(current);
+      setSnapshot(current);
+    }
+    // eslint-disable-next-line
+  }, []);
+
+  if (!snapshot) return null;
+  const diffs = diffSnapshots(snapshot, current);
+  if (!diffs.length) return null;
+
+  const since = new Date(snapshot.ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+
+  return (
+    <div className="what-changed-strip">
+      <span className="wc-label">Since {since}</span>
+      <span className="wc-dot">·</span>
+      <span className="wc-diffs">{diffs.join(' · ')}</span>
+      <button
+        className="wc-mark-seen"
+        onClick={() => { saveSnapshot(current); setSnapshot(current); }}
+      >mark seen</button>
+    </div>
+  );
+}
+
+// Contextual card surfaced when a meeting is imminent (≤60 min away).
+// Cross-references the next event's attendees against open Gmail threads,
+// owed tasks (overdue + dueSoon), and pending decisions — the prep work
+// you'd otherwise have to gather by tab-hopping right before joining.
+function MeetingPrepCard() {
+  const [now, setNow] = uS(() => new Date());
+  uE(() => {
+    const id = setInterval(() => setNow(new Date()), 60000);
+    return () => clearInterval(id);
+  }, []);
+
+  const event = uM(() => {
+    const cal = (window.SEED && window.SEED.calendar) || [];
+    if (!cal.length) return null;
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const toMin = (t) => { const [h, m] = (t || '0:0').split(':').map(Number); return h * 60 + m; };
+    const up = cal.find(e => toMin(e.time) > nowMin);
+    if (!up) return null;
+    return { ...up, startsIn: toMin(up.time) - nowMin };
+  }, [now]);
+
+  if (!event || event.startsIn < 0 || event.startsIn > 60) return null;
+  // Focus blocks aren't meetings — no prep needed.
+  if (event.type === 'focus') return null;
+
+  // Attendees come back as first names from the calendar agent; '+N' overflow tokens are skipped.
+  const attendees = (event.who || []).filter(n => n && !/^\+\d+$/.test(n));
+
+  const matches = (text) => {
+    if (!text || !attendees.length) return false;
+    const lc = text.toLowerCase();
+    return attendees.some(n => lc.includes(n.toLowerCase()));
+  };
+
+  const threads = attendees.length
+    ? ((window.SEED && window.SEED.inbox) || [])
+        .filter(t => matches(t.from) || matches(t.title))
+        .slice(0, 2)
+    : [];
+
+  const owed = attendees.length
+    ? []
+        .concat((window.SEED && window.SEED.overdue) || [])
+        .concat((window.SEED && window.SEED.dueSoon) || [])
+        .filter(t => matches(t.label) || matches(t.meta))
+        .slice(0, 2)
+    : [];
+
+  const decisions = attendees.length
+    ? ((window.SEED && window.SEED.decisions) || [])
+        .filter(d => matches(d.label) || matches(d.meta))
+        .slice(0, 2)
+    : [];
+
+  const hasContent = threads.length || owed.length || decisions.length;
+
+  const cols = [];
+  if (threads.length) {
+    cols.push({
+      label: 'Open with them',
+      items: threads.map(t => ({
+        key: t.id || t.title,
+        primary: (t.from || '').split(' ')[0],
+        secondary: t.title,
+        href: t.href || null,
+      })),
+    });
+  }
+  if (owed.length) {
+    cols.push({
+      label: 'Action items',
+      items: owed.map(t => ({
+        key: t.id || t.label,
+        primary: t.label,
+        secondary: t.meta || '',
+        href: t.href || null,
+      })),
+    });
+  }
+  if (decisions.length) {
+    cols.push({
+      label: 'Decisions pending',
+      items: decisions.map(d => ({
+        key: d.id || d.label,
+        primary: d.label,
+        secondary: d.meta || '',
+        href: d.href || null,
+      })),
+    });
+  }
+
+  const startLabel = event.startsIn <= 0 ? 'Now' : `In ${event.startsIn}m`;
+  const attendeesLabel = attendees.length
+    ? `with ${attendees.slice(0, 3).join(', ')}${attendees.length > 3 ? ` +${attendees.length - 3}` : ''}`
+    : 'no attendees on invite';
+
+  return (
+    <div className="meeting-prep-card">
+      <div className="mp-header">
+        <span className="mp-pill">{startLabel}</span>
+        <span className="mp-title" title={event.title}>{event.title}</span>
+        <span className="mp-attendees">{attendeesLabel}</span>
+      </div>
+      {hasContent ? (
+        <div className="mp-grid" style={{ gridTemplateColumns: `repeat(${cols.length}, 1fr)` }}>
+          {cols.map((c, i) => (
+            <div key={i} className="mp-col">
+              <div className="mp-col-label">{c.label}</div>
+              {c.items.map(it => {
+                const inner = (
+                  <>
+                    {it.primary && <strong>{it.primary}</strong>}
+                    {it.secondary && <span className="dim">{it.primary ? ' · ' : ''}{it.secondary}</span>}
+                  </>
+                );
+                return it.href
+                  ? <a key={it.key} className="mp-item" href={it.href} target="_blank" rel="noreferrer" title={`${it.primary || ''} ${it.secondary || ''}`.trim()}>{inner}</a>
+                  : <div key={it.key} className="mp-item" title={`${it.primary || ''} ${it.secondary || ''}`.trim()}>{inner}</div>;
+              })}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="mp-empty">
+          {attendees.length
+            ? 'No open threads, owed actions, or decisions surfaced for these attendees.'
+            : 'No prep context — invite has no listed attendees in the calendar feed.'}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Side drawer that pivots the dashboard around one person — every owed action,
+// open thread, decision, blocker, and today's meetings tied to them. Triggered by
+// clicking a row in the Team module. Closes on backdrop click or ESC.
+function StakeholderLens({ person, onClose }) {
+  uE(() => {
+    if (!person) return;
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [person, onClose]);
+
+  if (!person) return null;
+
+  // Build a name-token list to match against task/email text (>=3 chars to skip 'a', 'an' etc.)
+  const tokens = (person.name || '').split(/\s+/).filter(t => t.length >= 3);
+  const matches = (text) => {
+    if (!text) return false;
+    const lc = text.toLowerCase();
+    return tokens.some(t => lc.includes(t.toLowerCase()));
+  };
+  const matchesArr = (arr) => Array.isArray(arr) && arr.some(n => tokens.some(t => n && n.toLowerCase().includes(t.toLowerCase())));
+
+  const S = window.SEED || {};
+
+  const owedToThem = []
+    .concat(S.top3 || [], S.overdue || [], S.dueSoon || [])
+    .filter(t => !t.done && (matches(t.label) || matches(t.meta)));
+
+  const waitingOn = (S.blocked || [])
+    .filter(t => !t.done && (matches(t.label) || matches(t.meta)));
+
+  const inbox = (S.inbox || [])
+    .filter(i => matches(i.from) || matches(i.title));
+
+  const decisions = (S.decisions || [])
+    .filter(d => matches(d.who) || matches(d.label) || matches(d.title) || matches(d.meta));
+
+  const blockers = (S.blockers || [])
+    .filter(b => matches(b.title) || matches(b.meta));
+
+  const meetings = (S.calendar || [])
+    .filter(e => matchesArr(e.who));
+
+  // Past meetings together — populated by the granola agent on /dashboard refresh.
+  // Each entry: { date: 'YYYY-MM-DD', title: string, attendees: string[] }
+  const meetingHistory = (S.meetingHistory || [])
+    .filter(m => matchesArr(m.attendees) || matches(m.title))
+    .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+    .slice(0, 5);
+
+  // Derive a "last met" hint from the most recent matching past meeting.
+  const lastMet = meetingHistory[0] || null;
+
+  const firstName = (person.name || '').split(' ')[0];
+  const gmailHref = `https://mail.google.com/mail/u/0/#search/from%3A(${encodeURIComponent(person.name)})`;
+  const slackHref = `https://preply.slack.com/search?query=${encodeURIComponent(person.name)}`;
+
+  const Section = ({ title, items, render }) =>
+    items.length === 0 ? null : (
+      <section className="lens-section">
+        <h3>{title} <span className="lens-count">{items.length}</span></h3>
+        {items.map((it, i) => (
+          <div key={it.id || i} className="lens-item">{render(it)}</div>
+        ))}
+      </section>
+    );
+
+  const totalCount = owedToThem.length + waitingOn.length + inbox.length + decisions.length + blockers.length + meetings.length + meetingHistory.length;
+
+  return (
+    <div className="lens-overlay" onClick={onClose}>
+      <aside className="lens-drawer" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={`Stakeholder lens · ${person.name}`}>
+        <header className="lens-header">
+          <span className="pds-avatar size-48"><img src="ds/assets/avatar-default.svg" alt={person.name}/></span>
+          <div className="lens-id">
+            <div className="lens-name">{person.name}{person.manager && <span className="lens-manager">MGR</span>}</div>
+            <div className="lens-role">{person.note || ''}</div>
+            {lastMet && (
+              <div className="lens-lastmet">
+                Last met <strong>{lastMet.date}</strong> · {lastMet.title}
+              </div>
+            )}
+          </div>
+          <button className="lens-close" onClick={onClose} aria-label="Close">×</button>
+        </header>
+
+        <div className="lens-actions">
+          <a className="btn btn--tertiary btn--sm" href={gmailHref} target="_blank" rel="noreferrer">
+            <Icon name="mail" size={14}/>Gmail
+          </a>
+          <a className="btn btn--tertiary btn--sm" href={slackHref} target="_blank" rel="noreferrer">
+            <Icon name="message" size={14}/>Slack
+          </a>
+          <span className="lens-stamp">{totalCount} item{totalCount === 1 ? '' : 's'} surfaced</span>
+        </div>
+
+        <div className="lens-body">
+          <Section title="You owe them" items={owedToThem} render={t => (
+            <>
+              <div className="lens-item-label">{t.label}</div>
+              {t.meta && <div className="lens-item-meta">{t.meta}</div>}
+            </>
+          )}/>
+
+          <Section title="Waiting on them" items={waitingOn} render={t => (
+            <>
+              <div className="lens-item-label">{t.label}</div>
+              {t.meta && <div className="lens-item-meta">{t.meta}</div>}
+            </>
+          )}/>
+
+          <Section title="Decisions" items={decisions} render={d => (
+            <>
+              <div className="lens-item-label">{d.label || d.title}</div>
+              {d.meta && <div className="lens-item-meta">{d.meta}</div>}
+              {d.href && <a className="lens-item-link" href={d.href} target="_blank" rel="noreferrer">Open →</a>}
+            </>
+          )}/>
+
+          <Section title="Inbox threads" items={inbox} render={i => (
+            <>
+              <div className="lens-item-label">{i.title}</div>
+              <div className="lens-item-meta">from {i.from}</div>
+              {i.href && <a className="lens-item-link" href={i.href} target="_blank" rel="noreferrer">Open →</a>}
+            </>
+          )}/>
+
+          <Section title="Blockers involving them" items={blockers} render={b => (
+            <>
+              <div className="lens-item-label">{b.title}</div>
+              {b.meta && <div className="lens-item-meta">{b.meta}</div>}
+            </>
+          )}/>
+
+          <Section title="Today's meetings" items={meetings} render={m => (
+            <>
+              <div className="lens-item-label">{m.time} · {m.title}</div>
+              <div className="lens-item-meta">with {(m.who || []).filter(n => !/^\+\d+$/.test(n)).join(', ')}</div>
+            </>
+          )}/>
+
+          <Section title="Recent meetings together" items={meetingHistory} render={m => (
+            <>
+              <div className="lens-item-label">{m.date} · {m.title}</div>
+              {m.attendees && m.attendees.length > 0 && (
+                <div className="lens-item-meta">with {m.attendees.filter(n => !/^\+\d+$/.test(n)).slice(0, 5).join(', ')}</div>
+              )}
+            </>
+          )}/>
+
+          {totalCount === 0 && meetingHistory.length === 0 && (
+            <div className="lens-empty">
+              Nothing tied to {firstName} in the current data.<br/>
+              <span style={{fontSize:11, opacity:0.7}}>If that feels wrong, try refreshing with /dashboard.</span>
+            </div>
+          )}
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+// Log decision modal — captures what was decided + why for future traceability.
+// Triggered via 'dash:log-decision' event with detail = { title, who?, source?, sourceMeta? }.
+// Stores to localStorage.dashboard.decisionArchive.v1; also fires task-added if
+// the originating decision had an attached pending-decisions id (so the row can
+// be removed from the pending list).
+function LogDecisionModal({ open, prefill, onClose }) {
+  const [title, setTitle] = uS('');
+  const [reasoning, setReasoning] = uS('');
+  const [outcome, setOutcome] = uS('approved'); // approved | declined | deferred
+
+  uE(() => {
+    if (!open) return;
+    setTitle(prefill ? (prefill.title || '') : '');
+    setReasoning('');
+    setOutcome('approved');
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open, prefill, onClose]);
+
+  if (!open) return null;
+
+  const submit = () => {
+    const t = title.trim();
+    if (!t) return;
+    const dec = {
+      id: 'da-' + Date.now(),
+      ts: new Date().toISOString(),
+      title: t,
+      reasoning: reasoning.trim(),
+      outcome,
+      who: prefill && prefill.who || null,
+      source: prefill && prefill.source || 'manual',
+      sourceMeta: prefill && prefill.sourceMeta || null,
+      sourceId: prefill && prefill.sourceId || null,
+    };
+    saveArchivedDecision(dec);
+    window.dispatchEvent(new CustomEvent('dash:toast', { detail: {
+      msg: '✓ Decision logged: ' + (t.length > 50 ? t.slice(0, 47) + '…' : t),
+      kind: 'success',
+    }}));
+    onClose();
+  };
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-panel log-decision-modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-search">
+          <Icon name="check" size={16}/>
+          <span style={{flex: 1, fontSize: 14, fontWeight: 600}}>Log decision</span>
+          <button className="btn btn--ghost btn--sm" onClick={onClose}>ESC</button>
+        </div>
+        <div className="log-dec-body">
+          <label className="log-dec-field">
+            <span className="log-dec-label">What was decided</span>
+            <input
+              autoFocus
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              placeholder="e.g. Accept Tipalti 50/50 rev share"
+            />
+          </label>
+          <label className="log-dec-field">
+            <span className="log-dec-label">Outcome</span>
+            <div className="log-dec-radios">
+              <label><input type="radio" checked={outcome==='approved'} onChange={()=>setOutcome('approved')}/> Approved</label>
+              <label><input type="radio" checked={outcome==='declined'} onChange={()=>setOutcome('declined')}/> Declined</label>
+              <label><input type="radio" checked={outcome==='deferred'} onChange={()=>setOutcome('deferred')}/> Deferred</label>
+            </div>
+          </label>
+          <label className="log-dec-field">
+            <span className="log-dec-label">Reasoning <span className="log-dec-hint">(why this call — for future you)</span></span>
+            <textarea
+              value={reasoning}
+              onChange={e => setReasoning(e.target.value)}
+              placeholder="Key tradeoff, who pushed for it, what changed your mind…"
+              rows={5}
+            />
+          </label>
+          {prefill && prefill.who && (
+            <div className="log-dec-context">Stakeholder: <strong>{prefill.who}</strong></div>
+          )}
+          {prefill && prefill.sourceMeta && (
+            <div className="log-dec-context">Source: <em>{prefill.sourceMeta}</em></div>
+          )}
+          <div className="log-dec-footer">
+            <button className="btn btn--ghost btn--sm" onClick={onClose}>Cancel</button>
+            <button className="btn btn--primary btn--sm" onClick={submit} disabled={!title.trim()}>Log it</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Share modal — generates a paste-ready text digest of selected sections.
+// Reads from window.SEED so it works at DashboardApp level without context wiring.
+// The read-only URL is intentionally NOT a primary action since it's local-only;
+// it's tucked into a small Preview link for screenshot/screen-share use.
+const SHARE_SECTIONS = [
+  { key: 'top3',      label: 'Top 3 today',         defaultOn: true  },
+  { key: 'overdue',   label: 'Overdue',             defaultOn: true  },
+  { key: 'dueSoon',   label: 'Due soon',            defaultOn: true  },
+  { key: 'blocked',   label: 'Blocked',             defaultOn: false },
+  { key: 'decisions', label: 'Decisions pending',   defaultOn: true  },
+  { key: 'blockers',  label: 'Risks & blockers',    defaultOn: false },
+  { key: 'projects',  label: 'Active projects',     defaultOn: false },
+  { key: 'okrs',      label: 'Q2 OKRs (summary per OKR)', defaultOn: true  },
+];
+
+function ShareModal({ open, onClose }) {
+  const [selected, setSelected] = uS(() => {
+    const map = {};
+    SHARE_SECTIONS.forEach(s => { map[s.key] = s.defaultOn; });
+    return map;
+  });
+  const [format, setFormat] = uS('markdown'); // 'markdown' | 'plain'
+
+  uE(() => {
+    if (!open) return;
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  const toggle = (k) => setSelected(prev => ({ ...prev, [k]: !prev[k] }));
+  const allOn  = () => setSelected(Object.fromEntries(SHARE_SECTIONS.map(s => [s.key, true])));
+  const allOff = () => setSelected(Object.fromEntries(SHARE_SECTIONS.map(s => [s.key, false])));
+
+  const readOnlyUrl = (() => {
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set('view', 'read');
+      url.searchParams.delete('prep-test');
+      url.searchParams.delete('capture');
+      return url.toString();
+    } catch { return window.location.href; }
+  })();
+
+  const buildDigest = () => {
+    const S = window.SEED || {};
+    const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+    const md = format === 'markdown';
+    const lines = [];
+    const h1 = (s) => md ? `# ${s}` : s.toUpperCase();
+    const h2 = (s) => md ? `## ${s}` : `\n${s}\n${'-'.repeat(s.length)}`;
+    const bul = (s) => md ? `- ${s}` : `• ${s}`;
+    const bold = (s) => md ? `**${s}**` : s;
+    const em = (s) => md ? `_${s}_` : s;
+
+    // Read live user-toggled state from localStorage so the digest reflects
+    // your current view, not the static SEED. doneStore = locally-marked-done,
+    // dismissed = items you swiped/hid. Both keyed by normalized task label.
+    const doneStore = loadDoneTasks();
+    const dismissed = loadDismissedTasks();
+    const isArchived = (label) => normalizeTaskKey(label) in doneStore;
+    const isDismissed = (label) => normalizeTaskKey(label) in dismissed;
+    const isOpen = (t) => t && !t.done && !isArchived(t.label || t.title) && !isDismissed(t.label || t.title);
+
+    lines.push(h1(`Shadi's dashboard · ${today}`));
+    lines.push('');
+
+    if (selected.top3) {
+      const top3 = (S.top3 || []).filter(isOpen);
+      if (top3.length) {
+        lines.push(h2('Top 3 today'));
+        top3.forEach(t => lines.push(bul(`${bold(t.label)} — ${em(t.meta || '')}`)));
+        lines.push('');
+      }
+    }
+    if (selected.overdue) {
+      const overdue = (S.overdue || []).filter(isOpen);
+      if (overdue.length) {
+        lines.push(h2(`Overdue (${overdue.length})`));
+        overdue.forEach(t => lines.push(bul(`${t.label} — ${em(t.meta || '')}`)));
+        lines.push('');
+      }
+    }
+    if (selected.dueSoon) {
+      const dueSoon = (S.dueSoon || []).filter(isOpen);
+      if (dueSoon.length) {
+        lines.push(h2(`Due soon (${dueSoon.length})`));
+        dueSoon.slice(0, 8).forEach(t => lines.push(bul(`${t.label} — ${em(t.meta || '')}`)));
+        lines.push('');
+      }
+    }
+    if (selected.blocked) {
+      const blocked = (S.blocked || []).filter(isOpen);
+      if (blocked.length) {
+        lines.push(h2(`Blocked (${blocked.length})`));
+        blocked.forEach(t => lines.push(bul(`${t.label} — ${em(t.meta || '')}`)));
+        lines.push('');
+      }
+    }
+    if (selected.decisions) {
+      const decisions = S.decisions || [];
+      if (decisions.length) {
+        lines.push(h2(`Decisions pending (${decisions.length})`));
+        decisions.forEach(d => lines.push(bul(`${d.title || d.label} — ${em(d.meta || '')}`)));
+        lines.push('');
+      }
+    }
+    if (selected.blockers) {
+      const blockers = S.blockers || [];
+      if (blockers.length) {
+        lines.push(h2(`Risks & blockers (${blockers.length})`));
+        blockers.forEach(b => lines.push(bul(`${bold('[' + (b.sev || 'med') + ']')} ${b.title} — ${em(b.meta || '')}`)));
+        lines.push('');
+      }
+    }
+    if (selected.projects) {
+      const projects = S.projects || [];
+      if (projects.length) {
+        lines.push(h2(`Active projects (${projects.length})`));
+        projects.forEach(p => lines.push(bul(`${bold(p.name)} · ${p.status} · ${p.pct}% — ${em(p.meta || '')}`)));
+        lines.push('');
+      }
+    }
+    if (selected.okrs) {
+      const okrs = S.okrs || [];
+      if (okrs.length) {
+        // Build the OKR → items map by combining manual tags + keyword suggestions.
+        // Items locally marked done get promoted to the 'done' bucket regardless of
+        // their source list. Dismissed items are skipped entirely.
+        const links = loadOkrLinks();
+        const classify = (items, defaultKind) =>
+          (items || []).map(it => {
+            const label = it.label || it.title || '';
+            const meta  = it.meta || '';
+            if (isDismissed(label)) return null;
+            const tag   = links[normalizeTaskKey(label)] || suggestOkrFromText(label, meta);
+            if (!tag) return null;
+            const done  = it.done || isArchived(label);
+            const kind  = done ? 'done' : defaultKind;
+            return { tag, label, meta, kind };
+          }).filter(Boolean);
+
+        const tagged = []
+          .concat(classify(S.top3,      'in-progress'))
+          .concat(classify(S.overdue,   'in-progress'))
+          .concat(classify(S.dueSoon,   'in-progress'))
+          .concat(classify(S.blocked,   'blocked'))
+          .concat(classify(S.shipped,   'done'))
+          .concat(classify(S.decisions, 'decision'));
+
+        const byOkr = { k1: { done: [], 'in-progress': [], blocked: [], decision: [] },
+                        k2: { done: [], 'in-progress': [], blocked: [], decision: [] },
+                        k3: { done: [], 'in-progress': [], blocked: [], decision: [] } };
+        tagged.forEach(t => { if (byOkr[t.tag]) byOkr[t.tag][t.kind].push(t); });
+
+        // --- Synthesis helpers — turn item lists into a one-paragraph narrative ---
+        // condense: drop parenthetical clauses, hard-trim very long labels.
+        // Keep original casing so proper nouns (Jose, PayPal, etc.) stay correct.
+        const condense = (label) => {
+          let t = (label || '').replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
+          if (t.length > 80) t = t.slice(0, 77) + '…';
+          return t;
+        };
+        const joinClauses = (items, max = 3) => {
+          const top = items.slice(0, max).map(it => condense(it.label));
+          const extra = items.length - top.length;
+          if (!top.length) return '';
+          let s = top.join('; ');
+          if (extra > 0) s += `; +${extra} more`;
+          return s;
+        };
+        const synthesize = (g) => {
+          const parts = [];
+          if (g.done.length)            parts.push(`${bold('Done this week:')} ${joinClauses(g.done)}.`);
+          if (g['in-progress'].length)  parts.push(`${bold('In progress:')} ${joinClauses(g['in-progress'])}.`);
+          if (g.blocked.length)         parts.push(`${bold('Blocked:')} ${joinClauses(g.blocked)}.`);
+          if (g.decision.length)        parts.push(`${bold('Decisions pending:')} ${joinClauses(g.decision)}.`);
+          return parts.join(' ');
+        };
+
+        lines.push(h2('Q2 OKRs'));
+        okrs.forEach(k => {
+          lines.push('');
+          lines.push(`${bold(k.id)} · ${k.name} · ${k.pct}% · ${k.trend}`);
+          const groups = byOkr[k.id] || { done: [], 'in-progress': [], blocked: [], decision: [] };
+          const totalCount = groups.done.length + groups['in-progress'].length + groups.blocked.length + groups.decision.length;
+          if (totalCount === 0) {
+            lines.push(em('No items tagged or matched this week.'));
+            return;
+          }
+          lines.push(synthesize(groups));
+        });
+        lines.push('');
+      }
+    }
+
+    return lines.join('\n').trimEnd();
+  };
+
+  const digest = buildDigest();
+  const sectionCount = Object.values(selected).filter(Boolean).length;
+  const hasContent = digest.split('\n').length > 2; // more than just title + blank
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(digest);
+      window.dispatchEvent(new CustomEvent('dash:toast', { detail: { msg: `Copied (${sectionCount} section${sectionCount === 1 ? '' : 's'})`, kind: 'success' } }));
+    } catch {
+      window.dispatchEvent(new CustomEvent('dash:toast', { detail: { msg: 'Clipboard blocked — try selecting the preview text manually', kind: 'error' } }));
+    }
+    onClose();
+  };
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-panel share-modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-search">
+          <Icon name="share" size={16}/>
+          <span style={{flex: 1, fontSize: 14, fontWeight: 600}}>Share dashboard snapshot</span>
+          <button className="btn btn--ghost btn--sm" onClick={onClose}>ESC</button>
+        </div>
+
+        <div className="share-body">
+          <div className="share-toolbar">
+            <span className="share-toolbar-label">Sections</span>
+            <button className="btn btn--ghost btn--xs" onClick={allOn}>All</button>
+            <button className="btn btn--ghost btn--xs" onClick={allOff}>None</button>
+            <span style={{flex: 1}}/>
+            <span className="share-format">
+              <label><input type="radio" name="fmt" checked={format==='markdown'} onChange={() => setFormat('markdown')}/> Markdown</label>
+              <label><input type="radio" name="fmt" checked={format==='plain'}    onChange={() => setFormat('plain')}/> Plain</label>
+            </span>
+          </div>
+
+          <div className="share-sections">
+            {SHARE_SECTIONS.map(s => (
+              <label key={s.key} className="share-section-row">
+                <input type="checkbox" checked={!!selected[s.key]} onChange={() => toggle(s.key)}/>
+                <span>{s.label}</span>
+              </label>
+            ))}
+          </div>
+
+          <div className="share-preview-h">
+            <span>Preview</span>
+            <span className="share-preview-stamp">{digest.split('\n').length} lines · ~{digest.length} chars</span>
+          </div>
+          <textarea
+            className="share-preview"
+            value={hasContent ? digest : 'Pick at least one section to preview the digest.'}
+            readOnly
+            rows={10}
+          />
+
+          <div className="share-footer">
+            <a className="share-footer-link" href={readOnlyUrl} target="_blank" rel="noreferrer" title="Local-only — for screenshots / screen share">
+              <Icon name="eye" size={12}/> Preview read-only view (local)
+            </a>
+            <span style={{flex: 1}}/>
+            <button className="btn btn--ghost btn--sm" onClick={onClose}>Cancel</button>
+            <button className="btn btn--primary btn--sm" onClick={copy} disabled={!hasContent}>
+              <Icon name="copy" size={14}/> Copy to clipboard
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function Hero({ timeOfDay, data, capacityPct, state }) {
@@ -265,6 +1010,67 @@ const loadDismissedTasks = () => loadStore(DISMISS_KEY, DISMISS_TTL_MS);
 const loadDoneTasks      = () => loadStore(DONE_KEY,    DONE_TTL_MS);
 
 // =============================================================================
+// What-changed snapshot — small "since you last looked" diff strip atop the dashboard.
+// Stores a count snapshot in localStorage and surfaces deltas on subsequent loads.
+// =============================================================================
+const SNAPSHOT_KEY = 'dashboard.lastSnapshot.v1';
+function loadSnapshot() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(SNAPSHOT_KEY) || 'null');
+    if (!raw || typeof raw.ts !== 'number') return null;
+    // Auto-reset if the snapshot is from a different calendar day (Madrid).
+    const prevDay = new Date(raw.ts).toDateString();
+    const today   = new Date().toDateString();
+    if (prevDay !== today) return null;
+    return raw;
+  } catch { return null; }
+}
+function saveSnapshot(snap) {
+  try { localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(snap)); } catch {}
+}
+function buildDashboardSnapshot(state) {
+  const s = (window.SEED || {});
+  const slackTabs = (s.slack && s.slack.tabs) || [];
+  const findCount = (id) => (slackTabs.find(t => t.id === id) || {}).count || 0;
+  return {
+    ts: Date.now(),
+    top3Done:        state.top3.filter(t => t.done).length,
+    top3Total:       state.top3.length,
+    overdueCount:    state.overdue.length,
+    dueSoonCount:    state.dueSoon.length,
+    blockedCount:    state.blocked.length,
+    shippedCount:    state.shipped.length,
+    decisionsCount:  (s.decisions || []).length,
+    blockersHigh:    (s.blockers || []).filter(b => b.sev === 'high').length,
+    blockersTotal:   (s.blockers || []).length,
+    slackMentions:   findCount('mentions'),
+    slackOwed:       findCount('owed'),
+    inboxCount:      (s.inbox || []).length,
+  };
+}
+function diffSnapshots(prev, curr) {
+  if (!prev) return [];
+  const out = [];
+  const inc = (label, p, c) => {
+    if (c > p) out.push(`+${c - p} ${label}`);
+  };
+  const dec = (label, p, c) => {
+    if (c < p) out.push(`−${p - c} ${label}`);
+  };
+  if (curr.top3Done > prev.top3Done) out.push(`✓${curr.top3Done - prev.top3Done} priorit${curr.top3Done - prev.top3Done === 1 ? 'y' : 'ies'} done`);
+  inc('shipped',          prev.shippedCount,    curr.shippedCount);
+  inc('decisions',        prev.decisionsCount,  curr.decisionsCount);
+  dec('decisions',        prev.decisionsCount,  curr.decisionsCount);
+  inc('Slack mentions',   prev.slackMentions,   curr.slackMentions);
+  inc('replies owed',     prev.slackOwed,       curr.slackOwed);
+  dec('high blockers',    prev.blockersHigh,    curr.blockersHigh);
+  inc('high blockers',    prev.blockersHigh,    curr.blockersHigh);
+  inc('overdue',          prev.overdueCount,    curr.overdueCount);
+  dec('overdue cleared',  prev.overdueCount,    curr.overdueCount);
+  return out;
+}
+
+// =============================================================================
 // User-added tasks store (localStorage · no TTL · survives /dashboard refreshes)
 // "New task" button persists here so manually-added tasks don't vanish when the
 // agent JSONs get rewritten. Dismissing a user-added task fully deletes it
@@ -292,6 +1098,45 @@ function saveUserAddedTasks(tasks) {
 //   • evidenceForOkr() collects everything tied to an OKR for the expanded view
 //   • generateReviewMarkdown() composes the Friday review notes
 // =============================================================================
+// Sidebar (rail) width persistence — user can collapse/expand via button or
+// drag the right edge to resize. 56px = icon-only "collapsed" mode.
+const RAIL_WIDTH_KEY = 'dashboard.railWidth.v1';
+const RAIL_MIN = 56;        // collapsed (icon-only)
+const RAIL_MAX = 360;       // any wider eats too much content
+const RAIL_SNAP_THRESHOLD = 90; // dragging below this snaps to RAIL_MIN
+const RAIL_DEFAULT_EXPANDED = 200;
+function loadRailWidth() {
+  const v = parseInt(localStorage.getItem(RAIL_WIDTH_KEY) || '', 10);
+  if (Number.isFinite(v) && v >= RAIL_MIN && v <= RAIL_MAX) return v;
+  return RAIL_DEFAULT_EXPANDED;
+}
+function saveRailWidth(w) {
+  try { localStorage.setItem(RAIL_WIDTH_KEY, String(w)); } catch {}
+}
+
+// Decision archive — every "Log decision" submission persists here forever
+// (no TTL — the whole point is traceability when Jose asks "why X over Y").
+// Keyed locally; export by copying clipboard via the archive view.
+const DECISION_ARCHIVE_KEY = 'dashboard.decisionArchive.v1';
+function loadArchivedDecisions() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(DECISION_ARCHIVE_KEY) || '[]');
+    return Array.isArray(raw) ? raw : [];
+  } catch { return []; }
+}
+function saveArchivedDecision(dec) {
+  const list = loadArchivedDecisions();
+  list.unshift(dec);
+  try { localStorage.setItem(DECISION_ARCHIVE_KEY, JSON.stringify(list)); } catch {}
+  // Notify any listeners (Stakeholder Lens, archive view) to re-render
+  window.dispatchEvent(new CustomEvent('dash:decision-archived', { detail: dec }));
+}
+function deleteArchivedDecision(id) {
+  const list = loadArchivedDecisions().filter(d => d.id !== id);
+  try { localStorage.setItem(DECISION_ARCHIVE_KEY, JSON.stringify(list)); } catch {}
+  window.dispatchEvent(new CustomEvent('dash:decision-archived', { detail: { id, deleted: true } }));
+}
+
 const OKR_LINKS_KEY = 'dashboard.okrLinks.v1';
 const OKR_META = {
   k1: { short: 'AI',  color: 'var(--pink-400)', bg: 'var(--pink-100)', ink: 'var(--pink-700)' },
@@ -467,11 +1312,28 @@ function useDashboardState() {
   uE(() => {
     const onTaskAdded    = (e) => addTask(e.detail || {});
     const onMeetingAdded = (e) => addMeeting(e.detail || {});
+    // Cross-tab sync: when another tab (e.g. Hammerspoon Quick Capture)
+    // writes to localStorage, refresh user-added tasks from disk.
+    const onStorage = (e) => {
+      if (e.key !== USER_TASKS_KEY) return;
+      const fresh = loadUserAddedTasks();
+      // Replace user-added portion of each bucket (keep agent-sourced items as-is)
+      const merge = (current, freshUser) => {
+        const userKeys = new Set(freshUser.map(t => t.id));
+        const nonUser = current.filter(t => !t._user);
+        return [...freshUser, ...nonUser];
+      };
+      setOverdue(prev => merge(prev, fresh.overdue));
+      setDueSoon(prev => merge(prev, fresh.dueSoon));
+      setBlocked(prev => merge(prev, fresh.blocked));
+    };
     window.addEventListener('dash:task-added', onTaskAdded);
     window.addEventListener('dash:meeting-added', onMeetingAdded);
+    window.addEventListener('storage', onStorage);
     return () => {
       window.removeEventListener('dash:task-added', onTaskAdded);
       window.removeEventListener('dash:meeting-added', onMeetingAdded);
+      window.removeEventListener('storage', onStorage);
     };
   }, []);
   // --- OKR linking API ---------------------------------------------------
@@ -641,7 +1503,7 @@ function LayoutFocusFlow({ tod }) {
 // =============================================================================
 // LAYOUT D — Modern SaaS · expanded sidebar, top bar with search, polished cards
 // =============================================================================
-function ModernRail({ active = 'home' }) {
+function ModernRail({ active = 'home', collapsed, onToggle, onResize }) {
   const sections = [
     { label: 'Workspace', items: [
       { key: 'home',     icon: 'home',         label: 'Dashboard' },
@@ -656,20 +1518,49 @@ function ModernRail({ active = 'home' }) {
       { key: 'library',  icon: 'library',    label: 'Library' },
     ]},
   ];
+  // Drag the right edge to resize the rail freely. Live updates via onResize;
+  // pointermove tracking + capture so we keep getting events even when the cursor
+  // leaves the handle.
+  const beginResize = (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const startX = e.clientX;
+    const aside = e.currentTarget.closest('.d-rail');
+    const startWidth = aside ? aside.getBoundingClientRect().width : 200;
+    document.body.style.cursor = 'ew-resize';
+    document.body.style.userSelect = 'none';
+    const onMove = (ev) => {
+      if (typeof onResize === 'function') onResize(startWidth + (ev.clientX - startX));
+    };
+    const onUp = () => {
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+    };
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+  };
   return (
-    <aside className="d-rail">
+    <aside className="d-rail" data-collapsed={collapsed ? 'true' : 'false'}>
+      <button
+        className="d-rail-toggle"
+        onClick={onToggle}
+        title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+      >{collapsed ? '›' : '‹'}</button>
       <div className="d-rail-logo">
-        <div className="d-rail-logo-mark">S</div>
+        <div className="d-rail-logo-mark">{((window.SEED && window.SEED.user && window.SEED.user.name) || 'W')[0].toUpperCase()}</div>
         <div className="d-rail-logo-text">
-          Shadi
-          <small>Strategy & Planning</small>
+          {(window.SEED && window.SEED.user && window.SEED.user.name) || 'You'}
+          <small>{(window.SEED && window.SEED.user && window.SEED.user.role) || 'Work OS'}</small>
         </div>
       </div>
       {sections.map((s, i) => (
         <React.Fragment key={i}>
           <div className="d-rail-section">{s.label}</div>
           {s.items.map(it => (
-            <div key={it.key} className="d-rail-item" data-active={it.key === active}>
+            <div key={it.key} className="d-rail-item" data-active={it.key === active} title={collapsed ? it.label : undefined}>
               <Icon name={it.icon} size={16}/>
               <span>{it.label}</span>
               {it.pill != null && <span className="pill">{it.pill}</span>}
@@ -678,13 +1569,20 @@ function ModernRail({ active = 'home' }) {
         </React.Fragment>
       ))}
       <div className="d-rail-user">
-        <span className="pds-avatar size-32"><img src="ds/assets/shadi.jpg?v=1" alt="Shadi"/></span>
+        <span className="pds-avatar size-32">
+          <img src={(window.SEED && window.SEED.user && window.SEED.user.avatarUrl) || 'ds/assets/avatar-default.svg'} alt={(window.SEED && window.SEED.user && window.SEED.user.name) || 'You'}/>
+        </span>
         <div className="d-rail-user-meta">
-          <div className="d-rail-user-name">Shadi Shalah</div>
-          <div className="d-rail-user-role">Reports to Jose Ferreira</div>
+          <div className="d-rail-user-name">{(window.SEED && window.SEED.user && window.SEED.user.fullName) || (window.SEED && window.SEED.user && window.SEED.user.name) || 'You'}</div>
+          <div className="d-rail-user-role">{(window.SEED && window.SEED.user && window.SEED.user.role) || 'Add user info to data-override.jsx'}</div>
         </div>
         <button className="icon-btn" title="Settings"><Icon name="settings" size={14}/></button>
       </div>
+      <div
+        className="d-rail-resize-handle"
+        onPointerDown={beginResize}
+        title="Drag to resize · click toggle for one-tap collapse"
+      />
     </aside>
   );
 }
@@ -1031,6 +1929,34 @@ function VoiceButton() {
   );
 }
 
+// Pinned senior collaborators — click any avatar → opens Stakeholder Lens.
+// Configured per-user via window.SEED.pinnedPeople (set by data-override.jsx,
+// generated by the dashboard skill from your config). Each entry:
+//   { name: '<full name>', note: '<role>', manager?: true, bg?: '<css gradient>' }
+// If empty, the topbar strip is hidden entirely.
+const PINNED_PEOPLE = (window.SEED && Array.isArray(window.SEED.pinnedPeople)) ? window.SEED.pinnedPeople : [];
+
+function PinnedPeopleStrip() {
+  if (!PINNED_PEOPLE.length) return null;
+  return (
+    <div className="d-pinned-people" role="group" aria-label="Pinned people">
+      {PINNED_PEOPLE.map((p, i) => {
+        const initials = p.name.split(/\s+/).filter(Boolean).map(s => s[0]).slice(0, 2).join('').toUpperCase();
+        return (
+          <button
+            key={i}
+            className="d-pinned-avatar"
+            style={{ background: p.bg }}
+            title={`${p.name} · ${p.note}`}
+            aria-label={`Open stakeholder lens for ${p.name}`}
+            onClick={() => window.dispatchEvent(new CustomEvent('dash:open-lens', { detail: { person: p } }))}
+          >{initials}</button>
+        );
+      })}
+    </div>
+  );
+}
+
 function ModernTopbar() {
   const openFind = () => window.dispatchEvent(new Event('dash:open-find'));
   return (
@@ -1040,8 +1966,13 @@ function ModernTopbar() {
         <span className="d-search-placeholder">Search tasks, people, files, meetings…</span>
         <kbd>⌘K</kbd>
       </div>
+      <PinnedPeopleStrip/>
       <div style={{flex: 1}}/>
       <VoiceButton/>
+      <button className="d-topbar-icon hide-when-readonly" title="Share snapshot"
+              onClick={() => window.dispatchEvent(new Event('dash:open-share'))}>
+        <Icon name="share" size={16}/>
+      </button>
       <button className="d-topbar-icon" title="Filter"><Icon name="filter" size={16}/></button>
       <button className="d-topbar-icon" title="Notifications">
         <Icon name="bell" size={16}/>
@@ -1054,21 +1985,36 @@ function ModernTopbar() {
 }
 
 // Default layout D — two-column balanced (left: priority work, right: live feed)
-// Heights tuned to module content; left/right end near same bottom for clean scrolling.
+// + a full-width pins strip as a quick-reference footer.
+//
+// Layout principles:
+//  · Above-fold: top3 + calendar + inbox visible without scrolling
+//  · Text-heavy modules → LEFT (720px gives them room to breathe)
+//  · List-style modules → RIGHT (400px is plenty for compact rows)
+//  · Both columns end at ~y=2320 so the canvas feels symmetric
+//  · pins as full-width footer — visual punctuation, lots of horizontal slots
+//
+// To apply this layout to an existing custom layout, click "Reset layout" in
+// the toolbar. Otherwise loadLayoutD() merges saved positions with these
+// defaults, only adding modules that weren't previously placed.
 const DEFAULT_D_BOXES = [
-  // Left column (720 wide) — priority work
-  { id: 'top3',     left: 0,   top: 0,    width: 720, height: 400 },
-  { id: 'tasks',    left: 0,   top: 416,  width: 720, height: 600 },
-  { id: 'projects', left: 0,   top: 1032, width: 720, height: 700 },
-  { id: 'kpi',      left: 0,   top: 1748, width: 720, height: 320 },
-  { id: 'wellness', left: 0,   top: 2084, width: 720, height: 320 },
-  // Right column (400 wide) — live feed
-  { id: 'calendar', left: 736, top: 0,    width: 400, height: 460 },
-  { id: 'slack',    left: 736, top: 476,  width: 400, height: 600 },
-  { id: 'inbox',    left: 736, top: 1092, width: 400, height: 400 },
-  { id: 'blockers', left: 736, top: 1508, width: 400, height: 280 },
-  { id: 'team',     left: 736, top: 1804, width: 400, height: 320 },
-  { id: 'pins',     left: 736, top: 2140, width: 400, height: 340 },
+  // ── LEFT column · priority work (720px wide) ─────────────────────
+  { id: 'top3',        left: 0,   top: 0,    width: 720, height: 300 },
+  { id: 'tasks',       left: 0,   top: 316,  width: 720, height: 620 },
+  { id: 'projects',    left: 0,   top: 952,  width: 720, height: 580 },
+  { id: 'commitments', left: 0,   top: 1548, width: 720, height: 460 },
+  { id: 'kpi',         left: 0,   top: 2024, width: 720, height: 300 },
+
+  // ── RIGHT column · live feed (400px wide) ────────────────────────
+  { id: 'calendar',    left: 736, top: 0,    width: 400, height: 440 },
+  { id: 'inbox',       left: 736, top: 456,  width: 400, height: 380 },
+  { id: 'slack',       left: 736, top: 852,  width: 400, height: 540 },
+  { id: 'blockers',    left: 736, top: 1408, width: 400, height: 260 },
+  { id: 'team',        left: 736, top: 1684, width: 400, height: 320 },
+  { id: 'wellness',    left: 736, top: 2020, width: 400, height: 300 },
+
+  // ── BOTTOM full-width strip · quick reference ────────────────────
+  { id: 'pins',        left: 0,   top: 2340, width: 1136, height: 180 },
 ];
 const LAYOUT_D_KEY = 'wdash-layout-d-freeform';
 
@@ -1094,6 +2040,18 @@ function LayoutModernSaaS({ tod }) {
   const [activeId, setActiveId] = uS(null);
   const [savedSnapshot, setSavedSnapshot] = uS(() => JSON.stringify(loadLayoutD()));
   const [justSaved, setJustSaved] = uS(false);
+  const [railWidth, setRailWidth] = uS(loadRailWidth);
+
+  // Persist rail width on change (debounced via ref to avoid hammering localStorage during drag)
+  uE(() => { saveRailWidth(railWidth); }, [railWidth]);
+
+  const railCollapsed = railWidth <= RAIL_MIN + 4;
+  const toggleRail = () => setRailWidth(railCollapsed ? RAIL_DEFAULT_EXPANDED : RAIL_MIN);
+  const handleRailResize = (next) => {
+    let w = Math.max(RAIL_MIN, Math.min(RAIL_MAX, Math.round(next)));
+    if (w < RAIL_SNAP_THRESHOLD) w = RAIL_MIN; // snap to collapsed when dragged close
+    setRailWidth(w);
+  };
 
   // Explicit save (no auto-save) — the user's button click is what persists.
   const currentJson = JSON.stringify(boxes);
@@ -1146,6 +2104,7 @@ function LayoutModernSaaS({ tod }) {
       case 'inbox':    return <InboxMod data={SEED.inbox}/>;
       case 'team':     return <TeamMod data={SEED.team}/>;
       case 'wellness': return <WellnessMod data={SEED.personalSignals}/>;
+      case 'commitments': return <CommitmentsMod state={state}/>;
       case 'pins':     return <PinsMod data={SEED.pins}/>;
       default: return null;
     }
@@ -1176,11 +2135,13 @@ function LayoutModernSaaS({ tod }) {
 
   return (
     <div className="layout-d">
-      <div className="app-d">
-        <ModernRail active="home"/>
+      <div className="app-d" style={{ gridTemplateColumns: `${railWidth}px 1fr` }}>
+        <ModernRail active="home" collapsed={railCollapsed} onToggle={toggleRail} onResize={handleRailResize}/>
         <div className="d-main">
           <ModernTopbar/>
           <div className="d-content">
+
+            <WhatChangedStrip state={state}/>
 
             <div className="d-greeting">
               <div>
@@ -1199,6 +2160,8 @@ function LayoutModernSaaS({ tod }) {
                 </button>
               </div>
             </div>
+
+            <MeetingPrepCard/>
 
             <div className="d-stats">
               <div className="d-stat">
@@ -1370,6 +2333,7 @@ function LayoutSplitBrain({ tod }) {
       case 'inbox':    return <InboxMod data={SEED.inbox}/>;
       case 'team':     return <TeamMod data={SEED.team}/>;
       case 'wellness': return <WellnessMod data={SEED.personalSignals}/>;
+      case 'commitments': return <CommitmentsMod state={state}/>;
       case 'pins':     return <PinsMod data={SEED.pins}/>;
       default: return null;
     }
@@ -1459,6 +2423,28 @@ function DashboardApp() {
     }, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
+
+  // Quick-capture: URL ?capture=<text>&bucket=<overdue|dueSoon|blocked> auto-adds
+  // a task on page load, then clears the query so refresh doesn't duplicate.
+  // Pair with a Mac Shortcut that opens the dashboard URL with this param.
+  uE(() => {
+    try {
+      const url = new URL(window.location.href);
+      const capture = url.searchParams.get('capture');
+      if (!capture) return;
+      const bucket = url.searchParams.get('bucket') || 'dueSoon';
+      const project = url.searchParams.get('project') || 'ops';
+      const p = Number(url.searchParams.get('p')) || 2;
+      window.dispatchEvent(new CustomEvent('dash:task-added', {
+        detail: { label: decodeURIComponent(capture), bucket, project, p, meta: 'Quick capture' },
+      }));
+      url.searchParams.delete('capture');
+      url.searchParams.delete('bucket');
+      url.searchParams.delete('project');
+      url.searchParams.delete('p');
+      window.history.replaceState({}, '', url.pathname + (url.search ? '?' + url.searchParams : ''));
+    } catch (e) { /* no-op */ }
+  }, []);
   const [focus, setFocus]     = uS(TWEAK_DEFAULTS.focusMode);
   const [layout, setLayout]   = uS(TWEAK_DEFAULTS.layout); // 'canvas' | 'A' | 'B' | 'C'
   const [tweaksOpen, setTweaksOpen] = uS(false);
@@ -1471,6 +2457,10 @@ function DashboardApp() {
   const [summaryOpen, setSummaryOpen] = uS(false);
   const [summaryTopic, setSummaryTopic] = uS('brief');
   const [summaryPayload, setSummaryPayload] = uS(null);
+  const [lensPerson, setLensPerson] = uS(null);
+  const [shareOpen, setShareOpen] = uS(false);
+  const [logDecOpen, setLogDecOpen] = uS(false);
+  const [logDecPrefill, setLogDecPrefill] = uS(null);
 
   uE(() => {
     const openFind = (e) => { setFindPrefill((e && e.detail && e.detail.prefill) || ''); setFindOpen(true); };
@@ -1482,12 +2472,21 @@ function DashboardApp() {
       setSummaryPayload(d.payload || null);
       setSummaryOpen(true);
     };
+    const openLens  = (e) => { const p = e && e.detail && e.detail.person; if (p) setLensPerson(p); };
+    const openShare  = () => setShareOpen(true);
+    const openLogDec = (e) => {
+      setLogDecPrefill((e && e.detail) || null);
+      setLogDecOpen(true);
+    };
     const setLay   = (e) => { const k = e && e.detail && e.detail.layout; if (k) setLayout(k); };
     const setFoc   = (e) => { const on = !!(e && e.detail && e.detail.on); setFocus(on); };
     window.addEventListener('dash:open-find', openFind);
     window.addEventListener('dash:open-add-task', openAdd);
     window.addEventListener('dash:open-add-meeting', openMeet);
     window.addEventListener('dash:open-summary', openSum);
+    window.addEventListener('dash:open-lens', openLens);
+    window.addEventListener('dash:open-share', openShare);
+    window.addEventListener('dash:log-decision', openLogDec);
     window.addEventListener('dash:set-layout', setLay);
     window.addEventListener('dash:set-focus', setFoc);
     const onKey = (e) => {
@@ -1500,6 +2499,9 @@ function DashboardApp() {
       window.removeEventListener('dash:open-add-task', openAdd);
       window.removeEventListener('dash:open-add-meeting', openMeet);
       window.removeEventListener('dash:open-summary', openSum);
+      window.removeEventListener('dash:open-lens', openLens);
+      window.removeEventListener('dash:open-share', openShare);
+      window.removeEventListener('dash:log-decision', openLogDec);
       window.removeEventListener('dash:set-layout', setLay);
       window.removeEventListener('dash:set-focus', setFoc);
       document.removeEventListener('keydown', onKey);
@@ -1545,6 +2547,9 @@ function DashboardApp() {
       <AddTaskModal open={addOpen} onClose={() => setAddOpen(false)} prefillLabel={taskPrefill}/>
       <AddMeetingModal open={meetingOpen} onClose={() => setMeetingOpen(false)} prefillTitle={meetingPrefill}/>
       <VoiceSummaryModal open={summaryOpen} topic={summaryTopic} payload={summaryPayload} onClose={() => setSummaryOpen(false)}/>
+      <StakeholderLens person={lensPerson} onClose={() => setLensPerson(null)}/>
+      <ShareModal open={shareOpen} onClose={() => setShareOpen(false)}/>
+      <LogDecisionModal open={logDecOpen} prefill={logDecPrefill} onClose={() => setLogDecOpen(false)}/>
       <GlobalToast/>
     </>
   );

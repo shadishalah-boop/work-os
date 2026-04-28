@@ -1,6 +1,6 @@
 /* global React */
 // =============================================================================
-// DS — Bubble counter & overlay
+// PREPLY DS — Bubble counter & overlay
 // Bubble: pill counter for unread / counts. Variants dark|light, sizes
 // small|medium|large. Auto-collapses values > limit (default 99) to "99+".
 // BubbleOverlay: positions a bubble in the top-right corner of its child
