@@ -1,70 +1,237 @@
 ---
 name: dashboard
-description: Refresh Shadi's Work Dashboard prototype with live data. Fans out to 6 parallel agents (calendar, granola, gmail, slack, drive, wellness), merges their JSON into `data-override.jsx` and `drive-index.jsx` at `~/Documents/Claude/design_handoff_work_dashboard_c/`, then bumps cache versions in `Work Dashboard.html`. Invoke when Shadi says "/dashboard", "refresh dashboard", "update dashboard", or "pull fresh data".
+description: Refresh the Work Dashboard with live data. Fans out to 6 parallel agents (calendar, granola, gmail, slack, drive, wellness) reading from the user's MCP-connected accounts, merges their JSON into `data-override.jsx` and `drive-index.jsx` at the user's configured dashboardDir, then bumps cache versions in `Work Dashboard.html`. Invoke when the user says "/dashboard", "refresh dashboard", "update dashboard", or "pull fresh data".
 ---
 
 # Work Dashboard — refresh skill
 
-Orchestrator. Fans out to 6 agents, then merges their JSON into `data-override.jsx` + `drive-index.jsx` for the local React-in-browser dashboard at `~/Documents/Claude/design_handoff_work_dashboard_c/`.
-
-**User:** Shadi Shalah · Strategy & Planning Manager at Preply · Europe/Madrid.
+Orchestrator. Fans out to 6 agents, then merges their JSON into `data-override.jsx` + `drive-index.jsx` for the local React-in-browser dashboard. All user-specific values (name, email, team, OKRs, pins, output paths) come from `~/.claude/dashboard-config.local` — no personalization lives in this file or the agents.
 
 ## Architecture
 
 ```
-~/.claude/agents/dashboard-{calendar,granola,gmail,slack,drive,wellness}.md   (the 6 agents)
+~/.claude/dashboard-config.local                                       (user identity + paths)
+         ↓ read by SKILL.md (Step 1) + build-overrides.py + each agent
+<plugin>/agents/dashboard-{calendar,granola,gmail,slack,drive,wellness}.md   (the 6 agents)
          ↓ each writes
-~/.claude/dashboard-data/{calendar,granola,gmail,slack,drive,wellness}.json   (agent output)
-         ↓ this skill reads + merges
-~/Documents/Claude/design_handoff_work_dashboard_c/data-override.jsx           (dynamic SEED overlay)
-~/Documents/Claude/design_handoff_work_dashboard_c/drive-index.jsx             (voice mic file index)
-         ↓ skill bumps ?v=N
-~/Documents/Claude/design_handoff_work_dashboard_c/Work Dashboard.html         (cache-bust)
+<output.dataCacheDir>/{calendar,granola,gmail,slack,drive,wellness}.json    (agent output)
+         ↓ build-overrides.py reads + merges
+<output.dashboardDir>/data-override.jsx                                (dynamic SEED overlay)
+<output.dashboardDir>/drive-index.jsx                                  (Find palette index)
+         ↓ bumps ?v=N
+<output.dashboardDir>/Work Dashboard.html                              (cache-bust)
 ```
 
-## Step 1 — Fan out to all 6 agents in parallel
+## Step 0 — Load config
 
-**First, get today's actual date from the system clock** (sub-agents inherit a stale `currentDate` from the parent session's start — they cannot be trusted to derive "today" correctly):
+Read `~/.claude/dashboard-config.local`. If the file doesn't exist, tell the user to copy `templates/dashboard-config.local.example` and edit it. Extract the values you'll need in Step 1's prompts:
+
+- `USER_FULL_NAME` = `config.user.fullName`
+- `USER_EMAIL` = `config.user.email`
+- `USER_TIMEZONE` = `config.user.timezone` (default `Europe/Madrid`)
+- `MANAGER_NAME` = `config.org.manager.name`
+- `SENIOR_STAKEHOLDERS` = `config.org.seniorStakeholders` (comma-joined)
+- `SLACK_WORKSPACE` = `config.slack.workspace`
+- `SLACK_USER_ID` = `config.slack.userId`
+- `HIGH_SIGNAL_CHANNELS` = `config.slack.highSignalChannels` (comma-joined)
+- `WORKSTREAMS` = `config.dashboard.workstreams` (comma-joined)
+- `DASHBOARD_DIR` = `config.output.dashboardDir` (default `~/Documents/work-dashboard`)
+- `DATA_CACHE_DIR` = `config.output.dataCacheDir` (default `~/.claude/dashboard-data`)
+
+You'll inline these into each agent's kickoff prompt so the agents themselves stay generic.
+
+## Step 1 — Fan out (only the agents whose cache is stale)
+
+**Get today's date, the lookback window, AND which agents need to actually run:**
 
 ```bash
-date '+%Y-%m-%d'        # → today, e.g. 2026-04-27
-date -v+1d '+%Y-%m-%d'  # → tomorrow, e.g. 2026-04-28
+DASHBOARD_DIR="${DASHBOARD_DIR:-$HOME/Documents/work-dashboard}"
+DATA_CACHE_DIR="${DATA_CACHE_DIR:-$HOME/.claude/dashboard-data}"
+mkdir -p "$DATA_CACHE_DIR"
+
+date '+%Y-%m-%d'        # → today, e.g. 2026-05-05
+date -v+1d '+%Y-%m-%d'  # → tomorrow, e.g. 2026-05-06
+
+# --- WINDOW_DAYS auto-detection ---
+# Compute WINDOW_DAYS = ceil(hours since last successful refresh / 24), clamped to [1, 7].
+# Uses the mtime of data-override.jsx — only written on a complete refresh, so it's
+# the most reliable "last successful refresh" signal.
+LAST=$(stat -f '%m' "$DASHBOARD_DIR/data-override.jsx" 2>/dev/null)
+if [ -z "$LAST" ]; then
+  WINDOW_DAYS=7   # no prior refresh → safe default
+else
+  HRS=$(( ($(date '+%s') - LAST) / 3600 ))
+  WINDOW_DAYS=$(( (HRS + 23) / 24 ))
+  [ "$WINDOW_DAYS" -lt 1 ] && WINDOW_DAYS=1
+  [ "$WINDOW_DAYS" -gt 7 ] && WINDOW_DAYS=7
+fi
+echo "WINDOW_DAYS=$WINDOW_DAYS"
+
+# --- Per-agent TTL (same-day cache) ---
+# Skip an agent if its JSON file is younger than its TTL. Live-data agents
+# (calendar, gmail, slack) always run; the data they capture changes by the minute.
+# Slow-changing agents (granola, drive, wellness) can reuse a recent JSON.
+ttl_for_agent() {
+  case "$1" in
+    calendar|gmail|slack) echo 0       ;;  # always run
+    granola)              echo 7200    ;;  # 2h
+    drive)                echo 14400   ;;  # 4h
+    wellness)             echo 14400   ;;  # 4h
+  esac
+}
+
+NOW=$(date '+%s')
+RUN_AGENTS=""
+SKIP_AGENTS=""
+for agent in calendar granola gmail slack drive wellness; do
+  ttl=$(ttl_for_agent $agent)
+  json="$DATA_CACHE_DIR/${agent}.json"
+  if [ ! -f "$json" ] || [ "$ttl" -eq 0 ]; then
+    RUN_AGENTS="$RUN_AGENTS $agent"
+    continue
+  fi
+  age=$(( NOW - $(stat -f '%m' "$json") ))
+  # Cache is only valid if mtime < TTL **AND** sourceOk:true in the JSON.
+  # A fresh-but-failed JSON (sourceOk:false from a prior MCP outage) must be
+  # retried — otherwise the dashboard keeps showing empty data forever.
+  ok=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('sourceOk',False))" "$json" 2>/dev/null)
+  if [ "$age" -lt "$ttl" ] && [ "$ok" = "True" ]; then
+    SKIP_AGENTS="$SKIP_AGENTS $agent(${age}s,ok)"
+  else
+    RUN_AGENTS="$RUN_AGENTS $agent"
+  fi
+done
+echo "RUN_AGENTS:${RUN_AGENTS# }"
+echo "SKIP_AGENTS:${SKIP_AGENTS# }"
+echo "START_TS=$NOW"   # epoch seconds — pass this to wait-and-merge.sh in Step 1's tool block
 ```
 
-Capture as `TODAY` and `TOMORROW`. Then issue **one** tool-use block containing 6 Agent calls. Each prompt embeds the explicit date so agents don't have to derive it. Don't batch sequentially.
+Capture `TODAY`, `TOMORROW`, `WINDOW_DAYS`, `RUN_AGENTS`, `SKIP_AGENTS`, and `START_TS`.
+
+**The window auto-adjusts to the actual time elapsed since the last refresh:**
+
+- Same-day rerun → `WINDOW_DAYS=1`
+- Overnight refresh (~24h gap) → `WINDOW_DAYS=1`
+- Monday morning after Friday refresh (~64h gap) → `WINDOW_DAYS=3`
+- After a long absence (>1 week) → capped at `WINDOW_DAYS=7`
+- First-ever refresh (no `data-override.jsx`) → `WINDOW_DAYS=7`
+
+**The TTL cache means a same-day rerun might only fan out 3 agents instead of 6:**
+
+| Agent | TTL | Why |
+|---|---|---|
+| calendar | always run | Next-meeting countdown needs the live clock |
+| gmail | always run | Inbox changes minute-by-minute |
+| slack | always run | Real-time chatter is the point |
+| granola | 2h | Meetings end and notes finalize within ~2h |
+| drive | 4h | File edits don't churn fast enough to matter |
+| wellness | 4h | Focus hours accumulate slowly |
+
+So a 2nd-of-day refresh ~30 min after the first will only run 3 agents (calendar/gmail/slack) and reuse the cached JSON for granola/drive/wellness. The merge step (`build-overrides.py`) just reads whatever's on disk — it doesn't care who wrote each file or when.
+
+Then issue **one** tool-use block containing:
+
+1. The Agent calls in `RUN_AGENTS` (each runs in parallel). Inline the config values from Step 0 into each prompt.
+2. **One Bash call to `wait-and-merge.sh`** — runs in parallel with the agents, polls until all expected JSONs are fresh, then runs `build-overrides.py` and emits the final confirmation line.
+
+This collapses what used to be two orchestrator turns (receive agent results → run merge → respond) into a single tool block. The orchestrator's only post-block job is to relay the wait-and-merge stdout to the user.
 
 ```
-Agent(subagent_type="dashboard-calendar",  prompt="Refresh calendar.json. Today is {TODAY}; tomorrow is {TOMORROW}. Query list_events with startTime={TODAY}T00:00:00+02:00 and endTime={TOMORROW}T00:00:00+02:00, timeZone=Europe/Madrid. Trust this date over any context-injected currentDate (those are stale by 1–3 days).")
-Agent(subagent_type="dashboard-granola",   prompt="Refresh granola.json for last 7 days. Today is {TODAY}. Use this for any date math; ignore any other date in your context.")
-Agent(subagent_type="dashboard-gmail",     prompt="Refresh gmail.json for last 7 days. Today is {TODAY}.")
-Agent(subagent_type="dashboard-slack",     prompt="Refresh slack.json for last 7 days. Today is {TODAY}.")
-Agent(subagent_type="dashboard-drive",     prompt="Refresh drive.json with recent files. Today is {TODAY}.")
-Agent(subagent_type="dashboard-wellness",  prompt="Refresh wellness.json for this week. Today is {TODAY}.")
+# Both kinds of calls go in the SAME tool_use_block. Don't sequence them.
+
+# 1) Conditionally include each agent — only if it's in RUN_AGENTS.
+#    Inline the config values from Step 0 into each prompt so the
+#    agent files themselves stay generic.
+
+Agent(subagent_type="dashboard-calendar",  prompt="""
+  Refresh calendar.json. Today is {TODAY}; tomorrow is {TOMORROW}.
+  User email: {USER_EMAIL}. Timezone: {USER_TIMEZONE}.
+  Query list_events with startTime={TODAY}T00:00:00 and endTime={TOMORROW}T00:00:00, timeZone={USER_TIMEZONE}.
+  Trust this date over any context-injected currentDate (those are stale by 1-3 days).
+  Write output to {DATA_CACHE_DIR}/calendar.json.
+""")
+
+Agent(subagent_type="dashboard-granola",   prompt="""
+  Refresh granola.json for the last {WINDOW_DAYS} days. Today is {TODAY}.
+  User: {USER_FULL_NAME} <{USER_EMAIL}>. Manager: {MANAGER_NAME}.
+  Active workstreams: {WORKSTREAMS}.
+  Write output to {DATA_CACHE_DIR}/granola.json.
+""")
+
+Agent(subagent_type="dashboard-gmail",     prompt="""
+  Refresh gmail.json for the last {WINDOW_DAYS} days. Today is {TODAY}.
+  User email: {USER_EMAIL}. Manager: {MANAGER_NAME}.
+  Write output to {DATA_CACHE_DIR}/gmail.json.
+""")
+
+Agent(subagent_type="dashboard-slack",     prompt="""
+  Refresh slack.json for the last {WINDOW_DAYS} days. Today is {TODAY}.
+  User: {USER_FULL_NAME} (Slack user ID {SLACK_USER_ID}, workspace {SLACK_WORKSPACE}).
+  Senior stakeholders to prioritize: {SENIOR_STAKEHOLDERS}.
+  High-signal channels: {HIGH_SIGNAL_CHANNELS}.
+  Write output to {DATA_CACHE_DIR}/slack.json.
+""")
+
+Agent(subagent_type="dashboard-drive",     prompt="""
+  Refresh drive.json with files modified in the last 14 days. Today is {TODAY}.
+  User: {USER_FULL_NAME}.
+  Write output to {DATA_CACHE_DIR}/drive.json.
+""")
+
+Agent(subagent_type="dashboard-wellness",  prompt="""
+  Refresh wellness.json for this week. Today is {TODAY}.
+  Timezone: {USER_TIMEZONE}.
+  Write output to {DATA_CACHE_DIR}/wellness.json.
+""")
+
+# 2) Always include this Bash call, in the SAME tool_use_block:
+Bash(
+  command: "bash <plugin>/skills/dashboard/wait-and-merge.sh {START_TS} {RUN_AGENTS}",
+  timeout: 360000,
+  description: "Wait for agents, then merge"
+)
 ```
 
-If any agent returns an error, continue — its JSON file will have `sourceOk: false` and the merge step falls back to empty arrays for its fields (see Step 3).
+Where `{START_TS}` is the epoch seconds you captured at the top of Step 1, `{RUN_AGENTS}` is the space-separated list of agents that need to run, and `<plugin>` is the absolute path to the plugin install directory (Claude Code resolves this — you can also write `${CLAUDE_PLUGIN_ROOT}` if available).
 
-## Step 2 — Read the 6 JSON files
+If any agent returns an error, continue — its JSON file will have `sourceOk: false` and the merge falls back to empty arrays for its fields. The merge step appends `· failed: <agents>` to its confirmation line so the user can see what's stale.
 
-```
-Read /Users/shadi.shalah/.claude/dashboard-data/calendar.json
-Read /Users/shadi.shalah/.claude/dashboard-data/granola.json
-Read /Users/shadi.shalah/.claude/dashboard-data/gmail.json
-Read /Users/shadi.shalah/.claude/dashboard-data/slack.json
-Read /Users/shadi.shalah/.claude/dashboard-data/drive.json
-Read /Users/shadi.shalah/.claude/dashboard-data/wellness.json
-```
+## Step 2 — Relay the wait-and-merge output
 
-Parse each. Track which `sourceOk` flags are false for the final confirmation line.
+The Bash tool you launched in Step 1 returns the final confirmation line directly. Your only remaining job is to emit it to the user verbatim.
 
-## Step 3 — Merge overlapping fields
+**Do not** invoke `build-overrides.py` separately — `wait-and-merge.sh` already runs it. Don't add commentary unless something failed; the one-line confirmation is the response.
 
-Some SEED fields are produced by a single agent; others merge two. Apply this mapping:
+### What `build-overrides.py` does (called inside wait-and-merge.sh)
+
+- Loads `~/.claude/dashboard-config.local` (single source of truth for user identity + paths)
+- Reads the 6 JSON files from `<dataCacheDir>`
+- Merges overlapping fields per the rules below (granola+gmail tasks, granola+slack blockers, etc.)
+- Writes `data-override.jsx` to `<dashboardDir>` — combining the dynamic agent data with static blocks (user, greeting, team, okrs, pins, weather) sourced from config.local
+- Writes `drive-index.jsx` (or an empty `[]` if drive failed)
+- Bumps the `?v=N` cache parameters for both files in `<dashboardDir>/Work Dashboard.html`
+- Prints the final confirmation line directly to stdout
+
+**Total post-fanout overhead: ~0.2s** (the merge itself; `wait-and-merge.sh` polls in 2-second intervals, so worst case it adds 2s of latency after the slowest agent finishes).
+
+### What if the agents partially failed?
+
+Each agent writes its JSON with `sourceOk: false` and an `error` field on failure. The script handles this gracefully — fields fall back to empty arrays, and the final confirmation line appends `· failed: <agents>` so the user can see what's stale.
+
+### Where to edit static content
+
+User identity, team roster, OKRs, pins, and weather city all live in `~/.claude/dashboard-config.local`. Edit the JSON and rerun this skill — no code or plugin changes needed. **Do not edit `data-override.jsx` directly** — it gets rewritten every refresh.
+
+---
+
+## Reference: merge rules (encoded in build-overrides.py — included here for review)
+
+Some SEED fields are produced by a single agent; others merge two. The script applies this mapping:
 
 | SEED field | Source(s) | Merge rule |
 |---|---|---|
 | `SEED.calendar` | calendar.events | Map each event → `{id: 'c'+i, time, duration, title, type, who: attendees.map(firstName).slice(0,6)}`. Include `overflow` count as last `who` entry like `'+3'` if `attendees.length > 6`. |
-| `SEED.nextMeeting` | calendar.nextMeeting | Map `{title, with, room: time, startsIn: minutesUntil}`. If null, use `{title:'Nothing else today', startsIn:0, with:'you', room:'—'}`. |
+| `SEED.nextMeeting` | calendar.nextMeeting | Computed at LOAD time (IIFE in data-override.jsx) — picks the first event whose start is after `now`. Stays accurate even hours after the refresh. |
 | `SEED.top3` | granola.top3 | Pass through (cap 3). |
 | `SEED.overdue` | granola.overdue + gmail.overdue | Concatenate; re-id sequentially as `o1`, `o2`, `...`; cap 5. |
 | `SEED.dueSoon` | granola.dueSoon + gmail.dueSoon | Concatenate; re-id `d1..`; cap 10. |
@@ -77,199 +244,25 @@ Some SEED fields are produced by a single agent; others merge two. Apply this ma
 | `SEED.inbox` | gmail.inbox | Pass through; cap 6. |
 | `SEED.slack` | slack.{workspace,tabs,channels,activeThreads} | Pass through. |
 | `SEED.personalSignals` | wellness.* | Pass through all fields. |
-| `DRIVE_INDEX` | drive.files | Pass through (separate file, see Step 5). |
+| `DRIVE_INDEX` | drive.files | Pass through (written to a separate file, `drive-index.jsx`, by the script). |
 
-Static fields preserved by this skill (hardcoded in Step 4 template — they rarely change):
-- `SEED.user` · `SEED.greeting` · `SEED.team` · `SEED.okrs` · `SEED.pins` · `SEED.weather`
-- `SEED.knownPeople` (powers click-a-name → Stakeholder Lens) · `SEED.pinnedPeople` (topbar quick-access avatars)
+Static fields sourced from `~/.claude/dashboard-config.local`:
+- `SEED.user` ← `config.user`
+- `SEED.greeting` ← computed from `config.user.name`
+- `SEED.team` ← `config.org.team`
+- `SEED.okrs` ← `config.dashboard.okrs`
+- `SEED.pins` ← `config.dashboard.pins`
+- `SEED.weather` ← `config.dashboard.weather`
 
-If any agent's JSON has `sourceOk: false`, treat its fields as empty arrays for the merge (fall back to seed values from `data.jsx`).
-
-## Step 4 — Write `data-override.jsx`
-
-Use the Write tool. Path: `/Users/shadi.shalah/Documents/Claude/design_handoff_work_dashboard_c/data-override.jsx`.
-
-Build the file contents as one string using `JSON.stringify(mergedValue, null, 2)` for each dynamic block. Template:
-
-```jsx
-/* global React, window */
-// =============================================================================
-// LIVE OVERRIDE — auto-regenerated by the `dashboard` skill.
-// Dynamic blocks come from ~/.claude/dashboard-data/*.json.
-// Static blocks (user, greeting, team, okrs, pins, weather) are preserved below.
-// Hand-edit the static blocks in ~/.claude/skills/dashboard/SKILL.md.
-// =============================================================================
-
-(function () {
-  // --- User identity (static) -------------------------------------------
-  window.SEED.user = { name: 'Shadi', role: 'Strategy & Planning Manager', tz: 'Europe/Madrid' };
-  window.SEED.greeting = {
-    morning:   'Morning, <em>Shadi</em>.',
-    afternoon: 'Afternoon, <em>Shadi</em>.',
-    evening:   'Evening, <em>Shadi</em>.',
-  };
-
-  // --- Calendar (from calendar.json) ------------------------------------
-  window.SEED.calendar = {{CALENDAR_JSON}};
-
-  // Compute next upcoming meeting from live clock (overrides agent's nextMeeting
-  // so the dashboard always reflects now, not the moment the agent ran).
-  (function pickNext() {
-    const now = new Date();
-    const nowMin = now.getHours()*60 + now.getMinutes();
-    const toMin = (t) => { const [h,m] = t.split(':').map(Number); return h*60+m; };
-    const upcoming = window.SEED.calendar.find(e => toMin(e.time) > nowMin);
-    if (upcoming) {
-      const startMin = toMin(upcoming.time);
-      window.SEED.nextMeeting = {
-        title: upcoming.title,
-        startsIn: startMin - nowMin,
-        with: (upcoming.who && upcoming.who.length) ? upcoming.who.slice(0,3).join(', ') : 'you',
-        room: upcoming.time,
-      };
-    } else {
-      window.SEED.nextMeeting = { title: 'Nothing else today', startsIn: 0, with: 'you', room: '—' };
-    }
-  })();
-
-  // --- Top-3 today (from granola.json) ---------------------------------
-  window.SEED.top3 = {{TOP3_JSON}};
-
-  // --- Tasks (granola + gmail merged) -----------------------------------
-  window.SEED.overdue  = {{OVERDUE_JSON}};
-  window.SEED.dueSoon  = {{DUESOON_JSON}};
-  window.SEED.blocked  = {{BLOCKED_JSON}};
-  window.SEED.shipped  = {{SHIPPED_JSON}};
-
-  // --- Blockers (granola + slack merged) --------------------------------
-  window.SEED.blockers = {{BLOCKERS_JSON}};
-
-  // --- Team (static · Preply org · Strategic Finance under Jose Ferreira) ---
-  window.SEED.team = {
-    attention: '<b>Hitesh</b> & <b>Kate</b> (both onboarding), <b>Christopher Rogan</b> (pre-align call owed before he starts).',
-    people: [
-      { name: 'Jose Ferreira',     status: 'active', note: 'Manager · VP Strategic Finance',          ooo: false, manager: true  },
-      { name: 'Chermain Ang',      status: 'active', note: 'Sr. Strategy & Revenue Mgr',              ooo: false, manager: false },
-      { name: 'Hitesh Pankhania',  status: 'active', note: 'Onboarding · Sr. Strategy & Ops',         ooo: false, manager: false },
-      { name: 'Kate Jones',        status: 'active', note: 'Onboarding · Lead Exec Assistant',        ooo: false, manager: false },
-      { name: 'Cristina Rundall',  status: 'active', note: 'Personal Assistant · Jose',               ooo: false, manager: false },
-      { name: 'Nabila Ramadhyan',  status: 'active', note: 'Strategic Finance PM · under Chermain',   ooo: false, manager: false },
-    ],
-  };
-
-  // --- Projects (from granola.json) -------------------------------------
-  window.SEED.projects = {{PROJECTS_JSON}};
-
-  // --- Q2 OKRs (static · from Preply OKR sheet) -------------------------
-  // Source: https://docs.google.com/spreadsheets/d/1JCV36oLjUwu0orX2ZVxGN-jJe5DodNiwPkc2e_ofGX0
-  window.SEED.okrs = [
-    { id: 'k1', name: 'AI: Build 4\u20135 strategy-team workflows',                   pct: 10, trend: 'behind'  },
-    { id: 'k2', name: 'Fintech: Support Payments & Treasury roadmap',                  pct: 35, trend: 'on-pace' },
-    { id: 'k3', name: 'Additional: Bandwidth for CEO initiatives (B2B FR, Corp Dev)',  pct: 20, trend: 'on-pace' },
-  ];
-
-  // --- Decisions pending (granola + gmail merged) -----------------------
-  window.SEED.decisions = {{DECISIONS_JSON}};
-
-  // --- Recent meetings together (from granola.meetingHistory) ----------
-  // Powers the Stakeholder Lens "Recent meetings together" + "Last met" sections.
-  window.SEED.meetingHistory = {{MEETING_HISTORY_JSON}};
-
-  // --- Known people for click-a-name → Lens + topbar pinned avatars -----
-  // Per-user config — populate with the people you actually work with so the
-  // Stakeholder Lens activates on name mentions in tasks/decisions/inbox.
-  window.SEED.knownPeople = {{KNOWN_PEOPLE_JSON}};
-  window.SEED.pinnedPeople = {{PINNED_PEOPLE_JSON}};
-
-  // --- Pins / Quick access (static · Shadi's daily tools) ---------------
-  window.SEED.pins = [
-    { id: 'pn1', label: 'Q2 OKRs sheet',   sub: 'Sheets · Strategy team', letter: 'O', bg: 'var(--teal-100)',   href: 'https://docs.google.com/spreadsheets/d/1JCV36oLjUwu0orX2ZVxGN-jJe5DodNiwPkc2e_ofGX0/edit?gid=1707884311' },
-    { id: 'pn2', label: 'Granola',         sub: 'Meeting notes',          letter: 'G', bg: 'var(--pink-100)',   href: 'https://app.granola.ai' },
-    { id: 'pn3', label: 'Gmail',           sub: 'Inbox',                  letter: 'M', bg: 'var(--red-100)',    href: 'https://mail.google.com/mail/u/0/#inbox' },
-    { id: 'pn4', label: 'Google Calendar', sub: 'Week view',              letter: 'C', bg: 'var(--blue-100)',   href: 'https://calendar.google.com/calendar/u/0/r/week' },
-    { id: 'pn5', label: 'Slack · Preply',  sub: 'Workspace',              letter: '#', bg: 'var(--yellow-100)', href: 'https://preply.slack.com' },
-    { id: 'pn6', label: 'Google Drive',    sub: 'Files',                  letter: 'D', bg: 'var(--grey-100)',   href: 'https://drive.google.com' },
-  ];
-
-  // --- Personal signals / Wellness (from wellness.json) ----------------
-  window.SEED.personalSignals = {{PERSONALSIGNALS_JSON}};
-
-  // --- Inbox (from gmail.json) ------------------------------------------
-  window.SEED.inbox = {{INBOX_JSON}};
-
-  // --- Slack (from slack.json) ------------------------------------------
-  window.SEED.slack = {{SLACK_JSON}};
-
-  // --- Weather (static · Barcelona · replace with an agent later) -------
-  window.SEED.weather = {
-    city: 'Barcelona',
-    days: [
-      { label: 'Today', high: 20, low: 15, cond: 'Overcast' },
-      { label: 'Fri',   high: 18, low: 11, cond: 'Overcast' },
-      { label: 'Sat',   high: 19, low: 10, cond: 'Overcast' },
-    ],
-  };
-
-  console.log('[dashboard] live override applied · {{SOURCES_OK_SUMMARY}}');
-})();
-```
-
-Replace each `{{...}}` placeholder with the JSON stringification (pretty-printed, 2-space indent) of the merged value. Example for TOP3_JSON:
-```
-merged.top3 = granola.top3;                       // from Step 3
-TOP3_JSON   = JSON.stringify(merged.top3, null, 2).replace(/^/gm, '  ').trimStart();
-```
-
-**`{{SOURCES_OK_SUMMARY}}`** — replace with something like `calendar✓ granola✓ gmail✗ slack✓ drive✓ wellness✓` showing which agents succeeded.
-
-## Step 5 — Write `drive-index.jsx`
-
-Use the Write tool. Path: `/Users/shadi.shalah/Documents/Claude/design_handoff_work_dashboard_c/drive-index.jsx`.
-
-Template:
-```jsx
-/* global window */
-// Auto-generated by the `dashboard` skill from ~/.claude/dashboard-data/drive.json.
-// Used by the Find palette + voice mic "open [file]" fuzzy-match.
-window.DRIVE_INDEX = {{DRIVE_FILES_JSON}};
-```
-
-Where `{{DRIVE_FILES_JSON}}` = `JSON.stringify(drive.files, null, 2)`. If `drive.sourceOk === false`, write `window.DRIVE_INDEX = [];` and skip bumping drive-index.jsx's cache version in Step 6.
-
-## Step 6 — Bump cache versions in `Work Dashboard.html`
-
-Use the Edit tool on `/Users/shadi.shalah/Documents/Claude/design_handoff_work_dashboard_c/Work Dashboard.html`.
-
-For each file just rewritten, increment its `?v=N` suffix by 1:
-- `data-override.jsx?v=N` → `?v=(N+1)` — always bump
-- `drive-index.jsx?v=N`  → `?v=(N+1)` — bump only if Step 5 wrote new content
-
-First read the HTML to see current version numbers (they change between runs — grep the `?v=` for each file). Use Edit with `old_string` = current version line and `new_string` = bumped version.
-
-Do **not** bump other files (dashboard-d.css, gcal.jsx, modules-a.jsx, modules-b.jsx, app.jsx, data.jsx) — the skill doesn't touch them, so their cache stays valid.
-
-## Step 7 — Confirm to user
-
-Output exactly one line. Format:
-
-```
-Dashboard refreshed · {{ok_count}}/6 sources · {{summary_metrics}} · reload the browser tab
-```
-
-Example:
-```
-Dashboard refreshed · 6/6 sources · 7 events · 3 top3 · 4 blockers · 12 slack threads · 42 drive files · reload the browser tab
-```
-
-If any source failed, append which ones, e.g. `· failed: slack (auth expired)`.
+If any agent's JSON has `sourceOk: false`, the script treats its fields as empty arrays for the merge (so the dashboard degrades gracefully — see `safe()` in the script).
 
 ## Rules & gotchas
 
 - **Always fan out in parallel (Step 1)** — sequential agent calls waste 5–6× the wall time.
-- **Static blocks live in this SKILL.md template.** If Shadi asks to update his team roster, OKRs, pins, or greeting, edit this file — not `data-override.jsx`, which will be overwritten on next refresh.
-- **Never bump the other 5 cache params.** Only `data-override.jsx` and `drive-index.jsx` change per run.
-- **`nextMeeting` is computed at load time** from `SEED.calendar` (see Step 4's IIFE) — this gives accurate countdowns even if the dashboard is opened hours after the last refresh.
+- **Static blocks come from `~/.claude/dashboard-config.local`.** If the user wants to update team roster, OKRs, pins, or greeting, edit that file — not `data-override.jsx`, which gets overwritten on next refresh.
+- **Never bump the other 5 cache params.** The script only bumps `data-override.jsx` and `drive-index.jsx`.
+- **`nextMeeting` is computed at load time** from `SEED.calendar` (the IIFE the script writes into `data-override.jsx`) — this keeps the countdown accurate even if the dashboard is opened hours after the last refresh.
 - **Never render HTML** — the dashboard lives in its own HTML file; this skill only feeds it data.
-- **Never open the browser** — Shadi keeps the tab open and will reload manually.
+- **Never open the browser** — the user keeps the tab open. With the v0.4.0 auto-reload banner in `Work Dashboard.html`, the browser polls every 30s and either silent-reloads (tab hidden) or shows a "Fresh data available" banner (tab visible).
 - **Sort order matters for blockers**: always put `sev: 'high'` items before `sev: 'medium'` after concatenating granola + slack sources.
-- If `~/.claude/dashboard-data/` does not exist, create it with `mkdir -p` before agents run (they'll error otherwise).
+- If `<dataCacheDir>` does not exist, Step 1's bash creates it with `mkdir -p` before agents run.

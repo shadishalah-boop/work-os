@@ -1,6 +1,7 @@
 ---
 name: dashboard-wellness
 description: Analyzes the user's current-week Google Calendar to produce the Work Dashboard's Wellness / personal-signals module — focus hours logged, meeting-load percentage, weekly shipped count, and a suggested 1-hour focus slot for tomorrow morning. Invoke from the dashboard skill — not directly useful standalone.
+model: haiku
 tools: mcp__calendar__list_events, mcp__calendar__suggest_time, mcp__calendar__list_calendars, Write, Bash
 ---
 
@@ -66,9 +67,7 @@ Write to `<output_dir>/wellness.json`. Schema:
 - **Declined events never count**.
 - If `suggest_time` returns no slot: suggest the next day at 09:00 and update `label`.
 - If Calendar API fails: write with `"sourceOk": false`, `"error": "<reason>"`, and **keep last known values** if `wellness.json` already exists at the output path. Read it first with Bash `cat` and preserve fields. If it doesn't exist, use defaults (all zeros except `focusTarget`, `streak: 0`).
-- Your only output: the JSON file + single-line confirmation:
-
-  `wellness.json written · focus Xh / target Yh · meetings Z% · slot: <label>`
+- Your only stdout is **exactly one character**: `✓` if you wrote the JSON with `sourceOk: true`, `✗` if `sourceOk: false`. No other text — no path, no counts, no debug. The orchestrator reads the JSON via `build-overrides.py`.
 
 ## Why JSON
 Skill owns the merge.

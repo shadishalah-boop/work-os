@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Work dashboard — Shadi</title>
+<title>Work dashboard</title>
 <link rel="icon" type="image/jpeg" href="ds/assets/shadi.jpg"/>
 <link rel="stylesheet" href="ds/colors_and_type.css"/>
 <link rel="stylesheet" href="ds/layout-tokens.css"/>
@@ -49,5 +49,65 @@
 <script type="text/babel" src="modules-a.jsx?v=18"></script>
 <script type="text/babel" src="modules-b.jsx?v=24"></script>
 <script type="text/babel" src="app.jsx?v=44"></script>
+
+<script>
+// =============================================================================
+// Auto-reload (v0.4.0): poll Work Dashboard.html every 30s for cache-version
+// bumps. When the dashboard skill rewrites data-override.jsx or drive-index.jsx,
+// it increments their ?v=N suffix here. We detect that and reload so the open
+// tab always reflects the latest refresh — no manual reload required.
+//
+// UX: if the tab is hidden when fresh data lands, reload immediately. If
+// visible, show a tiny non-blocking banner so we don't wipe scroll / open
+// modules mid-interaction. Either way: click the banner to reload now.
+// =============================================================================
+(function autoReload() {
+  const POLL_INTERVAL_MS = 30 * 1000;  // 30s — local fetch, basically free
+
+  function readVersions(htmlText) {
+    const m = htmlText.match(/(?:data-override|drive-index)\.jsx\?v=\d+/g) || [];
+    return m.sort().join('|');
+  }
+
+  // Capture the versions we loaded with — anything different from this is "fresh data"
+  const loadedVersions = readVersions(document.documentElement.outerHTML);
+  let pendingFresh = false;
+
+  function showFreshBanner() {
+    if (document.getElementById('auto-reload-banner')) return;
+    const b = document.createElement('div');
+    b.id = 'auto-reload-banner';
+    b.style.cssText = 'position:fixed;top:12px;right:12px;z-index:9999;background:#0b6;color:#fff;padding:8px 12px;border-radius:6px;font:13px/1.4 system-ui,sans-serif;box-shadow:0 4px 16px rgba(0,0,0,.18);cursor:pointer';
+    b.textContent = 'Fresh data available — click to reload';
+    b.onclick = () => window.location.reload();
+    document.body.appendChild(b);
+  }
+
+  async function check() {
+    try {
+      const r = await fetch(window.location.pathname + '?_t=' + Date.now(), { cache: 'no-store' });
+      const html = await r.text();
+      const current = readVersions(html);
+      if (current && current !== loadedVersions) {
+        if (document.visibilityState === 'hidden') {
+          window.location.reload();
+        } else {
+          pendingFresh = true;
+          showFreshBanner();
+        }
+      }
+    } catch (e) { /* silent — don't break the dashboard if polling fails */ }
+  }
+
+  // Reload immediately if user switches back to the tab and fresh data was queued
+  document.addEventListener('visibilitychange', () => {
+    if (pendingFresh && document.visibilityState === 'visible') {
+      window.location.reload();
+    }
+  });
+
+  setInterval(check, POLL_INTERVAL_MS);
+})();
+</script>
 </body>
 </html>

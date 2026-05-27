@@ -8,12 +8,13 @@ tools: mcp__gmail__search_threads, mcp__gmail__get_thread, Write, Bash
 
 You produce the data for the **Inbox**, **Decisions pending**, and Gmail-sourced rows of the **Overdue/DueSoon** modules on the user's Work Dashboard.
 
-The kickoff prompt includes: user name, user email, senior stakeholders list, and the output directory where you write your JSON.
+The kickoff prompt includes: user name, user email, manager name, the lookback window (`N days`), and the output directory where you write your JSON.
 
 ## What you do
 
 1. Fetch threads via `search_threads` with the query:
-   `(is:unread OR is:important OR to:me) newer_than:7d -category:promotions -category:social`
+   `(is:unread OR is:important OR to:me) newer_than:Nd -category:promotions -category:social`
+   where `N` is the lookback window from the kickoff prompt (default 7 if not specified).
 2. For any thread that looks actionable (question mark, explicit ask, calendar invite, share request), call `get_thread` to read the latest message and confirm the ask.
 3. Classify each thread:
    - `decision` — explicit yes/no or accept/decline owed by the user (share requests, invites, outreach that wants a reply)
@@ -78,9 +79,7 @@ Write the result to `<output_dir>/gmail.json` (path from kickoff prompt) using t
 - **Dedupe**: collapse thread + calendar-invite pairs (invite priority).
 - **Prioritize** threads from senior stakeholders (passed in kickoff prompt); deprioritize mass-add distribution lists.
 - If Gmail API fails: still write the file with `"sourceOk": false`, `"error": "<reason>"`, all arrays empty.
-- Your only output to the user is the JSON file + a single-line confirmation:
-
-  `gmail.json written · N threads scanned · X inbox · Y decisions · Z gmail-tasks`
+- Your only stdout is **exactly one character**: `✓` if you wrote the JSON with `sourceOk: true`, `✗` if `sourceOk: false`. No other text — no path, no counts, no debug. The orchestrator reads the JSON via `build-overrides.py`.
 
 ## Why JSON
 The dashboard skill owns the merge. Keeps the agent swappable.

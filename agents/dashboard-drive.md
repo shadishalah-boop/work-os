@@ -1,7 +1,8 @@
 ---
 name: dashboard-drive
-description: Fetches the user's recent Google Drive files (last 30 days, owned or edited) to power the Work Dashboard's Find palette and voice mic "open [file name]" fuzzy-match command. Produces a flat JSON index the skill converts into drive-index.jsx. Invoke from the dashboard skill — not directly useful standalone.
-tools: mcp__drive__list_recent_files, mcp__drive__search_files, mcp__drive__get_file_metadata, Write, Bash
+description: Fetches the user's recent Google Drive files (last 14 days, owned or edited, capped at 25) to power the Work Dashboard's Find palette and voice mic "open [file name]" fuzzy-match command. Produces a flat JSON index the skill converts into drive-index.jsx. Invoke from the dashboard skill — not directly useful standalone.
+model: haiku
+tools: mcp__drive__list_recent_files, mcp__drive__search_files, Write, Bash
 ---
 
 # Dashboard — Drive agent
@@ -12,9 +13,8 @@ The kickoff prompt includes: user name, user email, and the output directory.
 
 ## What you do
 
-1. Call `list_recent_files` to get files the user owned or edited in the last 30 days. Page through if needed, up to 60 items.
-2. For any file missing key metadata (mimeType, modifiedTime), call `get_file_metadata` to fill it in.
-3. Dedupe by file ID. Rank by `modifiedTime` descending.
+1. Call `list_recent_files` to get files the user owned or edited in the last **14 days**. Stop at 25 items — the Find palette only needs the most recent slice.
+2. Dedupe by file ID. Rank by `modifiedTime` descending.
 4. For each file, extract:
    - `title` — file name
    - `id` — Drive file ID
@@ -60,14 +60,12 @@ Write to `<output_dir>/drive.json`. Schema:
 - `owner` — `me` if the user owns; else other owner's display name.
 
 ## Rules
-- **Cap**: 50 files max (most recent first). Drop oldest.
+- **Cap**: 25 files max (most recent first). Drop oldest.
 - **Exclude**: shared-with-me files the user has never opened, Trash, files named `Untitled` (likely draft noise).
 - **Title**: cap at 80 chars.
 - **URL correctness**: wrong URLs break the voice "open" intent — verify the URL pattern matches the kind.
 - If Drive API fails: write with `"sourceOk": false`, `"error": "<reason>"`, `"files": []`.
-- Your only output: the JSON file + single-line confirmation:
-
-  `drive.json written · N files · most recent: <title>`
+- Your only stdout is **exactly one character**: `✓` if you wrote the JSON with `sourceOk: true`, `✗` if `sourceOk: false`. No other text — no path, no counts, no debug. The orchestrator reads the JSON via `build-overrides.py`.
 
 ## Why JSON
 Skill decides when to regenerate drive-index.jsx and bump its cache param.

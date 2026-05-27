@@ -43,13 +43,31 @@ The plugin's `.mcp.json` auto-registers 5 MCP servers on install. Each needs per
 |---|---|---|---|
 | `calendar` | Google Calendar read + suggest-time | Google Cloud OAuth `credentials.json` | No — set `GOOGLE_OAUTH_CREDENTIALS` env var |
 | `gmail`    | Gmail search + thread read | Google OAuth (browser prompt on first use) | Yes |
-| `slack`    | Slack search + read channel/thread | Bot token from `api.slack.com/apps` | No — set `SLACK_BOT_TOKEN` + `SLACK_TEAM_ID` |
+| `slack`    | Slack search (MCP-free as of v0.4.0) | User OAuth token with `search:read` scope, stored in macOS Keychain | See "Slack setup" below |
 | `drive`    | Google Drive list/search | Google OAuth (browser prompt on first use) | Yes |
 | `granola`  | Granola meeting notes + transcripts | Granola desktop app running locally | Yes |
 
 If a server is unreachable, its agent returns `sourceOk: false` and the dashboard renders the rest cleanly — the unavailable sections just show empty arrays. You can add sources incrementally.
 
 Want to swap in a different MCP? Override entries in your own `~/.claude.json` under `mcpServers` — keep the same server names (`calendar`, `gmail`, `slack`, `drive`, `granola`) so the agents still resolve.
+
+### Slack setup (v0.4.0+ — MCP-free)
+
+The Slack agent no longer needs the Slack MCP server. Instead it calls the Slack web API directly using an OAuth token stored in macOS Keychain. This is faster, has fewer moving parts, and works in headless `claude -p` (e.g. launchd) where the MCP doesn't load.
+
+**One-time setup:**
+
+1. Get a Slack user OAuth token with `search:read` scope. Easiest path:
+   - Go to https://api.slack.com/apps → "Create New App" → "From scratch"
+   - Add OAuth scope `search:read` under "User Token Scopes"
+   - Install the app to your workspace → copy the **User OAuth Token** (`xoxp-...`)
+2. Store it in Keychain:
+
+```bash
+security add-generic-password -s slack_token -a "$USER" -w 'xoxp-paste-your-token-here'
+```
+
+That's it — the agent reads from this Keychain entry on every run. If the entry is missing, the Slack agent writes `sourceOk: false` and the rest of the dashboard renders fine.
 
 ---
 

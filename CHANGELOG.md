@@ -14,6 +14,106 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.4.0 — 2026-05-27
+
+**The speed-and-cost release.** Refresh time and cost both down ~80% with no
+loss of fidelity. New programmatic merge step, per-agent TTL cache, MCP-free
+Slack agent, browser auto-reload, and a real fix for the calendar agent's
+broken MCP names.
+
+### Speed & cost wins
+
+- **Programmatic merge** — `skills/dashboard/build-overrides.py` (new) reads
+  the 6 agent JSONs and writes `data-override.jsx` + `drive-index.jsx` in
+  ~0.2s. Replaces ~5 min of orchestrator-LLM hand-writing JSX every refresh.
+- **Wait-and-merge wrapper** — `skills/dashboard/wait-and-merge.sh` (new)
+  polls for fresh JSONs in parallel with agent fan-out, then runs the merge
+  in the same tool block. Collapses two orchestrator turns into one. Saves
+  ~30-60s of "post-completion thinking" latency per refresh.
+- **Per-agent TTL cache** — same-day reruns now skip granola/drive/wellness
+  (2-4h TTL) if their JSON is fresh and `sourceOk: true`. Cache poisoning
+  from prior failed runs is detected and retried.
+- **WINDOW_DAYS auto-detect** — lookback window is now derived from the
+  mtime of `data-override.jsx`. Same-day rerun → 1 day. Monday after
+  Friday → 3 days. Long absence → capped at 7. No more guessing.
+- **Haiku on cheap agents** — `dashboard-calendar`, `dashboard-drive`,
+  `dashboard-wellness` now run on Haiku via `model: haiku` frontmatter.
+  ~5× cheaper for those agents, same output quality.
+- **Single-character agent output** — agents now emit just `✓` or `✗` (was
+  a verbose line per agent). Smaller `tool_result` payload = faster
+  orchestrator turn.
+- **Slack agent rewrite — MCP-free** — `dashboard-slack` now uses the
+  Slack web API directly with an OAuth token from macOS Keychain. Two
+  wins: (1) works in headless `claude -p` (launchd) where the Slack MCP
+  doesn't load, (2) one fewer MCP server to install. Setup is one
+  `security add-generic-password -s slack_token`. See README's "Slack
+  setup" section.
+- **Slack scope filter** — Slack agent now scopes to DMs + channels the
+  user has posted in within the last 30 days, plus `#incident-*`. Active
+  channel list is cached for 24h. Skips the long tail of channels the
+  user is a member of but doesn't engage with.
+- **Drive cap 25 / 14d** — was 50 files over 30 days. The Find palette
+  doesn't need more.
+
+### Bug fixes
+
+- **Calendar MCP names** — v0.3.0 shipped with hash-based MCP IDs
+  (`mcp__e57d94a3-...`) that only worked on the maintainer's machine.
+  Fixed: now uses the generic `mcp__calendar__list_events` /
+  `mcp__calendar__list_calendars` names that match `.mcp.json.example`.
+  Without this fix the calendar agent would silently fail for every
+  other install.
+- **Cache poisoning** — failed agent runs writing `sourceOk: false` JSONs
+  were being served from the new TTL cache as if fresh. Fixed: cache is
+  only valid if BOTH mtime < TTL AND `sourceOk: true`.
+
+### Browser UX
+
+- **Auto-reload banner** — `Work Dashboard.html` now polls itself every
+  30s for cache-version bumps. When the dashboard skill writes a new
+  `data-override.jsx`, the open tab either silent-reloads (if hidden) or
+  shows a "Fresh data available — click to reload" banner (if visible).
+  No more remembering to Cmd+Shift+R after a refresh.
+
+### Personalization architecture (formalized)
+
+- **All user-specific data now lives in `~/.claude/dashboard-config.local`.**
+  This was already the design in v0.3.0 but several files were leaking
+  hardcoded values. v0.4.0 cleans them all up:
+  - `build-overrides.py` reads user/team/OKRs/pins/weather/paths from
+    config.local (with sensible defaults if missing)
+  - All 6 agent files reference "the user" generically; identity comes
+    via the orchestrator's kickoff prompts, which `SKILL.md` Step 0 reads
+    from config.local
+  - No hardcoded `/Users/<name>/...` paths anywhere — `$HOME`,
+    `~/...`, or self-locating paths throughout
+
+### Files changed
+
+- `skills/dashboard/SKILL.md` — full rewrite: Step 0 config load, Step 1
+  fan-out with TTL cache + wait-and-merge, Step 2 just relays output
+- `skills/dashboard/build-overrides.py` — NEW (~370 lines)
+- `skills/dashboard/wait-and-merge.sh` — NEW (~85 lines)
+- `agents/dashboard-calendar.md` — MCP names fix, `model: haiku`, single-char output
+- `agents/dashboard-slack.md` — full rewrite: MCP-free curl + Keychain
+- `agents/dashboard-{granola,gmail,drive,wellness}.md` — single-char output,
+  N-day window from prompt, Haiku where appropriate, drive cap 25/14d,
+  granola: no transcript pulls
+- `public/Work Dashboard.html` — auto-reload banner block
+
+### Update path for users on v0.3.0
+
+```
+/plugin uninstall work-os@work-os
+/plugin install work-os@work-os
+```
+
+Then if you want the Slack speedup, add your Slack OAuth token to
+Keychain (see README). Your `~/.claude/dashboard-config.local` is
+preserved across updates.
+
+---
+
 ## v0.3.0 — 2026-04-28
 
 Big release. Eight new product surfaces, a responsive layout, a config-driven
