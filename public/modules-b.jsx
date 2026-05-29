@@ -13,7 +13,7 @@ function SlackMod({ data }) {
   const [askState, setAskState] = useStateB({ status: 'idle', results: [], error: null, query: '' });
   const [replyText, setReplyText] = useStateB({});
 
-  const workspace = data.workspace || 'preply';
+  const workspace = data.workspace || 'workspace';
   const openInSlack = (url) => { if (url) window.open(url, '_blank', 'noopener'); };
 
   // Helper-service awareness: when the local dashboard-helper is up, clicks
@@ -81,7 +81,7 @@ function SlackMod({ data }) {
   return (
     <Module
       title={<span style={{display:'inline-flex', alignItems:'center', gap:8}}><span className="slack-brand"/>Slack · what you missed</span>}
-      sub={`${data.channels.length} tracked · ${(data.activeThreads||[]).length} active threads across Preply`}
+      sub={`${data.channels.length} tracked · ${(data.activeThreads||[]).length} active threads across your workspace`}
       right={
         <div style={{display:'flex', alignItems:'center', gap:8}}>
           <span
@@ -107,7 +107,7 @@ function SlackMod({ data }) {
           value={askQ}
           onChange={e=>setAskQ(e.target.value)}
           onKeyDown={onAskSubmit}
-          placeholder="Ask Slack anything · e.g. &quot;what did Bogdan say about Q2 hiring?&quot;"
+          placeholder="Ask Slack anything · e.g. &quot;what did we decide about the Q2 roadmap?&quot;"
           style={{flex:1, border:'none', outline:'none', background:'transparent', fontSize:13, fontFamily:'inherit'}}
         />
         <button className="btn btn--primary btn--sm" onClick={()=>onAskSubmit({})} disabled={!askQ.trim() || askState.status==='loading'}>
@@ -281,7 +281,7 @@ function SlackMod({ data }) {
             display: 'flex', alignItems: 'center', gap: 6,
           }}>
             <Icon name="sparkle" size={12}/>
-            Most active threads across Preply — today
+            Most active threads — today
           </div>
           {data.activeThreads.map(t => (
             <div key={t.id} onClick={()=>openInSlack(t.permalink)} style={{
@@ -684,7 +684,7 @@ function CommitmentsMod({ state }) {
     >
       {groups.length === 0 ? (
         <div className="commit-empty">
-          No open commitments to known stakeholders. Items mentioning <em>Jose</em>, <em>Christopher</em>, <em>Bertrand</em>, etc. will appear here as they show up in tasks.
+          No open commitments to known stakeholders. Items mentioning the people you work with will appear here as they show up in tasks.
         </div>
       ) : (
         <div className="commit-list">
@@ -1009,7 +1009,7 @@ function searchDashboard(q) {
       type:'person', key:'per-'+i, icon:'user-group',
       title:p.name + (p.manager ? ' · MGR' : ''),
       subtitle:p.note || (p.ooo ? 'Out of office' : ''),
-      badge: p.ooo ? 'OOO' : 'Preply',
+      badge: p.ooo ? 'OOO' : 'Team',
     });
   });
   (S.blockers || []).forEach((b, i) => {
@@ -1067,7 +1067,7 @@ function FindModal({ open, onClose, prefillQuery }) {
   const groups  = useMemoB(() => groupResults(results), [results]);
   const flat    = useMemoB(() => groups.flatMap(g => g.items), [groups]);
 
-  const workspace = (window.SEED && window.SEED.slack && window.SEED.slack.workspace) || 'preply';
+  const workspace = (window.SEED && window.SEED.slack && window.SEED.slack.workspace) || 'workspace';
   const tools = [
     { id:'gmail',    label:'Gmail',    url:(x)=>x?`https://mail.google.com/mail/u/0/#search/${encodeURIComponent(x)}`:'https://mail.google.com/mail/u/0/' },
     { id:'slack',    label:'Slack',    url:(x)=>x?`https://${workspace}.slack.com/search/${encodeURIComponent(x)}`:`https://${workspace}.slack.com` },
@@ -1509,7 +1509,7 @@ function AddMeetingModal({ open, onClose, prefillTitle }) {
               </div>
               <AttendeesInput
                 value={who} onChange={setWho} open={open}
-                placeholder="Start typing a name or email — e.g. konstantinos, emily, sagar"/>
+                placeholder="Start typing a name or email — e.g. sam, alex, jordan"/>
               <div style={{marginTop:6, fontSize:12, color:'var(--fg-3)'}}>
                 {emailCount > 0
                   ? `${emailCount} invitee${emailCount === 1 ? '' : 's'} will receive a Google Calendar invite.`

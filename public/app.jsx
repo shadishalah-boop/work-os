@@ -24,7 +24,7 @@ const { useState: uS, useEffect: uE, useMemo: uM } = React;
     })();
     const banner = document.createElement('div');
     banner.className = 'readonly-banner';
-    banner.innerHTML = '<span>Read-only view · shared snapshot of Shadi\'s dashboard</span><a href="' + exitUrl + '">Exit read-only →</a>';
+    banner.innerHTML = '<span>Read-only view · shared snapshot of this dashboard</span><a href="' + exitUrl + '">Exit read-only →</a>';
     document.body.insertBefore(banner, document.body.firstChild);
   } catch (e) { /* no-op */ }
 })();
@@ -79,7 +79,7 @@ function Rail() {
       <div className="rail-spacer"/>
       <div className="rail-item"><Icon name="settings" size={22}/></div>
       <div style={{marginTop:8}}>
-        <span className="pds-avatar size-32"><img src="ds/assets/shadi.jpg?v=1" alt="Shadi"/></span>
+        <span className="pds-avatar size-32"><img src="ds/assets/avatar-default.svg" alt="You"/></span>
       </div>
     </aside>
   );
@@ -397,7 +397,8 @@ function StakeholderLens({ person, onClose }) {
 
   const firstName = (person.name || '').split(' ')[0];
   const gmailHref = `https://mail.google.com/mail/u/0/#search/from%3A(${encodeURIComponent(person.name)})`;
-  const slackHref = `https://preply.slack.com/search?query=${encodeURIComponent(person.name)}`;
+  const _ws = (window.SEED && window.SEED.slack && window.SEED.slack.workspace) || 'app';
+  const slackHref = `https://${_ws}.slack.com/search?query=${encodeURIComponent(person.name)}`;
 
   const Section = ({ title, items, render }) =>
     items.length === 0 ? null : (
@@ -563,7 +564,7 @@ function LogDecisionModal({ open, prefill, onClose }) {
               autoFocus
               value={title}
               onChange={e => setTitle(e.target.value)}
-              placeholder="e.g. Accept Tipalti 50/50 rev share"
+              placeholder="e.g. Approve the vendor contract"
             />
           </label>
           <label className="log-dec-field">
@@ -665,7 +666,7 @@ function ShareModal({ open, onClose }) {
     const isDismissed = (label) => normalizeTaskKey(label) in dismissed;
     const isOpen = (t) => t && !t.done && !isArchived(t.label || t.title) && !isDismissed(t.label || t.title);
 
-    lines.push(h1(`Shadi's dashboard · ${today}`));
+    lines.push(h1(`${((window.SEED && window.SEED.user && window.SEED.user.name) || 'My')}'s dashboard · ${today}`));
     lines.push('');
 
     if (selected.top3) {
@@ -758,7 +759,7 @@ function ShareModal({ open, onClose }) {
 
         // --- Synthesis helpers — turn item lists into a one-paragraph narrative ---
         // condense: drop parenthetical clauses, hard-trim very long labels.
-        // Keep original casing so proper nouns (Jose, PayPal, etc.) stay correct.
+        // Keep original casing so proper nouns (names, product names, etc.) stay correct.
         const condense = (label) => {
           let t = (label || '').replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
           if (t.length > 80) t = t.slice(0, 77) + '…';
@@ -1145,8 +1146,10 @@ const OKR_META = {
 };
 const OKR_KEYWORDS = {
   k1: ['ai ', 'claude', ' mcp', 'skill', 'plugin', 'agent', 'workflow', 'automation', 'dashboard', 'work os', 'template', 'export', 'personal os', 'content creation', 'kb updater'],
-  k2: ['payment', 'fintech', 'payout', 'paypal', 'tipalti', ' fx', 'treasury', 'checkout', 'bin ', 'corridor', 'currency', 'mor ', 'provider', 'rogan', 'charlie', 'konstantinos', 'sagat', 'ezequiel', 'paula', 'pablo', 'mathew', 'jarl', 'craig', 'merchant', 'fintech', 'compliance', 'float', 'wise'],
-  k3: ['france', 'b2b', 'fr ', 'ceo', 'corp dev', 'm&a', 'acquisition', 'hendrix', 'flexi', 'mirjam', 'bertrand', 'tristan', 'onetoone', 'alejo', 'ken kubec', 'fe international'],
+  // Default keyword sets per OKR — generic examples. Tune these to your own work
+  // (e.g. add your domain terms and the stakeholders you collaborate with).
+  k2: ['payment', 'finance', 'payout', 'invoice', 'billing', 'treasury', 'budget', 'forecast', 'revenue', 'cost', 'pricing', 'vendor', 'contract', 'compliance'],
+  k3: ['strategy', 'expansion', 'market', 'partnership', 'corp dev', 'm&a', 'acquisition', 'gtm', 'launch', 'research'],
 };
 function loadOkrLinks() {
   try {
@@ -1673,9 +1676,9 @@ function VoiceButton() {
         if (/^(google\s+)?drive$/.test(what))         return { url: 'https://drive.google.com', label: 'Drive' };
         if (/^(gmail|email|inbox|mail)$/.test(what))  return { url: 'https://mail.google.com/mail/u/0/#inbox', label: 'Gmail' };
         if (/^(google\s+)?calendar$/.test(what))      return { url: 'https://calendar.google.com/calendar/u/0/r/week', label: 'Google Calendar' };
-        if (/^slack$/.test(what))                     return { url: 'https://preply.slack.com', label: 'Slack' };
+        if (/^slack$/.test(what))                     { const w=(window.SEED&&window.SEED.slack&&window.SEED.slack.workspace)||'app'; return { url: `https://${w}.slack.com`, label: 'Slack' }; }
         if (/^granola$/.test(what))                   return { url: 'https://app.granola.ai', label: 'Granola' };
-        if (/^(okrs?|okr\s+sheet)$/.test(what))       return { url: 'https://docs.google.com/spreadsheets/d/1JCV36oLjUwu0orX2ZVxGN-jJe5DodNiwPkc2e_ofGX0/edit', label: 'Q2 OKRs sheet' };
+        if (/^(okrs?|okr\s+sheet)$/.test(what))       { const p=((window.SEED&&window.SEED.pins)||[]).find(x=>/okr/i.test(x.label||'')); return (p&&p.href)?{ url:p.href, label:(p.label||'OKRs') }:null; }
         return null;
       })();
       if (dest) { openUrl(dest.url, dest.label); return; }
@@ -2111,10 +2114,11 @@ function LayoutModernSaaS({ tod }) {
   };
 
   const g = (window.SEED && window.SEED.greeting) || {};
+  const _gname = (window.SEED && window.SEED.user && window.SEED.user.name) || 'there';
   const greetingRaw =
-    tod === 'morning'   ? (g.morning   || 'Morning, <em>Shadi</em>.')   :
-    tod === 'afternoon' ? (g.afternoon || 'Afternoon, <em>Shadi</em>.') :
-                          (g.evening   || 'Evening, <em>Shadi</em>.');
+    tod === 'morning'   ? (g.morning   || `Morning, <em>${_gname}</em>.`)   :
+    tod === 'afternoon' ? (g.afternoon || `Afternoon, <em>${_gname}</em>.`) :
+                          (g.evening   || `Evening, <em>${_gname}</em>.`);
   const sub = buildHeroSubtitle(tod, state);
 
   const top3Count     = state.top3.length;

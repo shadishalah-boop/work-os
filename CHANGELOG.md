@@ -14,6 +14,24 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.4.2 — 2026-05-29
+
+**Static bundle scrub.** Removes the last personal data from the shipped `public/`
+bundle — the item v0.4.1 flagged as pending.
+
+- Removed the maintainer's avatar photo (`ds/assets/shadi.jpg`). The favicon and
+  topbar avatar now use the generic `ds/assets/favicon-s.svg` / `avatar-default.svg`.
+- `app.jsx` / `modules-a.jsx` / `modules-b.jsx`: the user name, Slack workspace,
+  OKR-sheet link, greeting fallbacks, and example placeholders are now config-driven
+  (resolved from `window.SEED`, populated from `dashboard-config.local`) or generic.
+- The OKR-classification keyword sets and the task-prioritization seniority cues are
+  now generic, tunable defaults — no hardcoded colleague names.
+- **Intentionally retained:** the Preply design system + brand fonts under `public/ds/`.
+  The plugin's audience is internal colleagues and the repo is private, so these are
+  appropriate; de-branding would only be needed for a public release.
+
+---
+
 ## v0.4.1 — 2026-05-29
 
 **Zero-prompt refresh.** Builds directly on v0.4.0. The refresh now runs entirely

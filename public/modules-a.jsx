@@ -73,15 +73,15 @@ function TextWithPeople({ text }) {
 // Score range typically 20-100. Higher = should be done sooner.
 // Signals: deadline pressure (bucket), priority field (p), stakeholder seniority
 // (text mentions of senior people), date recency (today/this week), blocked penalty.
+// Generic seniority cues for task prioritization. Order matters — first match wins.
+// Tune to your org by adding the names/titles of the people you work with, or rely on
+// the stakeholders you list in dashboard-config.local (org.seniorStakeholders).
 const SENIOR_RANK = [
-  // Order matters — first match wins so the most senior reason surfaces in the chip.
   { re: /\bceo\b/i,                               weight: 25, label: 'CEO' },
-  { re: /\b(christopher\s+rogan|rogan)\b/i,       weight: 22, label: 'Rogan' },
-  { re: /\bjose\b/i,                              weight: 20, label: 'Jose' },
-  { re: /\bchristopher\b/i,                       weight: 15, label: 'Christopher' },
-  { re: /\beze(quiel)?\b/i,                       weight: 14, label: 'Eze' },
-  { re: /\bpaula\b/i,                             weight: 12, label: 'Paula' },
-  { re: /\b(konstantinos|emily|mathew|sagat)\b/i, weight: 10, label: 'partner' },
+  { re: /\b(svp|evp|vp)\b/i,                       weight: 20, label: 'VP' },
+  { re: /\b(director|head\s+of)\b/i,              weight: 15, label: 'Director' },
+  { re: /\b(manager|lead)\b/i,                     weight: 12, label: 'Lead' },
+  { re: /\b(partner|vendor|client)\b/i,            weight: 10, label: 'partner' },
 ];
 
 function scoreTask(t, ctx = {}) {
