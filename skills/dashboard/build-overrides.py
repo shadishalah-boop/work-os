@@ -1,161 +1,102 @@
 #!/usr/bin/env python3
 """
-Build data-override.jsx and drive-index.jsx from agent JSON outputs.
-Called by the dashboard skill orchestrator after the 6 sub-agents finish.
+Build data-override.jsx and drive-index.jsx from the agent JSON outputs.
+Called by wait-and-merge.sh after the sub-agents finish.
 
-Replaces what used to be 5+ minutes of the orchestrator hand-writing JSX
-with a single ~50ms Python run. Output and confirmation line match the
-prior format exactly.
+Replaces what used to be minutes of the orchestrator hand-writing JSX with a
+single ~50ms run. All per-user identity (name, role, team, OKRs, pins, weather)
+is read from ~/.claude/dashboard-config.local — NOTHING personal is hardcoded
+here. If the config is missing, generic placeholders are used so the dashboard
+still renders.
 
-User identity, team roster, OKRs, pins, weather, and output paths are all
-read from ~/.claude/dashboard-config.local at runtime. Nothing user-specific
-is hardcoded — this file is identical for every install.
-
-Usage:
-    python3 <plugin>/skills/dashboard/build-overrides.py
+Paths (data cache dir, dashboard output dir) also come from the config, falling
+back to ~/.claude/dashboard-data and ~/Documents/work-dashboard.
 """
 
 import json
 import os
 import re
-import sys
 from pathlib import Path
 
-# ---------------------------------------------------------------------------
-# Load config — single source of truth for everything user-specific
-# ---------------------------------------------------------------------------
 HOME = Path.home()
 CONFIG_PATH = HOME / ".claude" / "dashboard-config.local"
 
-DEFAULT_CONFIG = {
-    "user": {
-        "name": "Friend",
-        "fullName": "Friend",
-        "role": "",
-        "email": "",
-        "timezone": "Europe/Madrid",
-    },
-    "org": {
-        "company": "",
-        "manager": {"name": "", "email": "", "role": ""},
-        "team": {"attention": "", "people": []},
-    },
-    "slack": {"workspace": "", "userId": "", "highSignalChannels": []},
-    "dashboard": {
-        "workstreams": [],
-        "classificationKeywords": [],
-        "okrs": [],
-        "pins": [],
-        "weather": {"city": "Barcelona"},
-        "focusTarget": 4,
-        "knownPeople": [],
-        "pinnedPeople": [],
-    },
-    "output": {
-        "dashboardDir": "~/Documents/work-dashboard",
-        "dataCacheDir": "~/.claude/dashboard-data",
-    },
-}
 
-
-def deep_merge(base, overlay):
-    """Recursively merge overlay onto base (overlay wins on conflict)."""
-    out = dict(base)
-    for k, v in (overlay or {}).items():
-        if isinstance(v, dict) and isinstance(out.get(k), dict):
-            out[k] = deep_merge(out[k], v)
-        else:
-            out[k] = v
-    return out
-
-
+# ---------------------------------------------------------------------------
+# Config
+# ---------------------------------------------------------------------------
 def load_config():
-    """Read ~/.claude/dashboard-config.local; merge over defaults."""
-    if not CONFIG_PATH.exists():
-        sys.stderr.write(
-            f"WARNING: {CONFIG_PATH} not found — using demo defaults. "
-            f"Copy templates/dashboard-config.local.example to {CONFIG_PATH} and edit.\n"
-        )
-        return DEFAULT_CONFIG
     try:
-        raw = json.loads(CONFIG_PATH.read_text())
-        # Drop README key if present (it's only documentation)
-        raw.pop("_README", None)
-        return deep_merge(DEFAULT_CONFIG, raw)
-    except Exception as e:
-        sys.stderr.write(f"WARNING: failed to parse {CONFIG_PATH}: {e} — using defaults.\n")
-        return DEFAULT_CONFIG
+        return json.loads(CONFIG_PATH.read_text())
+    except Exception:
+        return {}
 
 
-CONFIG = load_config()
+CFG = load_config()
 
 
-def expand(path_str):
-    """Expand ~ and env vars in a path string."""
-    return Path(os.path.expandvars(os.path.expanduser(path_str)))
+def cfg_get(dotted, default=None):
+    v = CFG
+    for k in dotted.split("."):
+        if isinstance(v, dict):
+            v = v.get(k)
+        else:
+            return default
+    return v if v is not None else default
 
 
-# Resolved paths
-DATA_DIR = expand(CONFIG["output"]["dataCacheDir"])
-OUT_DIR = expand(CONFIG["output"]["dashboardDir"])
+def cfg_path(dotted, default):
+    v = cfg_get(dotted)
+    if isinstance(v, str) and v:
+        return Path(os.path.expanduser(v))
+    return Path(os.path.expanduser(default))
+
+
+DATA_DIR = cfg_path("output.dataCacheDir", "~/.claude/dashboard-data")
+OUT_DIR = cfg_path("output.dashboardDir", "~/Documents/work-dashboard")
 DATA_OVERRIDE = OUT_DIR / "data-override.jsx"
 DRIVE_INDEX = OUT_DIR / "drive-index.jsx"
 HTML_FILE = OUT_DIR / "Work Dashboard.html"
 
 
 # ---------------------------------------------------------------------------
-# Static blocks — built from config.local
+# Static blocks — built from config with generic fallbacks (no hardcoded PII).
 # ---------------------------------------------------------------------------
-def js_dump(obj):
-    """JSON-encode for embedding in JS. Uses unicode chars (no \\u escapes) and 2-space indent."""
-    return json.dumps(obj, indent=2, ensure_ascii=False)
+_name = cfg_get("user.name", "there")
+_role = cfg_get("user.role", "")
+_tz = cfg_get("user.timezone", "Europe/Madrid")
 
+STATIC_USER = {"name": _name, "role": _role, "tz": _tz}
 
-def build_static_user():
-    u = CONFIG["user"]
-    return js_dump({
-        "name": u.get("name", "Friend"),
-        "role": u.get("role", ""),
-        "tz": u.get("timezone", "Europe/Madrid"),
-    })
+STATIC_GREETING = {
+    "morning":   f"Morning, <em>{_name}</em>.",
+    "afternoon": f"Afternoon, <em>{_name}</em>.",
+    "evening":   f"Evening, <em>{_name}</em>.",
+}
 
+# Team: prefer org.team; else empty roster with a friendly attention note.
+STATIC_TEAM = cfg_get("org.team") or {
+    "attention": "Add your team in <code>~/.claude/dashboard-config.local</code> → <code>org.team</code>.",
+    "people": [],
+}
 
-def build_static_greeting():
-    name = CONFIG["user"].get("name", "Friend")
-    return js_dump({
-        "morning":   f"Morning, <em>{name}</em>.",
-        "afternoon": f"Afternoon, <em>{name}</em>.",
-        "evening":   f"Evening, <em>{name}</em>.",
-    })
+STATIC_OKRS = cfg_get("dashboard.okrs") or []
+STATIC_PINS = cfg_get("dashboard.pins") or []
+STATIC_KNOWN_PEOPLE = cfg_get("dashboard.knownPeople") or []
+STATIC_PINNED_PEOPLE = cfg_get("dashboard.pinnedPeople") or []
 
+_city = cfg_get("dashboard.weather.city", "")
+STATIC_WEATHER = {
+    "city": _city,
+    "days": cfg_get("dashboard.weather.days") or [
+        {"label": "Today", "high": 20, "low": 14, "cond": "—"},
+        {"label": "Tomorrow", "high": 20, "low": 14, "cond": "—"},
+    ],
+}
 
-def build_static_team():
-    team = CONFIG["org"]["team"]
-    return js_dump({
-        "attention": team.get("attention", ""),
-        "people": team.get("people", []),
-    })
+_slack_workspace = cfg_get("slack.workspace", "")
 
-
-def build_static_okrs():
-    return js_dump(CONFIG["dashboard"].get("okrs", []))
-
-
-def build_static_pins():
-    return js_dump(CONFIG["dashboard"].get("pins", []))
-
-
-def build_static_weather():
-    w = CONFIG["dashboard"].get("weather", {})
-    # If config only provides a city, emit a minimal block — a real agent could enrich it later.
-    return js_dump({
-        "city": w.get("city", "Barcelona"),
-        "days": w.get("days", []),
-    })
-
-
-# IIFE that picks the next upcoming meeting at LOAD time (so the countdown
-# stays accurate even if the dashboard is opened hours after the last refresh).
+# IIFE that picks the next upcoming meeting at LOAD time.
 PICK_NEXT_IIFE = """(function pickNext() {
     const now = new Date();
     const nowMin = now.getHours()*60 + now.getMinutes();
@@ -179,7 +120,6 @@ PICK_NEXT_IIFE = """(function pickNext() {
 # Helpers
 # ---------------------------------------------------------------------------
 def load(name):
-    """Load a per-agent JSON, returning a sourceOk:false stub on miss/error."""
     p = DATA_DIR / f"{name}.json"
     if not p.exists():
         return {"sourceOk": False, "error": f"{p} missing"}
@@ -190,14 +130,12 @@ def load(name):
 
 
 def safe(d, key, default=None):
-    """Read a field with sourceOk fallback. Returns [] (or supplied default) if the source failed."""
     if not d.get("sourceOk", True):
         return [] if default is None else default
     return d.get(key) or ([] if default is None else default)
 
 
 def first_name(name_or_obj):
-    """Extract first name from {name, email} obj or a plain string."""
     if isinstance(name_or_obj, dict):
         n = name_or_obj.get("name", "") or ""
         return n.split()[0] if n else ""
@@ -206,30 +144,30 @@ def first_name(name_or_obj):
     return ""
 
 
+def js_dump(obj):
+    """JSON-encode for embedding in JS (valid JS object literal). 2-space indent."""
+    return json.dumps(obj, indent=2, ensure_ascii=False)
+
+
 def bump_v(html, fname):
-    """Increment the ?v=N suffix for the given filename in the HTML. Returns updated html."""
     pattern = rf'({re.escape(fname)}\?v=)(\d+)'
-    def replace(m):
-        return f"{m.group(1)}{int(m.group(2))+1}"
-    return re.sub(pattern, replace, html, count=1)
+    return re.sub(pattern, lambda m: f"{m.group(1)}{int(m.group(2))+1}", html, count=1)
 
 
 # ---------------------------------------------------------------------------
 # Read all 6 agent JSONs
 # ---------------------------------------------------------------------------
 calendar = load("calendar")
-granola  = load("granola")
-gmail    = load("gmail")
-slack    = load("slack")
-drive    = load("drive")
+granola = load("granola")
+gmail = load("gmail")
+slack = load("slack")
+drive = load("drive")
 wellness = load("wellness")
 
 
 # ---------------------------------------------------------------------------
-# Merge per the rules in SKILL.md
+# Merge
 # ---------------------------------------------------------------------------
-
-# Calendar: events → {id, time, duration, title, type, who} with overflow handling.
 cal_events = []
 for i, e in enumerate(safe(calendar, "events")):
     attendees = e.get("attendees") or []
@@ -238,75 +176,52 @@ for i, e in enumerate(safe(calendar, "events")):
     if overflow > 0:
         who.append(f"+{overflow}")
     cal_events.append({
-        "id": f"c{i+1}",
-        "time": e.get("time"),
-        "duration": e.get("duration"),
-        "title": e.get("title"),
-        "type": e.get("type", "event"),
-        "who": who,
+        "id": f"c{i+1}", "time": e.get("time"), "duration": e.get("duration"),
+        "title": e.get("title"), "type": e.get("type", "event"), "who": who,
     })
 
-# Top-3 (granola only, cap 3)
 top3 = safe(granola, "top3")[:3]
 
-# Overdue (granola + gmail concat, re-id, cap 5)
 overdue_raw = safe(granola, "overdue") + safe(gmail, "overdue")
 overdue = []
 for i, item in enumerate(overdue_raw[:5]):
-    o = dict(item); o["id"] = f"o{i+1}"
-    overdue.append(o)
+    o = dict(item); o["id"] = f"o{i+1}"; overdue.append(o)
 
-# Due soon (granola + gmail concat, re-id, cap 10)
 duesoon_raw = safe(granola, "dueSoon") + safe(gmail, "dueSoon")
 duesoon = []
 for i, item in enumerate(duesoon_raw[:10]):
-    d = dict(item); d["id"] = f"d{i+1}"
-    duesoon.append(d)
+    d = dict(item); d["id"] = f"d{i+1}"; duesoon.append(d)
 
-# Blocked (granola only, cap 5)
 blocked = safe(granola, "blocked")[:5]
-
-# Shipped (slack only, cap 5)
 shipped = safe(slack, "shipped")[:5]
 
-# Blockers (granola + slack concat, sort high>medium>low, cap 5)
 blockers_raw = safe(granola, "blockers") + safe(slack, "blockers")
 sev_rank = {"high": 0, "medium": 1, "low": 2}
 blockers = sorted(blockers_raw, key=lambda b: sev_rank.get(b.get("sev", "low"), 99))[:5]
 
-# Projects (granola only, cap 8)
 projects = safe(granola, "projects")[:8]
 
-# Decisions (gmail first — they have hrefs — then granola; re-id; cap 5)
 decisions_raw = list(safe(gmail, "decisions")) + list(safe(granola, "decisions"))
 decisions = []
 for i, item in enumerate(decisions_raw[:5]):
-    d = dict(item); d["id"] = f"dec{i+1}"
-    decisions.append(d)
+    d = dict(item); d["id"] = f"dec{i+1}"; decisions.append(d)
 
-# Meeting history (granola, sort newest-first, cap 30)
 meeting_history = sorted(
-    safe(granola, "meetingHistory"),
-    key=lambda m: m.get("date", ""),
-    reverse=True,
+    safe(granola, "meetingHistory"), key=lambda m: m.get("date", ""), reverse=True
 )[:30]
 
-# Inbox (gmail only, cap 6)
 inbox = safe(gmail, "inbox")[:6]
 
-# Slack passthrough (workspace + tabs + channels + activeThreads — shipped is separate)
 slack_seed = {
-    "workspace":     slack.get("workspace") or CONFIG["slack"].get("workspace", ""),
+    "workspace":     slack.get("workspace", _slack_workspace) if slack.get("sourceOk", True) else _slack_workspace,
     "tabs":          safe(slack, "tabs"),
     "channels":      safe(slack, "channels"),
     "activeThreads": safe(slack, "activeThreads"),
 }
 
-# Wellness passthrough (drop bookkeeping fields)
 ps_drop = {"generatedAt", "sourceOk", "error"}
 ps = {k: v for k, v in wellness.items() if k not in ps_drop} if wellness.get("sourceOk", False) else {}
 
-# Drive files
 drive_files = safe(drive, "files")
 
 
@@ -321,7 +236,7 @@ sources = [
     ("drive",    drive.get("sourceOk", False)),
     ("wellness", wellness.get("sourceOk", False)),
 ]
-src_summary = " ".join(f"{n}{'✓' if ok else '✗'}" for n, ok in sources)
+src_summary = " ".join(f"{n}{'OK' if ok else 'X'}" for n, ok in sources)
 ok_count = sum(1 for _, ok in sources if ok)
 failed = [n for n, ok in sources if not ok]
 
@@ -332,15 +247,15 @@ failed = [n for n, ok in sources if not ok]
 jsx = f"""/* global React, window */
 // =============================================================================
 // LIVE OVERRIDE - auto-regenerated by the `dashboard` skill via build-overrides.py.
-// Dynamic blocks come from <dataCacheDir>/*.json.
+// Dynamic blocks come from the agent JSONs in your data cache dir.
 // Static blocks (user, greeting, team, okrs, pins, weather) come from
-// ~/.claude/dashboard-config.local.
+// ~/.claude/dashboard-config.local — edit that file, not this one.
 // =============================================================================
 
 (function () {{
-  // --- User identity (from config.local) --------------------------------
-  window.SEED.user = {build_static_user()};
-  window.SEED.greeting = {build_static_greeting()};
+  // --- User identity (from config) --------------------------------------
+  window.SEED.user = {js_dump(STATIC_USER)};
+  window.SEED.greeting = {js_dump(STATIC_GREETING)};
 
   // --- Calendar (from calendar.json) ------------------------------------
   window.SEED.calendar = {js_dump(cal_events)};
@@ -360,14 +275,14 @@ jsx = f"""/* global React, window */
   // --- Blockers (granola + slack merged, sorted by sev) ----------------
   window.SEED.blockers = {js_dump(blockers)};
 
-  // --- Team (from config.local) ----------------------------------------
-  window.SEED.team = {build_static_team()};
+  // --- Team (from config) ----------------------------------------------
+  window.SEED.team = {js_dump(STATIC_TEAM)};
 
   // --- Projects (from granola.json) -------------------------------------
   window.SEED.projects = {js_dump(projects)};
 
-  // --- OKRs (from config.local) ----------------------------------------
-  window.SEED.okrs = {build_static_okrs()};
+  // --- OKRs (from config) ----------------------------------------------
+  window.SEED.okrs = {js_dump(STATIC_OKRS)};
 
   // --- Decisions pending (granola + gmail merged) -----------------------
   window.SEED.decisions = {js_dump(decisions)};
@@ -375,8 +290,12 @@ jsx = f"""/* global React, window */
   // --- Recent meetings together (from granola.meetingHistory) ----------
   window.SEED.meetingHistory = {js_dump(meeting_history)};
 
-  // --- Pins / Quick access (from config.local) -------------------------
-  window.SEED.pins = {build_static_pins()};
+  // --- Known / pinned people (from config) → Stakeholder Lens ----------
+  window.SEED.knownPeople = {js_dump(STATIC_KNOWN_PEOPLE)};
+  window.SEED.pinnedPeople = {js_dump(STATIC_PINNED_PEOPLE)};
+
+  // --- Pins / Quick access (from config) -------------------------------
+  window.SEED.pins = {js_dump(STATIC_PINS)};
 
   // --- Personal signals / Wellness (from wellness.json) ----------------
   window.SEED.personalSignals = {js_dump(ps)};
@@ -387,14 +306,14 @@ jsx = f"""/* global React, window */
   // --- Slack (from slack.json) ------------------------------------------
   window.SEED.slack = {js_dump(slack_seed)};
 
-  // --- Weather (from config.local) -------------------------------------
-  window.SEED.weather = {build_static_weather()};
+  // --- Weather (from config) -------------------------------------------
+  window.SEED.weather = {js_dump(STATIC_WEATHER)};
 
   console.log('[dashboard] live override applied · {src_summary}');
 }})();
 """
 
-DATA_OVERRIDE.parent.mkdir(parents=True, exist_ok=True)
+OUT_DIR.mkdir(parents=True, exist_ok=True)
 DATA_OVERRIDE.write_text(jsx)
 
 
@@ -403,14 +322,13 @@ DATA_OVERRIDE.write_text(jsx)
 # ---------------------------------------------------------------------------
 drive_ok = drive.get("sourceOk", False) and drive_files
 if drive_ok:
-    drive_jsx = f"""/* global window */
-// Auto-generated by the `dashboard` skill from <dataCacheDir>/drive.json.
-// Used by the Find palette + voice mic "open [file]" fuzzy-match.
-window.DRIVE_INDEX = {js_dump(drive_files)};
-"""
-    DRIVE_INDEX.write_text(drive_jsx)
+    DRIVE_INDEX.write_text(
+        "/* global window */\n"
+        "// Auto-generated by the `dashboard` skill from drive.json.\n"
+        "// Used by the Find palette + voice mic \"open [file]\" fuzzy-match.\n"
+        f"window.DRIVE_INDEX = {js_dump(drive_files)};\n"
+    )
 else:
-    # Drive failed — keep an empty index so the Find palette still works.
     DRIVE_INDEX.write_text(
         "/* global window */\n"
         "// Drive agent failed this run — empty index.\n"
@@ -427,24 +345,24 @@ if HTML_FILE.exists():
     if drive_ok:
         html = bump_v(html, "drive-index.jsx")
     HTML_FILE.write_text(html)
-# If the HTML file doesn't exist yet (first install), skip silently — the
-# user just hasn't copied the dashboard files into <dashboardDir> yet.
 
 
 # ---------------------------------------------------------------------------
-# Confirmation line (matches the format in SKILL.md)
+# Confirmation line
 # ---------------------------------------------------------------------------
-n_events  = len(cal_events)
-n_top3    = len(top3)
-n_block   = len(blockers)
-n_threads = len(slack_seed["activeThreads"])
-n_drive   = len(drive_files)
+n_events = len(cal_events)
+n_top3 = len(top3)
+n_block = len(blockers)
+# activeThreads is intentionally always [] (speed-tuning pass), so report the real
+# slack signal — the channels on the radar — instead of a perpetual 0.
+n_slack = len(slack_seed["channels"])
+n_drive = len(drive_files)
 
 fail_str = f" · failed: {', '.join(failed)}" if failed else ""
 
 print(
     f"Dashboard refreshed · {ok_count}/6 sources · "
     f"{n_events} events · {n_top3} top3 · {n_block} blockers · "
-    f"{n_threads} slack threads · {n_drive} drive files · reload the browser tab"
+    f"{n_slack} slack channels · {n_drive} drive files · reload the browser tab"
     f"{fail_str}"
 )

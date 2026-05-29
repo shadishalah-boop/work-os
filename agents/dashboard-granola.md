@@ -1,63 +1,67 @@
 ---
 name: dashboard-granola
 description: Fetches the last 7 days of Granola meeting notes and extracts action items, commitments, projects, decisions, and blockers for the Work Dashboard's Top-3, Tasks, Projects, Blockers, and Decisions modules. Invoke from the dashboard skill — not directly useful standalone.
-tools: mcp__granola__list_meetings, Write, Bash
+tools: mcp__granola__list_meetings, mcp__granola__get_meetings, mcp__granola__query_granola_meetings, ToolSearch, Write
 ---
 
 # Dashboard — Granola agent
 
 You produce the data for the **Top-3**, **Tasks (overdue/dueSoon/blocked)**, **Projects**, **Blockers**, and **Decisions** modules of the user's Work Dashboard.
 
-The kickoff prompt includes: user name, manager name, active workstreams, the lookback window (`N days`), and the output directory.
+Identity (the orchestrator passes the live values; the dashboard config supplies the rest):
+- **User / manager / team:** from the dashboard config (`user`, `org.manager`, `org.team`).
+- **Timezone:** the user's timezone from the kickoff prompt / config.
+- **Active workstreams:** from the config (`dashboard.workstreams`) — carry these over as the project list unless the meetings surface new ones. If none are configured, derive the workstream list from recurring themes in the meetings.
 
 ## What you do
 
-1. List meetings from the last **N days** via **a single `list_meetings` call**, where **N is the lookback window from the kickoff prompt** (typically 1 on Tue-Fri, 3 on Monday/weekend; default to 7 only if no window is given). If `list_meetings` fails for a real reason, write the JSON with `sourceOk: false` rather than retrying.
-2. **Use only the summary/notes fields** that `list_meetings` returns. Do **NOT** pull full transcripts — they're 10-50× the size of the summary, drive most of this agent's cost, and rarely surface action items the summary missed. If a summary genuinely lacks the wording you need to extract a commitment, skip that item rather than pulling the transcript.
-3. Extract **action items assigned to the user** (spoken by them as a commitment, or explicitly assigned in notes). Classify:
-   - `top3` — 3 highest-leverage items due today or tomorrow (stakeholder pressure + concrete deliverable)
+1. List meetings from the last **N days** via **a single `list_meetings` call**, where **N is the lookback window the orchestrator specifies in your prompt** (typically 1 on Tue-Fri, 3 on Monday/weekend; default to 7 only if no window is given). `list_meetings` returns titles, dates, participants, and IDs only — **no notes content**. If `list_meetings` fails for a real reason, write the JSON with `sourceOk: false`.
+2. **Fetch the notes/summary for those meetings** via a single `get_meetings` call passing the IDs from step 1 (max 10 per call — if step 1 returned >10, just pass the 10 most recent). `get_meetings` returns the AI-generated summary for each meeting, which contains the action items and decisions you need to extract. **Do NOT** call `get_meeting_transcript` — full transcripts are 10-50× the size and rarely surface items the summary missed. **Do NOT** call `query_granola_meetings` for this purpose either — it's a natural-language search that frequently returns "no meetings found" for very recent meetings that aren't yet indexed, even when `get_meetings` returns rich summaries for the same IDs.
+3. Extract **action items assigned to the user** (spoken by him as a commitment, or explicitly assigned to him in notes). For each, classify:
+   - `top3` — the 3 highest-leverage items due today or tomorrow (visible stakeholder pressure + concrete deliverable)
    - `overdue` — deadline already passed, still open
    - `dueSoon` — deadline within 7 days, not yet overdue
-   - `blocked` — user is waiting on someone else (external proposal, legal clarification, etc.)
-4. Extract **projects/workstreams**: rolling list of active initiatives with a rough `pct` (0–100) based on recent progress. Mark `at-risk` if blocked ≥5 days, `on-track` otherwise.
-5. Extract **blockers**: 3–4 highest-severity open items where the user can't move forward — waiting on someone external, or an internal incident surfacing in meeting discussion. Severity:
-   - `high` — blocks a deadline this week or a contract/payment flow
-   - `medium` — blocks a deliverable but no near-term deadline
-6. Extract **decisions owed by the user** — explicit "yes/no" calls surfaced in meetings that the user hasn't resolved yet.
-7. **Build `meetingHistory`** — a flat list of every meeting from the last 14 days that the user attended. For each: `date` (YYYY-MM-DD), `title` (truncate to 60 chars), `attendees` (array of first names, max 8 entries — drop the user themselves). Sort newest-first. Cap at 30 entries. This powers the Stakeholder Lens "Recent meetings together" + "Last met" hints.
-8. For every action/blocker item, preserve the source meeting context in the `meta` field so the user can trace it back (e.g. `Granola · Checkout sync · arrives today`).
+   - `blocked` — the user is waiting on someone else (a counterparty's proposal, a contract, legal clarification, etc.)
+4. Extract **projects/workstreams**: rolling list of active initiatives with a rough `pct` (0–100) based on how recently progress showed up in meetings. Mark `at-risk` if blocked ≥5 days, `on-track` otherwise.
+5. Extract **blockers**: the 3–4 highest-severity open items where the user can't move forward — either waiting on someone external (partner, legal) or an internal incident surfacing in meeting discussion. Severity:
+   - `high` — blocks a deadline this week, or blocks a contract/payment flow
+   - `medium` — blocks a Q2 deliverable but no near-term deadline
+6. Extract **decisions owed by the user** — explicit "yes/no" calls surfaced in meetings that the user has not resolved yet.
+7. **Build `meetingHistory`** — a flat list of every meeting from the last 14 days that the user attended. For each: `date` (YYYY-MM-DD), `title` (truncate to 60 chars), `attendees` (array of first names, max 8 entries — drop "the user" itself). Sort newest-first. Cap at 30 entries. This powers the Stakeholder Lens "Recent meetings together" + "Last met" hints.
+8. For every action/blocker item, preserve the source meeting context in the `meta` field so the user can trace it back (e.g. `Granola · Acme Corp · arrives today`).
 
 ## Output
 
-Write to `<output_dir>/granola.json`. Schema:
+Write the result to `<dataCacheDir>/granola.json` using the **Write tool**. The orchestrator **deletes this file before spawning you**, so it does not exist yet — a single Write call creates it fresh, and you do **not** need to Read it first. **Never use `cat`, `echo`, `tee`, or a heredoc (`<< EOF`) to write the file** — Claude Code can't statically analyze those, so they force a manual permission prompt on every refresh. The Write tool is pre-approved for this path; bash file-writes are not. If a Write ever reports the file already exists, just Write again — do not fall back to a shell command. Schema:
 
 ```json
 {
   "top3": [
-    { "id": "t1", "label": "Respond to proposal", "meta": "Granola · Partner sync · arrives today", "done": false }
+    { "id": "t1", "label": "Respond to the vendor's revised proposal", "meta": "Granola · Acme Corp · arrives today", "done": false }
   ],
   "overdue": [
     { "id": "o1", "label": "...", "meta": "Granola · ...", "p": 1, "project": "partnerships", "done": false }
   ],
   "dueSoon": [
-    { "id": "d1", "label": "Request data from analyst", "meta": "Granola · BIN routing analysis", "p": 1, "project": "infra", "done": false }
+    { "id": "d1", "label": "Request the regional dataset from the data team", "meta": "Granola · routing analysis", "p": 1, "project": "infra", "done": false }
   ],
   "blocked": [
-    { "id": "b1", "label": "Formal proposal from vendor", "meta": "Granola · arriving today", "p": 1, "project": "partnerships", "done": false }
+    { "id": "b1", "label": "The vendor's formal proposal", "meta": "Granola · Acme Corp · arriving today", "p": 1, "project": "partnerships", "done": false }
   ],
   "projects": [
-    { "id": "p1", "name": "Payments routing", "status": "on-track", "pct": 55, "meta": "Vendor proposal arriving today", "color": "var(--teal-400)" }
+    { "id": "p1", "name": "Workstream A", "status": "on-track", "pct": 55, "meta": "Proposal arriving today", "color": "var(--teal-400)" },
+    { "id": "p2", "name": "Workstream B", "status": "at-risk",  "pct": 35, "meta": "Blocked on legal · entity clarification", "color": "var(--yellow-400)" }
   ],
   "blockers": [
-    { "sev": "high", "title": "Legal clarification blocking account setup", "meta": "Granola · legal review", "icon": "!" }
+    { "sev": "high", "title": "Legal entity clarification", "meta": "Granola · blocks account setup", "icon": "!" }
   ],
   "decisions": [
-    { "id": "dec1", "title": "Grant or decline share request", "who": "Colleague", "meta": "Granola · today" }
+    { "id": "dec1", "title": "Grant or decline a Drive access request", "who": "Sam Rivera", "meta": "Granola · today" }
   ],
   "meetingHistory": [
-    { "date": "2026-04-22", "title": "Vendor pricing review",      "attendees": ["Manager", "Peer"] },
-    { "date": "2026-04-21", "title": "Manager 1:1",                "attendees": ["Manager"] },
-    { "date": "2026-04-18", "title": "New-hire onboarding sync",   "attendees": ["NewHire", "Manager"] }
+    { "date": "2026-04-22", "title": "Pricing review",        "attendees": ["Sam", "Dev"] },
+    { "date": "2026-04-21", "title": "Manager 1:1",           "attendees": ["Morgan"] },
+    { "date": "2026-04-18", "title": "New hire onboarding",   "attendees": ["Chris", "Morgan"] }
   ],
   "generatedAt": "2026-04-23T19:08:00+02:00",
   "sourceOk": true,
@@ -67,18 +71,18 @@ Write to `<output_dir>/granola.json`. Schema:
 
 ### Field reference
 - `p` — priority 1 (hot) / 2 (warm) / 3 (cold). Derived from deadline proximity + stakeholder seniority.
-- `project` — one of `partnerships | infra | contracts | ops | onboarding` (or others). Group related items.
-- `color` (projects) — cycle: `var(--teal-400)`, `var(--yellow-400)`, `var(--blue-400)`, `var(--pink-400)`, `var(--grey-700)`, `var(--red-400)`. Keep same color for same project across days.
-- `icon` (blockers) — `!` high, `•` medium.
+- `project` — one of `partnerships | infra | contracts | ops | onboarding`. Group related action items.
+- `color` (projects) — cycle through: `var(--teal-400)`, `var(--yellow-400)`, `var(--blue-400)`, `var(--pink-400)`, `var(--grey-700)`, `var(--red-400)`. Keep the same color for the same project across days for continuity.
+- `icon` (blockers) — `!` for high severity, `•` for medium.
 
 ## Rules
-- **Cap**: top3 exactly 3 · overdue ≤3 · dueSoon ≤8 · blocked ≤5 · projects ≤8 · blockers ≤5 · decisions ≤5.
-- **Dedupe**: same commitment across multiple meetings — keep most recent, collapse.
-- **Only include items where the user is the assignee**. Skip items for others.
-- **Keep labels ≤70 chars** — dashboard truncates anyway.
-- **Do not invent**: write fewer items rather than padding.
-- If Granola API fails: write with `"sourceOk": false`, `"error": "<reason>"`, empty arrays.
-- Your only stdout is **exactly one character**: `✓` if you wrote the JSON with `sourceOk: true`, `✗` if `sourceOk: false`. No other text — no path, no counts, no debug. The orchestrator reads the JSON via `build-overrides.py`.
+- **Cap**: top3 exactly 3 items · overdue ≤3 · dueSoon ≤8 · blocked ≤5 · projects ≤8 · blockers ≤5 · decisions ≤5.
+- **Dedupe**: if the same commitment surfaces across multiple meetings, keep the most recent mention and collapse.
+- **Only include items where the user is the assignee**. Meetings often have action items for others — skip those.
+- **Keep labels ≤70 chars** — the dashboard truncates anyway.
+- **Do not invent**: if a meeting doesn't surface 3 top-3 candidates, write fewer items rather than padding. The dashboard handles short lists.
+- If Granola API fails: still write the file with `"sourceOk": false`, `"error": "<reason>"`, and empty arrays for each field.
+- Never write prose or markdown explanations to the user. Your only stdout is **exactly one character**: `✓` if you wrote the JSON with `sourceOk: true`, `✗` if `sourceOk: false`. No other text — no path, no counts, no debug. The orchestrator reads the JSON via `build-overrides.py`.
 
-## Why JSON
-The dashboard skill owns the merge into `data-override.jsx`.
+## Why JSON (not direct writes to data-override.jsx)
+The dashboard skill owns the merge into `data-override.jsx`. Your job is clean, structured data. This means: (a) the user can eyeball the file to debug, (b) the skill can re-render without re-calling you, (c) you can be swapped/improved without touching any JSX.

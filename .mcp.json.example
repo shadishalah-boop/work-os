@@ -1,9 +1,10 @@
 {
   "_README": [
     "COPY this file to `.mcp.json` in your project root (or merge into ~/.claude.json) and fill in the command/args/env for each server.",
-    "The 6 dashboard agents reference tools using these exact server names — keep the keys as-is or rename them alongside the agents.",
+    "The dashboard agents reference tools using these exact server names — keep the keys as-is, or rename them (the agents fall back to a ToolSearch capability lookup if the exact name isn't found).",
     "Each server below is a TEMPLATE. Replace the `command` + `args` with the actual MCP server you want to use for that integration.",
-    "Auth credentials typically go in `env` or via OAuth flow. See each MCP server's README for details."
+    "Auth credentials typically go in `env` or via OAuth flow. See each MCP server's README for details.",
+    "SLACK IS NOT HERE ON PURPOSE: the slack agent uses the Slack web API directly with a user token (xoxp-…, search:read scope) from your macOS keychain (entry name `slack_token`), not an MCP server. Run: security add-generic-password -s slack_token -a \"$USER\" -w 'xoxp-...'"
   ],
   "mcpServers": {
     "calendar": {
@@ -18,15 +19,6 @@
       "_hint": "Gmail MCP server (OAuth). e.g. https://github.com/GongRzhe/Gmail-MCP-Server or similar",
       "command": "npx",
       "args": ["-y", "@gongrzhe/server-gmail-autoauth-mcp"]
-    },
-    "slack": {
-      "_hint": "Slack MCP. Requires Slack workspace token.",
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-slack"],
-      "env": {
-        "SLACK_BOT_TOKEN": "xoxb-...",
-        "SLACK_TEAM_ID": "T..."
-      }
     },
     "drive": {
       "_hint": "Google Drive MCP (OAuth).",

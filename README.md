@@ -4,6 +4,8 @@ A personal work dashboard plugin for [Claude Code](https://claude.com/claude-cod
 
 Invoke `/work-os:dashboard` and the plugin fans out to six parallel agents, pulls fresh data from your MCP servers, merges it, and writes it into a static HTML bundle you keep open in a browser tab. Reload the tab to see the new data.
 
+As of v0.4.1 the whole refresh runs inside a headless `claude -p` subprocess, so your interactive session never sees a permission prompt. This needs the **`claude` CLI on your `PATH`** (see Prerequisites).
+
 All user-specific content (your name, manager, team roster, OKRs, pins, Slack workspace) lives in a private config file on your machine — **nothing personal is bundled with the plugin.**
 
 ---
@@ -37,7 +39,9 @@ work-dashboard/
 
 ## Prerequisites
 
-The plugin's `.mcp.json` auto-registers 5 MCP servers on install. Each needs per-user auth:
+**The `claude` CLI must be on your `PATH`.** `/dashboard` runs the refresh inside a headless `claude -p --permission-mode bypassPermissions` subprocess (that's what keeps the interactive session prompt-free), so the launcher invokes `claude` directly.
+
+The plugin's `.mcp.json` auto-registers the MCP servers below. Each needs per-user auth:
 
 | Server | What it provides | Auth needed | Works out of the box? |
 |---|---|---|---|

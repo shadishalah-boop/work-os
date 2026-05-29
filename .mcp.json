@@ -2,9 +2,8 @@
   "_README": [
     "Auto-registered MCP servers for the work-dashboard plugin.",
     "Granola + Gmail + Drive work out of the box (OAuth on first use).",
-    "Calendar and Slack need per-user credentials — run /dashboard-setup for guided setup,",
-    "or manually set GOOGLE_OAUTH_CREDENTIALS (calendar) + SLACK_BOT_TOKEN / SLACK_TEAM_ID (slack) in your environment.",
-    "Until credentials are set, those two MCPs will fail to start — the dashboard still renders, those sections just show 'source unavailable'."
+    "Calendar needs per-user credentials — run /dashboard-setup for guided setup, or set GOOGLE_OAUTH_CREDENTIALS in your environment. Until then it fails to start and the dashboard just shows that section as 'source unavailable'.",
+    "Slack is NOT an MCP server here: the slack agent uses the Slack web API with a user token (xoxp-…, search:read) from your macOS keychain (entry `slack_token`). Run: security add-generic-password -s slack_token -a \"$USER\" -w 'xoxp-...'"
   ],
   "mcpServers": {
     "calendar": {
@@ -17,14 +16,6 @@
     "gmail": {
       "command": "npx",
       "args": ["-y", "@gongrzhe/server-gmail-autoauth-mcp"]
-    },
-    "slack": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-slack"],
-      "env": {
-        "SLACK_BOT_TOKEN": "${SLACK_BOT_TOKEN:-}",
-        "SLACK_TEAM_ID": "${SLACK_TEAM_ID:-}"
-      }
     },
     "drive": {
       "command": "npx",

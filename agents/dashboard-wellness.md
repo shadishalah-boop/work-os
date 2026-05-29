@@ -2,30 +2,44 @@
 name: dashboard-wellness
 description: Analyzes the user's current-week Google Calendar to produce the Work Dashboard's Wellness / personal-signals module — focus hours logged, meeting-load percentage, weekly shipped count, and a suggested 1-hour focus slot for tomorrow morning. Invoke from the dashboard skill — not directly useful standalone.
 model: haiku
-tools: mcp__calendar__list_events, mcp__calendar__suggest_time, mcp__calendar__list_calendars, Write, Bash
+tools: mcp__calendar__list_events, mcp__calendar__suggest_time, mcp__calendar__list_calendars, ToolSearch, Write, Read
 ---
 
 # Dashboard — Wellness agent
 
 You produce the data for the **Personal signals / Wellness** module on the user's Work Dashboard.
 
-The kickoff prompt includes: user name, working hours, weekly focus target (hours), and the output directory.
+Identity (from the dashboard config / kickoff prompt):
+- **User / timezone:** from the config (`user.email`, `user.timezone`).
+- **Working hours:** from the config (`user.workingHours`); default Mon–Fri 09:00–18:30.
 
 ## What you do
 
-1. Call `list_events` for the current work-week (Monday 00:00 → end of week 23:59 in user's timezone).
-2. Classify each event:
+**0. Resolve your calendar tool — its name can differ by environment.** This plugin
+references the Google Calendar MCP server as **`calendar`** (see `.mcp.json.example`), so the
+tool is normally **`mcp__calendar__list_events`** (and `…__suggest_time`, `…__list_calendars`).
+A differently-named server, or the headless refresh subprocess, may expose it under another
+name. Resolve robustly: try the `mcp__calendar__…` name first; if unavailable, call
+**`ToolSearch`** with `query: "calendar list events"` and use whatever it surfaces.
+**If you cannot reach any calendar list-events tool, write the file with `sourceOk:false`,
+`error:"calendar tool not available"`, and zeroed metrics (`focusTarget:4`, `streak:0`) —
+do NOT fabricate focusHours/meetingHours/pctMeetings.** If `suggest_time` specifically is
+missing but `list_events` works, keep `sourceOk:true` and just default `suggestedFocus` to
+tomorrow 09:00–10:00.
+
+1. Call `list_events` (the tool resolved in step 0) for the current work-week (Mon 00:00 → Fri 23:59 Europe/Madrid).
+2. Classify each event into:
    - **focus** — title contains "focus", "deep work", "heads down", "blocked time", "no meetings", OR event has 0 other attendees AND duration ≥60min
-   - **meeting** — ≥1 other attendee, not focus
-   - **declined** — user's response status is `declined` (exclude from both counters)
+   - **meeting** — has ≥1 other attendee, not focus
+   - **declined** — the user's response status is `declined` (exclude from both counters)
 3. Sum up:
    - `focusHours` — total hours of focus blocks this week (so far)
    - `meetingHours` — total hours of meetings this week (so far)
    - `pctMeetings` — `round(meetingHours / (meetingHours + focusHours + elapsedWorkHours) * 100)`; if denominator = 0, set to 0
-   - `shippedThisWeek` — count of completed meetings (end in past, not declined) — approximates what the user "showed up for"
-4. Use `focusTarget` from kickoff prompt (default 4 if missing).
-5. Set `streak` — consecutive prior working days where `focusHours ≥ 0.5`. Cap at 10. Default 3 if unreliable.
-6. Find `suggestedFocus` — first free 1-hour slot tomorrow between 09:00–12:00 user-tz using `suggest_time`. If tomorrow is Sat/Sun, use next Monday.
+   - `shippedThisWeek` — count of completed meetings (end time in past, not declined) — this approximates items the user "showed up for"
+4. Set `focusTarget` = **4** (the user's weekly target — do not change).
+5. Set `streak` — number of consecutive prior working days where `focusHours ≥ 0.5`. Cap at 10. If you can't compute reliably, default to 3.
+6. Find `suggestedFocus` — the first free 1-hour slot tomorrow between 09:00–12:00 Europe/Madrid using `suggest_time` (duration 60 min). If tomorrow is Sat/Sun, use next Monday.
 7. Build `weeklyMessage` — one short sentence referencing pctMeetings, framed as a gentle prompt. Examples:
    - `"You've been in meetings <em>28%</em> of this week. Protect a free hour tomorrow morning?"`
    - `"Meetings at <em>42%</em> this week — consider declining one optional invite tomorrow."`
@@ -33,7 +47,7 @@ The kickoff prompt includes: user name, working hours, weekly focus target (hour
 
 ## Output
 
-Write to `<output_dir>/wellness.json`. Schema:
+Write the result to `<dataCacheDir>/wellness.json` using the **Write tool**. The orchestrator **deletes this file before spawning you**, so it does not exist yet — a single Write call creates it fresh, and you do **not** need to Read it first. **Never use `cat`, `echo`, `tee`, or a heredoc (`<< EOF`) to write the file** — Claude Code can't statically analyze those, so they force a manual permission prompt on every refresh. The Write tool is pre-approved for this path; bash file-writes are not. If a Write ever reports the file already exists, just Write again — do not fall back to a shell command. Schema:
 
 ```json
 {
@@ -58,16 +72,16 @@ Write to `<output_dir>/wellness.json`. Schema:
 ### Field reference
 - `focusHours` / `meetingHours` — decimals, rounded to 1 place.
 - `pctMeetings` — integer 0–100.
-- `weeklyMessage` — supports `<em>...</em>`; keep ≤90 chars.
-- `suggestedFocus.label` — humanized user-timezone: `tomorrow 9–10 AM`, `Mon 10–11 AM`, etc.
+- `weeklyMessage` — supports `<em>...</em>` for emphasis; keep ≤90 chars.
+- `suggestedFocus.label` — humanized Europe/Madrid: `tomorrow 9–10 AM`, `Mon 10–11 AM`, etc.
 
 ## Rules
 - **Week boundary**: Monday is week-start. Before Monday 09:00, use last week's data.
-- **Focus heuristic precedence**: title-keyword match wins over attendee-count heuristic. Review meetings with 0 attendees but titles like "prep for X" / "review of Y" are **not** focus.
-- **Declined events never count**.
-- If `suggest_time` returns no slot: suggest the next day at 09:00 and update `label`.
-- If Calendar API fails: write with `"sourceOk": false`, `"error": "<reason>"`, and **keep last known values** if `wellness.json` already exists at the output path. Read it first with Bash `cat` and preserve fields. If it doesn't exist, use defaults (all zeros except `focusTarget`, `streak: 0`).
+- **Focus heuristic precedence**: title-keyword match wins over attendee-count heuristic. Review meetings that happen to have no attendees other than the user are **not** focus — skip if title suggests work with others ("prep for X", "review of Y").
+- **Declined events never count** toward either bucket.
+- If `suggest_time` returns no slot (fully booked morning): suggest the next day at 09:00, and update `label` accordingly.
+- If Calendar API fails: write the file with `"sourceOk": false`, `"error": "<reason>"`, and sensible defaults (all zeros except `focusTarget: 4`, `streak: 0`). The orchestrator pre-deletes `wellness.json`, so there's no prior file to preserve — just write defaults via the **Write tool**. Never use `cat` or a shell command.
 - Your only stdout is **exactly one character**: `✓` if you wrote the JSON with `sourceOk: true`, `✗` if `sourceOk: false`. No other text — no path, no counts, no debug. The orchestrator reads the JSON via `build-overrides.py`.
 
 ## Why JSON
-Skill owns the merge.
+Skill owns the merge. Lets the wellness heuristics evolve without touching the dashboard code.

@@ -14,6 +14,51 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.4.1 — 2026-05-29
+
+**Zero-prompt refresh.** Builds directly on v0.4.0. The refresh now runs entirely
+inside a headless subprocess, so the interactive session never shows a permission
+prompt — plus a real fix for Slack returning empty.
+
+### Prompt-free refresh (headless bypass)
+
+- `/dashboard` now makes a single call to `skills/dashboard/refresh-headless.sh`,
+  which runs the whole orchestration (prep → 6-agent fan-out → merge) inside
+  `claude -p --permission-mode bypassPermissions`. v0.4.0's in-session fan-out still
+  tripped manual approvals three independent ways — the Write tool guarding
+  `~/.claude/` as a "sensitive file", the lightweight agents shelling out via
+  unparseable heredocs, and overwrite-needs-Read fallbacks — none of which an
+  allowlist rule or `tools:` frontmatter could suppress. Running it non-interactively
+  is the reliable fix. **Requires the `claude` CLI on your `PATH`.**
+- New files: `prep.sh` (date/window/TTL + pre-delete + slack pre-fetch, extracted
+  from SKILL.md), `headless-prompt.md` (the subprocess's orchestration prompt),
+  `_config.sh` (path resolution), `drive-transform.py`, `slack-fetch.sh`.
+
+### Slack fetch fixed (it was returning empty)
+
+- `slack-fetch.sh`'s queries silently matched nothing. Two bugs: relative dates
+  (`after:Nd`) are Gmail syntax that Slack ignores — switched to absolute
+  `after:YYYY-MM-DD`; and `<@U…>` is the in-message mention encoding, not a valid
+  search-operator value — switched to `from:me` / `to:me`. The authed user's own ID
+  is resolved via `auth.test` and passed to the agent for @-mention detection. The
+  Slack radar now populates.
+
+### Other
+
+- Agents resolve their MCP tools by the configured server name **with a ToolSearch
+  capability fallback**, so renamed servers — and the headless subprocess, which can
+  expose tools under different names — still resolve.
+- `build-overrides.py` is fully config-driven and now reports the Slack **channel**
+  count in the confirmation line (was the always-empty `activeThreads`).
+
+### Note
+
+- The static `public/` bundle still carries personal data and Preply-proprietary
+  design-system assets from earlier versions; the repository is kept **private**
+  pending that scrub. The skill + agents in this release are clean.
+
+---
+
 ## v0.4.0 — 2026-05-27
 
 **The speed-and-cost release.** Refresh time and cost both down ~80% with no
