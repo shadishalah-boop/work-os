@@ -28,5 +28,8 @@ dashboard-filters.local
 dist/
 build/
 
+# Runtime logs from bundled MCP servers (e.g. google-calendar-mcp writes ./logs/)
+logs/
+
 # Claude Code session junk
 .claude/settings.local.json
