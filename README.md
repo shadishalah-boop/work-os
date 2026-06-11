@@ -183,44 +183,32 @@ You can edit your config or filters at any time — changes apply on the next ru
 
 ---
 
-## Optional: scheduled auto-refresh
+## Optional: scheduled auto-refresh (hands-free dashboard)
 
-Plugins cannot ship scheduled tasks (they run per-user-machine), so you set this up yourself. A few options:
+One command sets it up — ask Claude Code:
 
-### macOS — launchd
+> *"Set up the dashboard auto-refresh schedule"*
 
-```xml
-<!-- ~/Library/LaunchAgents/com.you.work-os.plist -->
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key>             <string>com.you.work-os</string>
-  <key>ProgramArguments</key>  <array>
-    <string>/bin/zsh</string>
-    <string>-lc</string>
-    <string>claude -p "/work-os:dashboard"</string>
-  </array>
-  <key>StartCalendarInterval</key>
-  <array>
-    <dict><key>Hour</key><integer>8</integer><key>Minute</key><integer>0</integer></dict>
-    <dict><key>Hour</key><integer>13</integer><key>Minute</key><integer>0</integer></dict>
-  </array>
-</dict>
-</plist>
+…or run the helper yourself from the plugin directory:
+
+```bash
+bash <plugin>/skills/dashboard/schedule.sh install                       # weekdays 08:00 + 13:00
+bash <plugin>/skills/dashboard/schedule.sh install --times "08:00 12:00 16:00"
+bash <plugin>/skills/dashboard/schedule.sh install --serve               # + local server (see below)
+bash <plugin>/skills/dashboard/schedule.sh status                        # what's scheduled + last log lines
+bash <plugin>/skills/dashboard/schedule.sh uninstall
 ```
 
-Load with `launchctl load ~/Library/LaunchAgents/com.you.work-os.plist`.
+On macOS this installs a launchd LaunchAgent; on Linux, tagged crontab entries.
+The job runs the same headless refresh `/dashboard` uses and logs to
+`~/.claude/dashboard-refresh.log`.
 
-### Any OS — cron
-
-```cron
-0 8,13,17 * * 1-5   claude -p "/work-os:dashboard" >> ~/.claude/dashboard-cron.log 2>&1
-```
-
-### Claude Code scheduled-tasks MCP
-
-If you run the community scheduled-tasks MCP, register a task that invokes the skill on a cron schedule. See its README for details.
+**To make the open tab update itself too** (the full zero-touch experience), use
+`--serve`: it runs a tiny localhost-only server for your dashboard folder, and you
+open `http://localhost:8787/Work%20Dashboard.html` instead of the file directly.
+Why: the dashboard polls itself for fresh data and auto-reloads, but Chrome blocks
+that polling on `file://` pages — served over localhost it works everywhere. Without
+`--serve`, scheduled refreshes still happen; you just reload the tab when you sit down.
 
 ---
 
