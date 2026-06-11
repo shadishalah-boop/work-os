@@ -3,15 +3,16 @@
 #
 # Invoked (inside the headless refresh subprocess) as:  bash <skill-dir>/prep.sh
 #
-# Does all the date/window/cache computation, pre-deletes the output files of the
-# agents that will run, and pre-fetches Slack — so the orchestrator's only Bash
-# call here is this one statically-analyzable line. Its internals are never
-# analyzed by Claude Code's permission matcher (heredocs/$(...) inside a committed
-# script are fine; the same logic inline in the skill would force a prompt).
+# Does all the date/window/cache computation and pre-deletes the output files of
+# the agents that will run — so the orchestrator's only Bash call here is this one
+# statically-analyzable line. Its internals are never analyzed by Claude Code's
+# permission matcher (heredocs/$(...) inside a committed script are fine; the same
+# logic inline in the skill would force a prompt).
 #
 # Prints KEY=VALUE lines for the orchestrator to capture:
-#   TODAY, TOMORROW, NOW (HH:MM), WINDOW_DAYS, START_TS, SLACK_RAW,
-#   DATA_DIR, DASH_DIR, RUN_AGENTS, SKIP_AGENTS
+#   TODAY, TOMORROW, NOW (HH:MM), WINDOW_DAYS, SINCE_WINDOW, SINCE_1D, SINCE_30D,
+#   START_TS, TZNAME, DATA_DIR, DASH_DIR, RUN_AGENTS, SKIP_AGENTS,
+#   MCP_CALENDAR, MCP_GMAIL, MCP_SLACK, MCP_DRIVE, MCP_GRANOLA
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -23,6 +24,19 @@ TODAY=$(date '+%Y-%m-%d')
 TOMORROW=$(date -v+1d '+%Y-%m-%d' 2>/dev/null || date -d '+1 day' '+%Y-%m-%d')
 NOW_HHMM=$(date '+%H:%M')
 START_TS=$(date '+%s')
+
+# `since N` prints the calendar date N days ago — Slack search needs ABSOLUTE
+# `after:YYYY-MM-DD` dates (relative `after:Nd` is Gmail syntax Slack ignores).
+since() { date -v-"${1}"d '+%Y-%m-%d' 2>/dev/null || date -d "-${1} days" '+%Y-%m-%d'; }
+
+# User timezone + per-source MCP server names from config (defaults = the
+# standard managed connectors most users already have).
+TZNAME="$(_cfg user.timezone 'Europe/Madrid')"
+MCP_CALENDAR="$(_cfg mcp.calendar 'Google_Calendar')"
+MCP_GMAIL="$(_cfg mcp.gmail 'Gmail')"
+MCP_SLACK="$(_cfg mcp.slack 'Slack')"
+MCP_DRIVE="$(_cfg mcp.drive 'Google_Drive')"
+MCP_GRANOLA="$(_cfg mcp.granola 'Granola')"
 
 # --- WINDOW_DAYS = ceil(hours since last successful refresh / 24), clamped [1,7] ---
 # Uses mtime of data-override.jsx — only written on a complete refresh.
@@ -80,25 +94,21 @@ for agent in $RUN_AGENTS; do
   esac
 done
 
-# --- If slack will run, fetch its raw data now so the agent can Read it ---
-SLACK_RAW=skipped
-case " $RUN_AGENTS " in
-  *" slack "*)
-    if bash "$SCRIPT_DIR/slack-fetch.sh" "$WINDOW_DAYS" >/dev/null 2>&1; then
-      SLACK_RAW=ok
-    else
-      SLACK_RAW=fail
-    fi
-    ;;
-esac
-
 echo "TODAY=$TODAY"
 echo "TOMORROW=$TOMORROW"
 echo "NOW=$NOW_HHMM"
 echo "WINDOW_DAYS=$WINDOW_DAYS"
+echo "SINCE_WINDOW=$(since "$WINDOW_DAYS")"
+echo "SINCE_1D=$(since 1)"
+echo "SINCE_30D=$(since 30)"
 echo "START_TS=$START_TS"
-echo "SLACK_RAW=$SLACK_RAW"
+echo "TZNAME=$TZNAME"
 echo "DATA_DIR=$DATA_DIR"
 echo "DASH_DIR=$DASH_DIR"
 echo "RUN_AGENTS=$RUN_AGENTS"
 echo "SKIP_AGENTS=$SKIP_AGENTS"
+echo "MCP_CALENDAR=$MCP_CALENDAR"
+echo "MCP_GMAIL=$MCP_GMAIL"
+echo "MCP_SLACK=$MCP_SLACK"
+echo "MCP_DRIVE=$MCP_DRIVE"
+echo "MCP_GRANOLA=$MCP_GRANOLA"

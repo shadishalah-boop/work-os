@@ -2,7 +2,7 @@
 name: dashboard-drive
 model: haiku
 description: Fetches the user's recent Google Drive files (last 14 days, owned or edited, capped at 25) to power the Work Dashboard's Find palette and voice mic "open [file name]" fuzzy-match command. Produces a flat JSON index the skill converts into drive-index.jsx. Invoke from the dashboard skill — not directly useful standalone.
-tools: mcp__drive__list_recent_files, mcp__drive__search_files, mcp__drive__get_file_metadata, ToolSearch, Write
+tools: mcp__Google_Drive__list_recent_files, mcp__Google_Drive__search_files, mcp__drive__list_recent_files, mcp__drive__search_files, ToolSearch, Write
 ---
 
 # Dashboard — Drive agent
@@ -15,11 +15,12 @@ Identity (from the dashboard config / kickoff prompt):
 
 ## What you do — fetch, dump raw. That's it.
 
-**Resolve your Drive tool.** This plugin references the Drive MCP server as **`drive`**
-(see `.mcp.json.example`), so the tool is normally **`mcp__drive__list_recent_files`**. A
-differently-named server, or the headless refresh subprocess, may expose it under another
-name — if `mcp__drive__list_recent_files` isn't available, call **`ToolSearch`** with
-`query: "drive recent files"` and use whatever recent-files tool it surfaces.
+**Resolve your Drive tool.** Your kickoff prompt names the Drive MCP server (default
+**`Google_Drive`** — the standard managed connector), so the tool is normally
+**`mcp__Google_Drive__list_recent_files`**. Try the `mcp__<server>__…` name from your
+kickoff prompt first, then the legacy `mcp__drive__list_recent_files`; if neither is
+available, call **`ToolSearch`** with `query: "drive recent files"` and use whatever
+recent-files tool it surfaces.
 
 You have **only the Drive MCP tools, ToolSearch, and the Write tool** — no Bash. This is
 deliberate: an agent that can't emit bash can't trip Claude Code's permission prompt. The
@@ -65,7 +66,7 @@ The script writes `<dataCacheDir>/drive.json`. Schema:
   - `application/vnd.google-apps.folder` → `folder`
   - anything else → `other`
 - `url` — must be a direct-edit link for Google-native types (doc/sheet/slide use `/edit`), else the Drive file-view URL.
-- `modifiedLabel` — relative to **now** in Europe/Madrid: `today` (same calendar day), `yesterday`, `Nd ago` (2–6 days), `Nw ago` (1–4 weeks), `Nmo ago` (older, up to 12mo).
+- `modifiedLabel` — relative to **now** in the user's timezone: `today` (same calendar day), `yesterday`, `Nd ago` (2–6 days), `Nw ago` (1–4 weeks), `Nmo ago` (older, up to 12mo).
 - `owner` — `me` if the user is owner; else the other owner's display name (cap 30 chars).
 
 ## Rules

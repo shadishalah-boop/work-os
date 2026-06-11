@@ -15,7 +15,7 @@ local React-in-browser dashboard. All per-user identity and paths come from
 ```
 <skill-dir>/refresh-headless.sh                  ← the ONE call /dashboard makes
    └─ claude -p --permission-mode bypassPermissions  (headless subprocess)
-        ├─ prep.sh            → date/window/cache + pre-delete + slack pre-fetch
+        ├─ prep.sh            → date/window/cache + pre-delete + MCP server names
         ├─ 6 agents (parallel) → <dataCacheDir>/{calendar,granola,gmail,slack,drive,wellness}.json
         └─ wait-and-merge.sh  → drive-transform.py + build-overrides.py
               └─ <dashboardDir>/data-override.jsx + drive-index.jsx  (+ cache-bust the HTML)
@@ -50,7 +50,7 @@ otherwise force manual approvals all run **ungated inside the subprocess**.
 > which the static analyzer can't parse; (c) overwrite-needs-Read fallbacks. Moving
 > the orchestration into a non-interactive `claude -p` is the reliable zero-prompt fix.
 
-**Do NOT** run `prep.sh`, the `Agent` fan-out, `slack-fetch.sh`, `drive-transform.py`,
+**Do NOT** run `prep.sh`, the `Agent` fan-out, `drive-transform.py`,
 `wait-and-merge.sh`, or `build-overrides.py` yourself from the interactive session —
 that reintroduces every prompt this design removes. The subprocess owns all of it.
 
@@ -58,10 +58,10 @@ that reintroduces every prompt this design removes. The subprocess owns all of i
 
 The headless `claude -p` reads `headless-prompt.md` and executes:
 
-1. **`prep.sh`** — computes `TODAY`/`TOMORROW`/`NOW`/`WINDOW_DAYS`/`START_TS`,
-   resolves `DATA_DIR`/`DASH_DIR` from config, decides `RUN_AGENTS` vs `SKIP_AGENTS`
-   via the per-agent TTL cache, deletes each running agent's stale output (fresh
-   Write), and pre-fetches Slack via `slack-fetch.sh` when slack will run.
+1. **`prep.sh`** — computes `TODAY`/`TOMORROW`/`NOW`/`WINDOW_DAYS`/`SINCE_*`/`START_TS`,
+   resolves `DATA_DIR`/`DASH_DIR`/timezone/per-source MCP server names from config,
+   decides `RUN_AGENTS` vs `SKIP_AGENTS` via the per-agent TTL cache, and deletes each
+   running agent's stale output (fresh Write).
 2. **Fan-out** — one `Agent` call per agent in `RUN_AGENTS` (parallel) + one
    `wait-and-merge.sh` call in the same tool block. Each agent is told its absolute
    output path so nothing is hardcoded.
@@ -92,11 +92,12 @@ generic placeholders.
 ## Requirements
 
 - The `claude` CLI on `PATH` (the subprocess is `claude -p`).
-- MCP servers configured for calendar / gmail / slack / drive / granola (see
-  `.mcp.json.example`). The agents resolve their tools by the configured server
-  name, falling back to a capability search — so renamed servers still work.
-- Slack uses a user token (`xoxp-…`, `search:read` scope) in the macOS keychain
-  under `slack_token` — no Slack MCP needed (works headless).
+- MCP servers for calendar / gmail / slack / drive / granola. **No servers are
+  bundled** — the agents use whatever connectors the user already has (defaults:
+  the standard managed connectors `Google_Calendar`, `Gmail`, `Slack`,
+  `Google_Drive`, `Granola`). Different server names can be set in the config's
+  `mcp` section; the agents also fall back to a ToolSearch capability lookup,
+  so renamed servers still work.
 
 ## Rules & gotchas
 

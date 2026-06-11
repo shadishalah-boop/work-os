@@ -16,13 +16,14 @@ Run this Bash command and read its KEY=VALUE stdout:
 bash {{SKILL_DIR}}/prep.sh
 ```
 
-It prints: `TODAY`, `TOMORROW`, `NOW` (HH:MM), `WINDOW_DAYS`, `START_TS`,
-`SLACK_RAW`, `DATA_DIR`, `DASH_DIR`, `RUN_AGENTS`, `SKIP_AGENTS`.
+It prints: `TODAY`, `TOMORROW`, `NOW` (HH:MM), `WINDOW_DAYS`, `SINCE_WINDOW`,
+`SINCE_1D`, `SINCE_30D`, `START_TS`, `TZNAME`, `DATA_DIR`, `DASH_DIR`,
+`RUN_AGENTS`, `SKIP_AGENTS`, and the per-source MCP server names
+`MCP_CALENDAR`, `MCP_GMAIL`, `MCP_SLACK`, `MCP_DRIVE`, `MCP_GRANOLA`.
 
-Capture every value. `prep.sh` has already: created the data dir, DELETED each
-RUN_AGENTS output file (so every agent does a fresh-create Write), and — if slack
-is in RUN_AGENTS — run slack-fetch.sh so `<DATA_DIR>/slack-raw.json` is on disk.
-Do NOT run prep.sh's sub-steps yourself.
+Capture every value. `prep.sh` has already created the data dir and DELETED each
+RUN_AGENTS output file (so every agent does a fresh-create Write). Do NOT run
+prep.sh's sub-steps yourself.
 
 ## STEP 2 — fan out in ONE tool block (agents in parallel + the merge waiter)
 
@@ -36,12 +37,12 @@ Issue a SINGLE tool-use block containing BOTH:
 
 Kickoff prompts — include only the ones whose agent is in RUN_AGENTS:
 
-- `dashboard-calendar`: `Refresh calendar data. TODAY=<TODAY>; TOMORROW=<TOMORROW>; NOW=<NOW> (HH:MM, user timezone). These were computed live seconds ago — use them and ignore any other date in your context. List today's events (startTime=<TODAY>T00:00:00, endTime=<TOMORROW>T00:00:00, user timezone). Write the JSON to <DATA_DIR>/calendar.json.`
-- `dashboard-granola`: `Refresh granola data with a 7-day lookback for action items / blockers / decisions (a single list_meetings call, then a get_meetings call with the IDs to fetch summaries — list_meetings returns titles only). Today is <TODAY>; ignore any other date in your context. Build meetingHistory from the same fetched meetings (cap 30, newest first). Write the JSON to <DATA_DIR>/granola.json.`
-- `dashboard-gmail`: `Refresh gmail data for the last <WINDOW_DAYS> days. Today is <TODAY>. Write the JSON to <DATA_DIR>/gmail.json.`
-- `dashboard-slack`: `Refresh slack data for the last <WINDOW_DAYS> days. Today is <TODAY>. The orchestrator already ran slack-fetch.sh — Read <DATA_DIR>/slack-raw.json (you have no Bash tool). Write the JSON to <DATA_DIR>/slack.json.`
-- `dashboard-drive`: `Refresh drive data with files modified in the last 14 days. Today is <TODAY>. Dump the raw recent-files response with the Write tool to <DATA_DIR>/drive-raw.json and stop — the orchestrator runs the transform.`
-- `dashboard-wellness`: `Refresh wellness data for this week. Today is <TODAY>; NOW=<NOW> (HH:MM, user timezone). Write the JSON to <DATA_DIR>/wellness.json.`
+- `dashboard-calendar`: `Refresh calendar data. TODAY=<TODAY>; TOMORROW=<TOMORROW>; NOW=<NOW> (HH:MM); timezone=<TZNAME>. These were computed live seconds ago — use them and ignore any other date in your context. Your calendar MCP server is named <MCP_CALENDAR>. List today's events (startTime=<TODAY>T00:00:00, endTime=<TOMORROW>T00:00:00, timezone <TZNAME>). Write the JSON to <DATA_DIR>/calendar.json.`
+- `dashboard-granola`: `Refresh granola data with a 7-day lookback for action items / blockers / decisions (a single list_meetings call, then a get_meetings call with the IDs to fetch summaries — list_meetings returns titles only). Today is <TODAY>; timezone=<TZNAME>; ignore any other date in your context. Your granola MCP server is named <MCP_GRANOLA>. Build meetingHistory from the same fetched meetings (cap 30, newest first). Write the JSON to <DATA_DIR>/granola.json.`
+- `dashboard-gmail`: `Refresh gmail data for the last <WINDOW_DAYS> days. Today is <TODAY>; timezone=<TZNAME>. Your gmail MCP server is named <MCP_GMAIL>. Write the JSON to <DATA_DIR>/gmail.json.`
+- `dashboard-slack`: `Refresh slack data for the last <WINDOW_DAYS> days. Today is <TODAY>; timezone=<TZNAME>. Your slack MCP server is named <MCP_SLACK>. Absolute dates for Slack search operators: SINCE_WINDOW=<SINCE_WINDOW>; SINCE_1D=<SINCE_1D>; SINCE_30D=<SINCE_30D>. Write the JSON to <DATA_DIR>/slack.json.`
+- `dashboard-drive`: `Refresh drive data with files modified in the last 14 days. Today is <TODAY>. Your drive MCP server is named <MCP_DRIVE>. Dump the raw recent-files response with the Write tool to <DATA_DIR>/drive-raw.json and stop — the orchestrator runs the transform.`
+- `dashboard-wellness`: `Refresh wellness data for this week. Today is <TODAY>; NOW=<NOW> (HH:MM); timezone=<TZNAME>. Your calendar MCP server is named <MCP_CALENDAR>. Write the JSON to <DATA_DIR>/wellness.json.`
 
 The Bash call (always include it, in the SAME block), with a 360000 ms timeout:
 

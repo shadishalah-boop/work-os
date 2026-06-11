@@ -14,6 +14,62 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.5.0 — 2026-06-11
+
+**MCP-only release.** The plugin now works with the MCP connectors you already
+have — no bundled servers, no custom Slack app, no Google Cloud OAuth, no macOS
+Keychain. This makes a fresh install on a colleague's machine zero-auth-setup.
+
+### Bundled `.mcp.json` removed (it was breaking installs)
+
+- The bundled community npx servers are gone. One of them (`granola-mcp`) was
+  **unpublished from npm** and could never start on a fresh install; the calendar
+  server required a per-user Google Cloud OAuth `credentials.json` that stopped
+  most installs cold. `.mcp.json` and `.mcp.json.example` are deleted.
+- Agents now default to the standard managed connector names
+  (`Google_Calendar`, `Gmail`, `Slack`, `Google_Drive`, `Granola`), keep the old
+  lowercase names as a fallback, and fall back further to a ToolSearch capability
+  lookup. A new **`mcp` config section** (see the example template) lets you map
+  any source to a differently-named server.
+
+### Slack agent → Slack MCP (Keychain + curl removed)
+
+- `dashboard-slack` now runs its own searches through the Slack MCP
+  (`slack_search_public_and_private`) instead of `slack-fetch.sh` + an `xoxp-`
+  user token in the macOS Keychain. `slack-fetch.sh` is deleted, `prep.sh` no
+  longer pre-fetches Slack, and the agent works on any OS with zero per-user
+  Slack setup. Output schema unchanged — `build-overrides.py` untouched.
+- Existing users can delete the old token:
+  `security delete-generic-password -s slack_token`.
+
+### Setup wizard verifies connectors live
+
+- `/dashboard-setup` Step 8 no longer prints a static (and stale) auth table —
+  it checks each of the 5 sources against the tools actually available in the
+  session, records non-default server names into the config's `mcp` section,
+  and prints a live ✓/✗ table with exact fix-it steps for anything missing.
+- Fixed stale `work-dashboard` plugin-name references in the setup skill.
+
+### Timezone unhardcoded
+
+- `Europe/Madrid` was baked into 5 of the 6 agents. The orchestrator now passes
+  `user.timezone` from the config (`TZNAME`) in every kickoff prompt, plus
+  absolute Slack search dates (`SINCE_WINDOW`/`SINCE_1D`/`SINCE_30D`) computed by
+  `prep.sh`. The wellness agent's hardcoded `focusTarget: 4` now reads
+  `dashboard.focusTarget` from config too.
+
+### Update path for users on v0.4.x
+
+```
+/plugin update work-os
+```
+
+Then make sure the five standard connectors show in `/mcp`, optionally add the
+`mcp` section to `~/.claude/dashboard-config.local` (only needed for non-default
+server names), and delete the old Slack Keychain entry.
+
+---
+
 ## v0.4.2 — 2026-05-29
 
 **Static bundle scrub.** Removes the last personal data from the shipped `public/`

@@ -1,7 +1,7 @@
 ---
 name: dashboard-granola
 description: Fetches the last 7 days of Granola meeting notes and extracts action items, commitments, projects, decisions, and blockers for the Work Dashboard's Top-3, Tasks, Projects, Blockers, and Decisions modules. Invoke from the dashboard skill — not directly useful standalone.
-tools: mcp__granola__list_meetings, mcp__granola__get_meetings, mcp__granola__query_granola_meetings, ToolSearch, Write
+tools: mcp__Granola__list_meetings, mcp__Granola__get_meetings, mcp__granola__list_meetings, mcp__granola__get_meetings, ToolSearch, Write
 ---
 
 # Dashboard — Granola agent
@@ -14,6 +14,15 @@ Identity (the orchestrator passes the live values; the dashboard config supplies
 - **Active workstreams:** from the config (`dashboard.workstreams`) — carry these over as the project list unless the meetings surface new ones. If none are configured, derive the workstream list from recurring themes in the meetings.
 
 ## What you do
+
+**0. Resolve your Granola tools — their names can differ by environment.** Your kickoff
+prompt names the Granola MCP server (default **`Granola`** — the standard managed
+connector), so the tools are normally **`mcp__Granola__list_meetings`** /
+**`mcp__Granola__get_meetings`**. Resolve robustly: try the `mcp__<server>__…` names from
+your kickoff prompt first, then the legacy `mcp__granola__…` names; if neither is
+available, call **`ToolSearch`** with `query: "granola list meetings"` and use what it
+surfaces. Only write `sourceOk:false` after genuinely trying ToolSearch and finding no
+Granola tool — never fabricate meetings.
 
 1. List meetings from the last **N days** via **a single `list_meetings` call**, where **N is the lookback window the orchestrator specifies in your prompt** (typically 1 on Tue-Fri, 3 on Monday/weekend; default to 7 only if no window is given). `list_meetings` returns titles, dates, participants, and IDs only — **no notes content**. If `list_meetings` fails for a real reason, write the JSON with `sourceOk: false`.
 2. **Fetch the notes/summary for those meetings** via a single `get_meetings` call passing the IDs from step 1 (max 10 per call — if step 1 returned >10, just pass the 10 most recent). `get_meetings` returns the AI-generated summary for each meeting, which contains the action items and decisions you need to extract. **Do NOT** call `get_meeting_transcript` — full transcripts are 10-50× the size and rarely surface items the summary missed. **Do NOT** call `query_granola_meetings` for this purpose either — it's a natural-language search that frequently returns "no meetings found" for very recent meetings that aren't yet indexed, even when `get_meetings` returns rich summaries for the same IDs.

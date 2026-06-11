@@ -18,10 +18,10 @@ PLUGIN_DIR="$(dirname "$(dirname "$(dirname "$0")")")"  # if invoked as a script
 ```
 
 In practice, use the Claude Code plugin path. Common locations:
-- `~/.claude/plugins/work-dashboard/`
+- `~/.claude/plugins/work-os/`
 - The path shown when the user ran `/plugin install`.
 
-If unsure, ask the user to run `claude plugin info work-dashboard` and paste back the path. Store as `$PLUGIN_DIR`.
+If unsure, ask the user to run `claude plugin info work-os` and paste back the path. Store as `$PLUGIN_DIR`.
 
 ## Step 1 — check for existing config
 
@@ -145,6 +145,13 @@ Once all fields are gathered, build the full config object. Schema (copy exactly
     "team": { "attention": "...", "people": [...] }
   },
   "slack": { "workspace": "...", "userId": "", "highSignalChannels": [] },
+  "mcp": {
+    "calendar": "Google_Calendar",
+    "gmail": "Gmail",
+    "slack": "Slack",
+    "drive": "Google_Drive",
+    "granola": "Granola"
+  },
   "dashboard": {
     "workstreams": [],
     "classificationKeywords": [],
@@ -163,29 +170,43 @@ Actions:
 3. Copy the plugin's static bundle: `cp -R "$PLUGIN_DIR/public/." "$dashboardDir/"`.
 4. Create `~/.claude/dashboard-filters.local` if it doesn't exist with the content of `$PLUGIN_DIR/templates/dashboard-filters.local.example`.
 
-## Step 8 — MCP server status
+## Step 8 — verify the user's MCP connectors (live check, no static table)
 
-Print a per-server status table. The plugin bundles `.mcp.json` at its root so the 5 servers auto-register, but each needs per-user auth:
+The plugin bundles **no MCP servers** — the dashboard uses the connectors the user
+already has (at most companies these are the standard managed connectors:
+**Google Calendar, Gmail, Slack, Google Drive, Granola**).
+
+Verify each of the 5 capabilities live:
+
+1. For each source, check whether its tools are available in THIS session. Try the
+   default names first (`mcp__Google_Calendar__list_events`, `mcp__Gmail__search_threads`,
+   `mcp__Slack__slack_search_public_and_private`, `mcp__Google_Drive__list_recent_files`,
+   `mcp__Granola__list_meetings`). If a default name is missing, use **ToolSearch** with a
+   capability query (e.g. `"calendar list events"`, `"slack search messages"`) to find
+   what that user's server is actually called.
+2. When a source resolves under a **non-default server name**, record the actual server
+   name in the config's `mcp` section (e.g. `"calendar": "gcal"`) so every refresh tells
+   the agents the right name. Leave defaults for sources that match.
+3. Print a live status table, for example:
 
 ```
-Your MCP servers (5 of them — all needed for the full dashboard):
+Your data sources:
 
-  ┌──────────┬────────────────────────────────────────────────────────────┐
-  │ Server   │ Next step                                                  │
-  ├──────────┼────────────────────────────────────────────────────────────┤
-  │ calendar │ Needs Google Cloud OAuth credentials.json.                 │
-  │          │ Docs: https://github.com/nspady/google-calendar-mcp#setup  │
-  │ gmail    │ Auto-OAuth. On first `/dashboard`, a browser tab opens.    │
-  │ slack    │ Needs SLACK_BOT_TOKEN (xoxb-…) + SLACK_TEAM_ID.            │
-  │          │ Create at: https://api.slack.com/apps                       │
-  │ drive    │ Auto-OAuth. Same flow as Gmail, first run only.            │
-  │ granola  │ Just needs the Granola desktop app running locally.        │
-  └──────────┴────────────────────────────────────────────────────────────┘
-
-If a server fails at dashboard refresh, its data section will show "source unavailable" — the rest of the dashboard still renders. You can set up MCPs incrementally.
+  ✓ Calendar   (Google_Calendar)
+  ✓ Gmail      (Gmail)
+  ✗ Slack      — no Slack MCP found in this session
+  ✓ Drive      (Google_Drive)
+  ✓ Granola    (Granola)
 ```
 
-If the user wants guided setup for a specific MCP, offer to open its README in the browser and paste a sample `.mcp.json` snippet inline.
+4. For every ✗, tell the user exactly how to fix it: open `/mcp` to see configured
+   servers, and connect the missing connector (at Preply: the standard company
+   connectors for Slack / Gmail / Google Calendar / Google Drive / Granola — same ones
+   used in claude.ai). Then they can re-run `/dashboard-setup` to re-verify, or just run
+   `/dashboard` — a missing source only blanks its own modules.
+
+Close with: "If a server fails at refresh time, its section shows 'source unavailable' —
+the rest of the dashboard still renders. You can add sources incrementally."
 
 ## Step 9 — final message
 
@@ -198,7 +219,7 @@ Your config: ~/.claude/dashboard-config.local
 Dashboard output: <dashboardDir>/Work Dashboard.html
 Open it once now so the tab stays ready.
 
-Run /dashboard anytime to refresh with live data from the 5 MCPs.
+Run /dashboard anytime to refresh with live data from your connected MCPs.
 Edit ~/.claude/dashboard-config.local to update your team / OKRs / pins later.
 
 — welcome to your Work Dashboard, <firstName>.

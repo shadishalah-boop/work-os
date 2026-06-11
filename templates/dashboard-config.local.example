@@ -40,6 +40,15 @@
     "highSignalChannels": ["#incident-*", "#proj-*", "#leadership"]
   },
 
+  "mcp": {
+    "_README": "Server names of your MCP connectors, as shown by /mcp. Defaults below match the standard managed connectors — only change these if yours are named differently (the agents also fall back to a capability search).",
+    "calendar": "Google_Calendar",
+    "gmail": "Gmail",
+    "slack": "Slack",
+    "drive": "Google_Drive",
+    "granola": "Granola"
+  },
+
   "dashboard": {
     "workstreams": [
       "Pricing v3",

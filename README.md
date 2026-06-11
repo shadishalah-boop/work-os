@@ -13,9 +13,8 @@ All user-specific content (your name, manager, team roster, OKRs, pins, Slack wo
 ## What's in the bundle
 
 ```
-work-dashboard/
+work-os/
 ├── .claude-plugin/plugin.json        ← plugin manifest
-├── .mcp.json                         ← auto-registers the 5 MCP servers on install
 ├── skills/
 │   ├── dashboard/SKILL.md            ← /dashboard  (refresh orchestrator)
 │   └── dashboard-setup/SKILL.md      ← /dashboard-setup  (one-time onboarding)
@@ -39,39 +38,23 @@ work-dashboard/
 
 ## Prerequisites
 
-**The `claude` CLI must be on your `PATH`.** `/dashboard` runs the refresh inside a headless `claude -p --permission-mode bypassPermissions` subprocess (that's what keeps the interactive session prompt-free), so the launcher invokes `claude` directly.
+**1. The `claude` CLI must be on your `PATH`.** `/dashboard` runs the refresh inside a headless `claude -p --permission-mode bypassPermissions` subprocess (that's what keeps the interactive session prompt-free), so the launcher invokes `claude` directly.
 
-The plugin's `.mcp.json` auto-registers the MCP servers below. Each needs per-user auth:
+**2. Your MCP connectors.** The plugin bundles **no MCP servers** (as of v0.5.0) — the agents use the connectors you already have. At most companies these are the standard managed connectors, already authenticated:
 
-| Server | What it provides | Auth needed | Works out of the box? |
-|---|---|---|---|
-| `calendar` | Google Calendar read + suggest-time | Google Cloud OAuth `credentials.json` | No — set `GOOGLE_OAUTH_CREDENTIALS` env var |
-| `gmail`    | Gmail search + thread read | Google OAuth (browser prompt on first use) | Yes |
-| `slack`    | Slack search (MCP-free as of v0.4.0) | User OAuth token with `search:read` scope, stored in macOS Keychain | See "Slack setup" below |
-| `drive`    | Google Drive list/search | Google OAuth (browser prompt on first use) | Yes |
-| `granola`  | Granola meeting notes + transcripts | Granola desktop app running locally | Yes |
+| Source | Default server name | What it provides |
+|---|---|---|
+| Calendar | `Google_Calendar` | Today's events + suggest-time |
+| Gmail    | `Gmail`           | Thread search + read |
+| Slack    | `Slack`           | Message search (mentions, shipped, incidents) |
+| Drive    | `Google_Drive`    | Recent files for the Find palette |
+| Granola  | `Granola`         | Meeting notes → tasks/decisions/blockers |
+
+Run `/mcp` to see what you have connected. `/dashboard-setup` verifies all five live and records any non-default server names in your config (`mcp` section) — the agents also fall back to a capability search, so differently-named or self-hosted servers work too.
 
 If a server is unreachable, its agent returns `sourceOk: false` and the dashboard renders the rest cleanly — the unavailable sections just show empty arrays. You can add sources incrementally.
 
-Want to swap in a different MCP? Override entries in your own `~/.claude.json` under `mcpServers` — keep the same server names (`calendar`, `gmail`, `slack`, `drive`, `granola`) so the agents still resolve.
-
-### Slack setup (v0.4.0+ — MCP-free)
-
-The Slack agent no longer needs the Slack MCP server. Instead it calls the Slack web API directly using an OAuth token stored in macOS Keychain. This is faster, has fewer moving parts, and works in headless `claude -p` (e.g. launchd) where the MCP doesn't load.
-
-**One-time setup:**
-
-1. Get a Slack user OAuth token with `search:read` scope. Easiest path:
-   - Go to https://api.slack.com/apps → "Create New App" → "From scratch"
-   - Add OAuth scope `search:read` under "User Token Scopes"
-   - Install the app to your workspace → copy the **User OAuth Token** (`xoxp-...`)
-2. Store it in Keychain:
-
-```bash
-security add-generic-password -s slack_token -a "$USER" -w 'xoxp-paste-your-token-here'
-```
-
-That's it — the agent reads from this Keychain entry on every run. If the entry is missing, the Slack agent writes `sourceOk: false` and the rest of the dashboard renders fine.
+> **Upgrading from ≤v0.4.x?** The bundled `.mcp.json` community servers are gone (one of them, `granola-mcp`, was unpublished from npm and broke fresh installs), and the Slack `xoxp-` token + macOS Keychain setup is no longer needed — the Slack agent now uses the Slack MCP. You can delete the Keychain entry: `security delete-generic-password -s slack_token`.
 
 ---
 
