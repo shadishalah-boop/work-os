@@ -83,17 +83,39 @@ Keychain. This makes a fresh install on a colleague's machine zero-auth-setup.
   keywords) for you. With no OKRs configured, the dashboard shows a hint where
   they'd go instead of an empty section.
 
+### Install hardening
+
+- **Bundle auto-sync** — the refresh now copies the static bundle when it's
+  missing (manual installs used to get data files with no HTML) and re-syncs it
+  when the plugin version changes (upgrades used to strand users on old JSX
+  forever). Generated data and the new **`custom.css`** (your visual overrides,
+  loaded last, never overwritten) are preserved.
+- **Linux fix (critical)** — the `stat -f || stat -c` mtime pattern returned
+  filesystem info instead of failing on GNU stat, crashing `prep.sh` on Linux
+  whenever a prior refresh existed. GNU order now tried first.
+- **Self-diagnosing refresh line** — failed agents now report *why* (the JSON's
+  `error` field), and a typo'd `dashboard-config.local` is called out loudly
+  instead of silently using defaults.
+- **Cheaper, friendlier headless run** — the orchestrator subprocess is pinned to
+  `--model sonnet`, and an org-disabled `bypassPermissions` now produces a human
+  explanation instead of raw stderr.
+- **Docs/setup truthfulness** — removed nonexistent `claude plugin root` /
+  `claude plugin info` commands (setup uses `${CLAUDE_PLUGIN_ROOT}`); setup now
+  opens the dashboard at the end and offers to run the first refresh; README
+  leads with a 3-step colleague quickstart; the Slack Ask panel and meeting
+  modal no longer instruct token/OAuth setup for optional features.
+
 ### Update path for users on v0.4.x
 
 ```
 /plugin update work-os
+/dashboard
 ```
 
-Then make sure the five standard connectors show in `/mcp`, optionally add the
-`mcp` section to `~/.claude/dashboard-config.local` (only needed for non-default
-server names), and delete the old Slack Keychain entry. To pick up the bundle
-changes (banner, OKR refactor), re-copy `public/` over your `dashboardDir` —
-your config, task state, and layout live elsewhere and are unaffected.
+The refresh re-syncs the bundle automatically. Make sure the five standard
+connectors show in `/mcp`, optionally add the `mcp` section to
+`~/.claude/dashboard-config.local` (only needed for non-default server names),
+and delete the old Slack Keychain entry.
 
 ---
 
