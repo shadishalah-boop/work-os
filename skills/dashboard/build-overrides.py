@@ -26,13 +26,17 @@ CONFIG_PATH = HOME / ".claude" / "dashboard-config.local"
 # Config
 # ---------------------------------------------------------------------------
 def load_config():
+    """Returns (config_dict, error). A missing file is fine (defaults); a file
+    that exists but doesn't parse is a user-visible problem — report it."""
     try:
-        return json.loads(CONFIG_PATH.read_text())
-    except Exception:
-        return {}
+        return json.loads(CONFIG_PATH.read_text()), None
+    except FileNotFoundError:
+        return {}, None
+    except Exception as e:
+        return {}, str(e)
 
 
-CFG = load_config()
+CFG, CFG_ERROR = load_config()
 
 
 def cfg_get(dotted, default=None):
@@ -361,11 +365,25 @@ n_block = len(blockers)
 n_slack = len(slack_seed["channels"])
 n_drive = len(drive_files)
 
-fail_str = f" · failed: {', '.join(failed)}" if failed else ""
+# Failed sources with their reason (from each agent JSON's `error` field), so
+# the confirmation line is self-diagnosing instead of just naming the agent.
+_by_name = {"calendar": calendar, "granola": granola, "gmail": gmail,
+            "slack": slack, "drive": drive, "wellness": wellness}
+fail_bits = []
+for n in failed:
+    err = _by_name[n].get("error") or "no output file"
+    fail_bits.append(f"{n} ({str(err)[:80]})")
+fail_str = f" · failed: {'; '.join(fail_bits)}" if fail_bits else ""
+
+config_str = (
+    f" · CONFIG ERROR: ~/.claude/dashboard-config.local is invalid JSON"
+    f" ({CFG_ERROR}) — all settings ignored, defaults used"
+    if CFG_ERROR else ""
+)
 
 print(
     f"Dashboard refreshed · {ok_count}/6 sources · "
     f"{n_events} events · {n_top3} top3 · {n_block} blockers · "
     f"{n_slack} slack channels · {n_drive} drive files · reload the browser tab"
-    f"{fail_str}"
+    f"{fail_str}{config_str}"
 )

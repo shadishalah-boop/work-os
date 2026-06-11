@@ -135,14 +135,17 @@ function SlackMod({ data }) {
 
           {askState.status==='no-server' && (
             <div style={{fontSize:12, color:'var(--fg-2)', lineHeight:1.5}}>
-              Open a Terminal and run: <code style={{fontFamily:'var(--font-mono)', background:'var(--grey-100)', padding:'1px 5px', borderRadius:3}}>bash ~/.claude/dashboard-server/start.sh</code>
-              <br/>Then paste your Slack user token (xoxp-…) into <code style={{fontFamily:'var(--font-mono)', background:'var(--grey-100)', padding:'1px 5px', borderRadius:3}}>~/.claude/dashboard-server/slack-token.txt</code>
+              In-dashboard Slack search needs the optional local helper service, which isn't
+              bundled with the plugin — no setup required for the rest of the dashboard.
+              <div style={{marginTop:6}}>
+                <button className="btn btn--ghost btn--sm" onClick={()=>searchSlackNative(askState.query)}>Open in Slack search instead</button>
+              </div>
             </div>
           )}
 
           {askState.status==='no-token' && (
             <div style={{fontSize:12, color:'var(--fg-2)', lineHeight:1.5}}>
-              Paste your Slack user token (xoxp-…) into <code style={{fontFamily:'var(--font-mono)', background:'var(--grey-100)', padding:'1px 5px', borderRadius:3}}>~/.claude/dashboard-server/slack-token.txt</code> and ask again.
+              The optional local helper is running but has no Slack token configured.
               <div style={{marginTop:6}}>
                 <button className="btn btn--ghost btn--sm" onClick={()=>searchSlackNative(askState.query)}>Open in Slack search instead</button>
               </div>
@@ -1536,11 +1539,11 @@ function AddMeetingModal({ open, onClose, prefillTitle }) {
                     background: hasClient ? 'var(--ok, #2c9c5c)' : 'var(--fg-3)',
                   }}/>
                   <span style={{color: hasClient ? 'var(--fg-1)' : 'var(--fg-3)'}}>
-                    {hasClient ? 'Direct send connected — invites email automatically' : 'Set up direct send to skip the Google Calendar tab'}
+                    {hasClient ? 'Direct send connected — invites email automatically' : 'Invites open a pre-filled Google Calendar tab — works as-is'}
                   </span>
                 </div>
                 <button className="btn btn--ghost btn--sm" onClick={()=>setCfgOpen(o=>!o)}>
-                  {cfgOpen ? 'Hide' : (hasClient ? 'Edit' : 'Set up')}
+                  {cfgOpen ? 'Hide' : (hasClient ? 'Edit' : 'Optional: direct send')}
                 </button>
               </div>
               {cfgOpen && (
@@ -1549,7 +1552,9 @@ function AddMeetingModal({ open, onClose, prefillTitle }) {
                   background:'var(--grey-50)', border:'1px solid var(--border-subtle)',
                 }}>
                   <div style={{fontSize:12, color:'var(--fg-2)', marginBottom:8, lineHeight:1.45}}>
-                    Paste your Google OAuth 2.0 <b>Web</b> Client ID. One-time setup:{' '}
+                    <b>Optional, advanced.</b> Direct send creates the event + emails invitees without
+                    opening a tab, but needs your own Google Cloud OAuth client. Skip this unless the
+                    extra click bothers you. Paste a Google OAuth 2.0 <b>Web</b> Client ID. One-time setup:{' '}
                     <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer"
                        style={{color:'var(--accent)'}}>console.cloud.google.com/apis/credentials</a>
                     {' '}→ Create OAuth Client ID → Web app → add{' '}

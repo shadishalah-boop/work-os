@@ -18,12 +18,12 @@ bash {{SKILL_DIR}}/prep.sh
 
 It prints: `TODAY`, `TOMORROW`, `NOW` (HH:MM), `WINDOW_DAYS`, `SINCE_WINDOW`,
 `SINCE_1D`, `SINCE_30D`, `START_TS`, `TZNAME`, `DATA_DIR`, `DASH_DIR`,
-`RUN_AGENTS`, `SKIP_AGENTS`, and the per-source MCP server names
-`MCP_CALENDAR`, `MCP_GMAIL`, `MCP_SLACK`, `MCP_DRIVE`, `MCP_GRANOLA`.
+`RUN_AGENTS`, `SKIP_AGENTS`, `CONFIG`, `BUNDLE`, and the per-source MCP server
+names `MCP_CALENDAR`, `MCP_GMAIL`, `MCP_SLACK`, `MCP_DRIVE`, `MCP_GRANOLA`.
 
-Capture every value. `prep.sh` has already created the data dir and DELETED each
-RUN_AGENTS output file (so every agent does a fresh-create Write). Do NOT run
-prep.sh's sub-steps yourself.
+Capture every value. `prep.sh` has already created the data dir, synced the
+static bundle if needed, and DELETED each RUN_AGENTS output file (so every agent
+does a fresh-create Write). Do NOT run prep.sh's sub-steps yourself.
 
 ## STEP 2 — fan out in ONE tool block (agents in parallel + the merge waiter)
 
@@ -66,4 +66,9 @@ wait-and-merge.sh already did the waiting, drive transform, and merge.
 
 Output ONLY the final confirmation line that `wait-and-merge.sh` printed (the
 build-overrides.py line, e.g. `Dashboard refreshed · …`). No preamble, no
-commentary, no markdown fences, no recap. Just that one line.
+commentary, no markdown fences, no recap. Just that one line — with two
+exceptions, appended to the same line when they apply:
+
+- If STEP 1's `BUNDLE` was not `ok` (e.g. `synced to v0.5.0`), append
+  ` · bundle <BUNDLE> — hard-reload the tab (Cmd/Ctrl+Shift+R)`.
+- If STEP 1's `CONFIG` was not `ok`, append ` · config: <CONFIG>`.

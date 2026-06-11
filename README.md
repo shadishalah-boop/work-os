@@ -1,6 +1,29 @@
-# Work Dashboard
+# Work OS
 
 A personal work dashboard plugin for [Claude Code](https://claude.com/claude-code) that merges your **Google Calendar, Gmail, Slack, Google Drive, and Granola meeting notes** into a local React-in-browser view.
+
+## Quickstart (for colleagues — 3 steps, ~5 minutes)
+
+> You need: the **Claude Code CLI** installed, your standard company MCP connectors
+> (Slack, Gmail, Google Calendar, Google Drive, Granola — check with `/mcp`), and
+> **read access to this repo** (ask the maintainer to add you as a collaborator
+> while the repo is private).
+
+In Claude Code:
+
+```
+/plugin marketplace add shadishalah-boop/work-os
+/plugin install work-os@work-os
+/dashboard-setup
+```
+
+The setup wizard asks a few questions (name, timezone, team — all skippable),
+verifies your connectors, opens the dashboard in your browser, and offers to run
+your first refresh. After that, `/dashboard` anytime for fresh data. That's it.
+
+Everything below is reference detail.
+
+---
 
 Invoke `/work-os:dashboard` and the plugin fans out to six parallel agents, pulls fresh data from your MCP servers, merges it, and writes it into a static HTML bundle you keep open in a browser tab. Reload the tab to see the new data.
 
@@ -67,7 +90,7 @@ In Claude Code, run:
 /plugin install work-os@work-os
 ```
 
-Then run the guided setup — it writes your config file, creates the output directories, copies the bundle, and prints per-MCP auth instructions:
+Then run the guided setup — it writes your config file, creates the output directories, copies the bundle, verifies your MCP connectors live, opens the dashboard, and offers to run the first refresh:
 
 ```
 /dashboard-setup
@@ -88,9 +111,15 @@ When a new version ships, just:
 /dashboard
 ```
 
-Then **hard-reload the dashboard tab** (⌘⇧R / Ctrl+Shift+R) to pick up new JSX/CSS.
-Your `~/.claude/dashboard-config.local`, `data-override.jsx` task state, and saved
-canvas layout all persist across upgrades — nothing to redo.
+The refresh detects the version change and **re-syncs the HTML/JSX/CSS bundle
+automatically** (v0.5.0+), preserving your generated data, task state, and
+`custom.css`. Then hard-reload the dashboard tab (⌘⇧R / Ctrl+Shift+R).
+Your `~/.claude/dashboard-config.local` and saved canvas layout persist across
+upgrades — nothing to redo.
+
+> Note: the bundle re-sync overwrites direct edits to `app.jsx` / `modules-*.jsx` /
+> `dashboard*.css` in your dashboard folder. Put visual tweaks in **`custom.css`**
+> (never overwritten) instead.
 
 If `/plugin update` says "already on the latest" but you know there's a newer
 version, run `/plugin marketplace update work-os` first to refresh the source,
@@ -118,22 +147,18 @@ This fans out to 6 agents in parallel (~30–60s), merges their JSON, and rewrit
 
 ## Manual install
 
-If you don't want to use `/dashboard-setup`:
+If you don't want to use `/dashboard-setup`, just ask Claude Code in any session:
 
-```bash
-# 1. Copy the config template and edit it
-cp "$(claude plugin root work-os)/templates/dashboard-config.local.example" \
-   ~/.claude/dashboard-config.local
+> *"Copy the work-os plugin's `templates/dashboard-config.local.example` to
+> `~/.claude/dashboard-config.local`, and the filters template to
+> `~/.claude/dashboard-filters.local`."*
 
-# 2. (Optional) Copy the filter template
-cp "$(claude plugin root work-os)/templates/dashboard-filters.local.example" \
-   ~/.claude/dashboard-filters.local
+(Or find the plugin's install path yourself with `claude plugin list --json` and
+`cp` the two templates from its `templates/` directory.) Then edit the config —
+fill in the `user` / `org` / `slack` / `dashboard` / `output` sections.
 
-# 3. Edit the config — fill in user / org / slack / dashboard / output sections
-open ~/.claude/dashboard-config.local
-```
-
-Then run `/dashboard` — the skill auto-creates the output directories and copies the HTML bundle on first run.
+Then run `/dashboard` — the refresh creates the output directories and copies the
+HTML bundle automatically when it's missing (and re-syncs it after plugin updates).
 
 **Config file sections:**
 - `user` — your name, email, timezone, working hours
@@ -207,12 +232,13 @@ Your team roster, OKRs, pins, and weather city live in `~/.claude/dashboard-conf
 
 ### Edit visuals
 
-Colors, layout, and module order live in the HTML bundle under `output.dashboardDir/`:
-- `dashboard-d.css` — theme + layout
-- `modules-a.jsx`, `modules-b.jsx` — individual dashboard modules
-- `app.jsx` — orchestration, greeting bar, left rail
+Put CSS tweaks in **`custom.css`** in your dashboard folder — it loads last (so it
+wins) and is the one file the bundle re-sync never overwrites.
 
-Changes there persist. If you want to update the bundled defaults (for yourself or to upstream), edit `public/` in the plugin repo and push.
+Deeper changes (module JSX, layout logic) belong in the plugin repo's `public/`:
+edit there and push, and every install picks them up on its next refresh. Avoid
+editing `app.jsx` / `modules-*.jsx` / `dashboard*.css` directly in your dashboard
+folder — those copies are replaced when a plugin update re-syncs the bundle.
 
 ### Swap a data source
 
@@ -222,9 +248,13 @@ Each agent lives in `agents/dashboard-<name>.md`. To change what an agent does, 
 
 ## Troubleshooting
 
-**"No config found" on first run** — Copy the template to `~/.claude/dashboard-config.local` (see Install step 4).
+**"No config found" / config ignored** — Run `/dashboard-setup`, or copy the template per **Manual install** above. If your config exists but has a JSON typo, the refresh confirmation line calls it out (`CONFIG ERROR: …`) and falls back to defaults until you fix it.
 
-**Agent reports `sourceOk: false`** — That MCP server is unreachable or unauthenticated. Run `/mcp` to check status. The dashboard still renders; that source's modules just show empty arrays.
+**Agent reports `sourceOk: false`** — That MCP server is unreachable or unauthenticated. The refresh confirmation line includes the reason (e.g. `failed: slack (no slack search tool found)`). Run `/mcp` to check status. The dashboard still renders; that source's modules just show empty arrays.
+
+**Refresh fails immediately mentioning "bypass"** — Your (org-managed) Claude Code settings disable `bypassPermissions`, which the zero-prompt refresh needs. Ask your admin about `disableBypassPermissionsMode`.
+
+**"Fresh data" banner never appears** — Chrome blocks `fetch()` on `file://` pages, so the auto-reload poller can't work when the dashboard is opened as a local file there. Reload the tab manually after a refresh, or use a browser that allows local-file fetch.
 
 **Dashboard shows yesterday's data** — Browser cache. Hard-reload (Cmd/Ctrl + Shift + R). If that doesn't help, confirm the skill actually ran — check `<output.dataCacheDir>/*.json` timestamps.
 

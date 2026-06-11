@@ -1,0 +1,11 @@
+/* custom.css — YOUR visual overrides. Loaded last, so anything here wins.
+ *
+ * This file is never overwritten: plugin upgrades re-sync the bundle into this
+ * folder but always preserve custom.css (and your generated data files).
+ * Put theme/layout tweaks here instead of editing dashboard*.css or the JSX —
+ * those files are replaced on every plugin update.
+ *
+ * Examples:
+ *   :root { --pink-500: #7c3aed; }              — recolor the primary accent
+ *   .layout-d .d-rail { display: none; }        — hide the left rail entirely
+ */

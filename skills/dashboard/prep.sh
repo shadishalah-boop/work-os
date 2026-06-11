@@ -11,7 +11,7 @@
 #
 # Prints KEY=VALUE lines for the orchestrator to capture:
 #   TODAY, TOMORROW, NOW (HH:MM), WINDOW_DAYS, SINCE_WINDOW, SINCE_1D, SINCE_30D,
-#   START_TS, TZNAME, DATA_DIR, DASH_DIR, RUN_AGENTS, SKIP_AGENTS,
+#   START_TS, TZNAME, DATA_DIR, DASH_DIR, RUN_AGENTS, SKIP_AGENTS, CONFIG, BUNDLE,
 #   MCP_CALENDAR, MCP_GMAIL, MCP_SLACK, MCP_DRIVE, MCP_GRANOLA
 set -uo pipefail
 
@@ -19,6 +19,43 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=/dev/null
 source "$SCRIPT_DIR/_config.sh"   # sets DATA_DIR, DASH_DIR
 mkdir -p "$DATA_DIR"
+
+# --- Config sanity: a typo'd JSON silently becomes "all defaults", which looks
+# --- like a broken install. Surface it loudly instead.
+if [ ! -f "$CONFIG_FILE" ]; then
+  CONFIG="missing (run /dashboard-setup — using defaults)"
+elif ERR=$(python3 -m json.tool "$CONFIG_FILE" 2>&1 >/dev/null); then
+  CONFIG=ok
+else
+  CONFIG="INVALID JSON ($(echo "$ERR" | head -1)) — ALL settings ignored, defaults used"
+fi
+
+# --- Bundle sync: copy/refresh the static bundle in DASH_DIR.
+# Runs when the HTML is missing (fresh/manual install) or the stamped version
+# differs from the plugin's (upgrade). Preserves the two generated overlay files
+# and the user's custom.css.
+PLUGIN_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PUBLIC_DIR="$PLUGIN_ROOT/public"
+PLUGIN_VERSION=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('version','0'))" "$PLUGIN_ROOT/.claude-plugin/plugin.json" 2>/dev/null || echo 0)
+STAMP_FILE="$DASH_DIR/.bundle-version"
+BUNDLE=ok
+if [ -d "$PUBLIC_DIR" ]; then
+  STAMPED=$(cat "$STAMP_FILE" 2>/dev/null || echo "")
+  if [ ! -f "$DASH_DIR/Work Dashboard.html" ] || [ "$STAMPED" != "$PLUGIN_VERSION" ]; then
+    mkdir -p "$DASH_DIR"
+    KEEP_DIR=$(mktemp -d)
+    for f in data-override.jsx drive-index.jsx custom.css; do
+      [ -f "$DASH_DIR/$f" ] && cp "$DASH_DIR/$f" "$KEEP_DIR/$f"
+    done
+    cp -R "$PUBLIC_DIR/." "$DASH_DIR/"
+    for f in data-override.jsx drive-index.jsx custom.css; do
+      [ -f "$KEEP_DIR/$f" ] && cp "$KEEP_DIR/$f" "$DASH_DIR/$f"
+    done
+    rm -rf "$KEEP_DIR"
+    echo "$PLUGIN_VERSION" > "$STAMP_FILE"
+    BUNDLE="synced to v$PLUGIN_VERSION"
+  fi
+fi
 
 TODAY=$(date '+%Y-%m-%d')
 TOMORROW=$(date -v+1d '+%Y-%m-%d' 2>/dev/null || date -d '+1 day' '+%Y-%m-%d')
@@ -39,8 +76,15 @@ MCP_DRIVE="$(_cfg mcp.drive 'Google_Drive')"
 MCP_GRANOLA="$(_cfg mcp.granola 'Granola')"
 
 # --- WINDOW_DAYS = ceil(hours since last successful refresh / 24), clamped [1,7] ---
-# Uses mtime of data-override.jsx — only written on a complete refresh.
-LAST=$(stat -f '%m' "$DASH_DIR/data-override.jsx" 2>/dev/null || stat -c '%Y' "$DASH_DIR/data-override.jsx" 2>/dev/null)
+# Uses mtime of data-override.jsx — only written on a complete refresh. The
+# bundled STUB (just copied by the sync above on fresh installs) doesn't count.
+# NOTE: GNU stat must be tried FIRST (-c). On Linux, BSD-style `stat -f '%m'`
+# does not fail — it prints filesystem info — so the old `-f || -c` order
+# returned garbage and crashed the arithmetic below under `set -u`.
+LAST=$(stat -c '%Y' "$DASH_DIR/data-override.jsx" 2>/dev/null || stat -f '%m' "$DASH_DIR/data-override.jsx" 2>/dev/null)
+if [ -n "${LAST:-}" ] && grep -q "^// Stub" "$DASH_DIR/data-override.jsx" 2>/dev/null; then
+  LAST=""   # never actually refreshed
+fi
 if [ -z "$LAST" ]; then
   WINDOW_DAYS=7   # no prior refresh → safe default
 else
@@ -59,7 +103,8 @@ ttl_for_agent() {
   esac
 }
 
-stat_mtime() { stat -f '%m' "$1" 2>/dev/null || stat -c '%Y' "$1" 2>/dev/null; }
+# GNU first, BSD fallback — see the NOTE above.
+stat_mtime() { stat -c '%Y' "$1" 2>/dev/null || stat -f '%m' "$1" 2>/dev/null; }
 
 RUN_AGENTS=""
 SKIP_AGENTS=""
@@ -107,6 +152,8 @@ echo "DATA_DIR=$DATA_DIR"
 echo "DASH_DIR=$DASH_DIR"
 echo "RUN_AGENTS=$RUN_AGENTS"
 echo "SKIP_AGENTS=$SKIP_AGENTS"
+echo "CONFIG=$CONFIG"
+echo "BUNDLE=$BUNDLE"
 echo "MCP_CALENDAR=$MCP_CALENDAR"
 echo "MCP_GMAIL=$MCP_GMAIL"
 echo "MCP_SLACK=$MCP_SLACK"

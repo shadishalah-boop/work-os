@@ -11,17 +11,15 @@ First-time setup wizard. Gathers the user's identity, team, OKRs, and pins; writ
 
 ## Step 0 — locate the plugin
 
-The plugin root is where this SKILL.md lives minus `skills/dashboard-setup/`. Resolve it once:
+Use `${CLAUDE_PLUGIN_ROOT}` — Claude Code sets it to this plugin's install root for
+every Bash call made from this skill. Resolve it once and store as `$PLUGIN_DIR`:
 
 ```bash
-PLUGIN_DIR="$(dirname "$(dirname "$(dirname "$0")")")"  # if invoked as a script
+echo "${CLAUDE_PLUGIN_ROOT}"
 ```
 
-In practice, use the Claude Code plugin path. Common locations:
-- `~/.claude/plugins/work-os/`
-- The path shown when the user ran `/plugin install`.
-
-If unsure, ask the user to run `claude plugin info work-os` and paste back the path. Store as `$PLUGIN_DIR`.
+If it's somehow empty, fall back to `claude plugin list --json` and find the
+`work-os` entry's install path. Do NOT guess paths or ask the user to find it.
 
 ## Step 1 — check for existing config
 
@@ -181,7 +179,10 @@ Actions:
 1. Write `~/.claude/dashboard-config.local` with the JSON (pretty-printed, 2-space indent).
 2. `mkdir -p` the `dashboardDir` and `dataCacheDir`.
 3. Copy the plugin's static bundle: `cp -R "$PLUGIN_DIR/public/." "$dashboardDir/"`.
-4. Create `~/.claude/dashboard-filters.local` if it doesn't exist with the content of `$PLUGIN_DIR/templates/dashboard-filters.local.example`.
+4. Stamp the bundle version so refresh-time auto-sync knows what's installed:
+   read `version` from `$PLUGIN_DIR/.claude-plugin/plugin.json` and write it to
+   `$dashboardDir/.bundle-version`.
+5. Create `~/.claude/dashboard-filters.local` if it doesn't exist with the content of `$PLUGIN_DIR/templates/dashboard-filters.local.example`.
 
 ## Step 8 — verify the user's MCP connectors (live check, no static table)
 
@@ -221,22 +222,33 @@ Your data sources:
 Close with: "If a server fails at refresh time, its section shows 'source unavailable' —
 the rest of the dashboard still renders. You can add sources incrementally."
 
-## Step 9 — final message
+## Step 9 — open the dashboard + offer the first refresh
 
-Print exactly:
+1. Open the dashboard in the user's browser so success is immediate, not homework:
+   `open "<dashboardDir>/Work Dashboard.html"` (macOS) or
+   `xdg-open "<dashboardDir>/Work Dashboard.html"` (Linux). If the open command
+   fails, just print the path. The tab will show the labeled **sample data**
+   banner until the first refresh — tell the user that's expected.
+
+2. Print:
 
 ```
 Setup complete.
 
 Your config: ~/.claude/dashboard-config.local
-Dashboard output: <dashboardDir>/Work Dashboard.html
-Open it once now so the tab stays ready.
+Dashboard: <dashboardDir>/Work Dashboard.html  (just opened — keep the tab pinned)
+The tab shows sample data until the first refresh.
 
-Run /dashboard anytime to refresh with live data from your connected MCPs.
 Edit ~/.claude/dashboard-config.local to update your team / OKRs / pins later.
 
 — welcome to your Work Dashboard, <firstName>.
 ```
+
+3. Then ask: *"Want me to run your first refresh now? Takes ~1-2 minutes and fills
+   the dashboard with your real data."* If yes, run the refresh exactly the way the
+   `dashboard` skill does — a single Bash call to
+   `${CLAUDE_PLUGIN_ROOT}/skills/dashboard/refresh-headless.sh` (timeout 480000) —
+   and relay its one-line output. Do NOT orchestrate agents yourself.
 
 ## Rules
 
@@ -245,7 +257,7 @@ Edit ~/.claude/dashboard-config.local to update your team / OKRs / pins later.
 - **Always back up** an existing config before overwriting. Never silent-destroy user data.
 - **Validate IANA timezone** against `Intl.DateTimeFormat().resolvedOptions().timeZone`-style names. If the user types a vague "CET" or "Pacific time", offer the canonical name (e.g. "Europe/Madrid", "America/Los_Angeles").
 - **Timezone default**: if the user says "use my system timezone", run `date +%Z` for display and check `/etc/localtime` for the IANA name.
-- **Don't call the 6 agents from this skill.** Setup only. The user explicitly runs `/dashboard` after.
+- **Don't orchestrate the 6 agents from this skill.** The only refresh this skill may trigger is the single `refresh-headless.sh` call in Step 9, with the user's consent.
 - **If the user aborts mid-setup**, discard any partial state — don't write a half-filled config.
 - **Currency / language**: the dashboard is English-only today; don't offer localization options.
 

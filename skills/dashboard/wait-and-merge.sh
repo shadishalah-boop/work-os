@@ -21,7 +21,9 @@ START="${1:?usage: wait-and-merge.sh <start_epoch> <agent1> [agent2 ...]}"
 shift
 EXPECTED="$*"
 
-stat_mtime() { stat -f '%m' "$1" 2>/dev/null || stat -c '%Y' "$1" 2>/dev/null; }
+# GNU stat first (-c): on Linux, BSD-style `stat -f` succeeds with filesystem
+# info instead of failing, so the old `-f || -c` order returned garbage.
+stat_mtime() { stat -c '%Y' "$1" 2>/dev/null || stat -f '%m' "$1" 2>/dev/null; }
 
 if [ -z "$EXPECTED" ]; then
   # No agents to wait for (everything cached). Just run merge and exit.
