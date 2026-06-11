@@ -250,6 +250,14 @@ Edit ~/.claude/dashboard-config.local to update your team / OKRs / pins later.
    `${CLAUDE_PLUGIN_ROOT}/skills/dashboard/refresh-headless.sh` (timeout 480000) —
    and relay its one-line output. Do NOT orchestrate agents yourself.
 
+4. Finally offer hands-free mode: *"Want the dashboard to refresh itself on a
+   schedule (weekdays 8:00 + 13:00 by default)? I can set that up now — you can
+   change times or remove it anytime."* If yes, run
+   `bash ${CLAUDE_PLUGIN_ROOT}/skills/dashboard/schedule.sh install` (append
+   `--times "..."` if the user wants different times; mention `--serve` if they
+   want the open tab to auto-reload too — see README "scheduled auto-refresh").
+   Relay the script's output.
+
 ## Rules
 
 - **One question at a time when there's a branch.** Batch only obvious related fields.

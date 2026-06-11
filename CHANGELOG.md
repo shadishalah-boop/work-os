@@ -14,6 +14,20 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.5.1 — 2026-06-11
+
+**Hands-free refresh.** New `skills/dashboard/schedule.sh` sets up (and removes)
+scheduled auto-refresh in one command — launchd LaunchAgent on macOS, tagged
+crontab on Linux. Defaults to weekdays 08:00 + 13:00 (`--times` to change), runs
+the same headless refresh `/dashboard` uses, logs to
+`~/.claude/dashboard-refresh.log`, and `status` shows the schedule + last log
+lines. Optional `--serve` runs a localhost-only HTTP server for the dashboard
+folder so the open tab auto-reloads (Chrome blocks the reload poller on `file://`
+pages). `/dashboard-setup` now offers this at the end of onboarding, and the
+README's hand-edit-a-plist instructions are replaced with the one-liner.
+
+---
+
 ## v0.5.0 — 2026-06-11
 
 **MCP-only release.** The plugin now works with the MCP connectors you already
