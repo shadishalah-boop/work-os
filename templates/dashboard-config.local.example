@@ -40,6 +40,15 @@
     "highSignalChannels": ["#incident-*", "#proj-*", "#leadership"]
   },
 
+  "mcp": {
+    "_README": "Server names of your MCP connectors, as shown by /mcp. Defaults below match the standard managed connectors — only change these if yours are named differently (the agents also fall back to a capability search).",
+    "calendar": "Google_Calendar",
+    "gmail": "Gmail",
+    "slack": "Slack",
+    "drive": "Google_Drive",
+    "granola": "Granola"
+  },
+
   "dashboard": {
     "workstreams": [
       "Pricing v3",
@@ -50,10 +59,11 @@
     "classificationKeywords": ["pricing", "onboarding", "SSO", "brand", "Q2", "strategy"],
 
     "okrs": [
-      { "id": "k1", "name": "Pricing v3 — ship by May 6", "pct": 40, "trend": "on-pace" },
-      { "id": "k2", "name": "Onboarding v2 — 100% rollout", "pct": 90, "trend": "on-pace" },
-      { "id": "k3", "name": "Enterprise SSO — design review",       "pct": 25, "trend": "behind" }
+      { "id": "k1", "name": "Pricing v3 — ship by May 6",     "pct": 40, "trend": "on-pace", "short": "Pri", "keywords": ["pricing", "tier", "bundle"] },
+      { "id": "k2", "name": "Onboarding v2 — 100% rollout",   "pct": 90, "trend": "on-pace", "short": "Onb", "keywords": ["onboarding", "activation"] },
+      { "id": "k3", "name": "Enterprise SSO — design review", "pct": 25, "trend": "behind",  "short": "SSO", "keywords": ["sso", "enterprise", "auth"] }
     ],
+    "_okrs_README": "okrs is optional (empty array = OKR section shows a setup hint). Per OKR: short = 2-4 char pill label (default K1, K2, …); keywords = lowercase substrings that auto-suggest tagging matching tasks/decisions to this OKR (omit for manual tagging only).",
 
     "pins": [
       { "id": "pn1", "label": "Q2 OKRs sheet",   "sub": "Sheets",       "letter": "O", "bg": "var(--teal-100)",   "href": "https://docs.google.com/spreadsheets/d/REPLACE/edit" },

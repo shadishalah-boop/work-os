@@ -48,14 +48,30 @@ cd "$WORKDIR" 2>/dev/null || cd /tmp
 # The headless prompt references its sibling scripts via {{SKILL_DIR}}; substitute
 # the resolved absolute path so the subprocess can find prep.sh / wait-and-merge.sh
 # regardless of where the plugin is installed.
-sed "s|{{SKILL_DIR}}|$SCRIPT_DIR|g" "$PROMPT_FILE" \
+#
+# --model sonnet: the orchestration is mechanical (run script, fan out, relay one
+# line) — pinning it keeps refreshes fast and cheap regardless of the user's
+# default model. Sub-agents still use their own frontmatter models.
+OUT=$(sed "s|{{SKILL_DIR}}|$SCRIPT_DIR|g" "$PROMPT_FILE" \
   | claude -p \
+      --model sonnet \
       --permission-mode bypassPermissions \
-      --no-session-persistence
+      --no-session-persistence 2>&1)
 status=$?
 
 if [ -n "${WORKDIR:-}" ] && [ "$WORKDIR" != "/tmp" ]; then
   rm -rf "$WORKDIR" 2>/dev/null || true
 fi
 
+if [ "$status" -ne 0 ] && echo "$OUT" | grep -qi "bypass"; then
+  echo "refresh-headless: your Claude Code settings do not allow bypassPermissions" >&2
+  echo "(often disabled by org-managed settings). The dashboard's zero-prompt refresh" >&2
+  echo "needs it. Ask your admin about 'disableBypassPermissionsMode', or run the" >&2
+  echo "refresh interactively and approve the prompts." >&2
+  echo "--- original error: ---" >&2
+  echo "$OUT" >&2
+  exit "$status"
+fi
+
+echo "$OUT"
 exit "$status"

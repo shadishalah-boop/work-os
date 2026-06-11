@@ -11,17 +11,15 @@ First-time setup wizard. Gathers the user's identity, team, OKRs, and pins; writ
 
 ## Step 0 — locate the plugin
 
-The plugin root is where this SKILL.md lives minus `skills/dashboard-setup/`. Resolve it once:
+Use `${CLAUDE_PLUGIN_ROOT}` — Claude Code sets it to this plugin's install root for
+every Bash call made from this skill. Resolve it once and store as `$PLUGIN_DIR`:
 
 ```bash
-PLUGIN_DIR="$(dirname "$(dirname "$(dirname "$0")")")"  # if invoked as a script
+echo "${CLAUDE_PLUGIN_ROOT}"
 ```
 
-In practice, use the Claude Code plugin path. Common locations:
-- `~/.claude/plugins/work-dashboard/`
-- The path shown when the user ran `/plugin install`.
-
-If unsure, ask the user to run `claude plugin info work-dashboard` and paste back the path. Store as `$PLUGIN_DIR`.
+If it's somehow empty, fall back to `claude plugin list --json` and find the
+`work-os` entry's install path. Do NOT guess paths or ask the user to find it.
 
 ## Step 1 — check for existing config
 
@@ -85,16 +83,29 @@ Save as `team.attention`.
 If user said `no`: set `team.people = []` and `team.attention = ""`.
 If `attention-only`: only ask the attention question.
 
-## Step 4 — optional OKRs
+## Step 4 — optional OKRs (default: skip)
 
 Ask:
 
-> *"Want to add your top OKRs now? You can add up to 3 — each with a name, current % done, and trend (on-pace / behind / ahead). Or say 'skip' and add later.*
+> *"Want to add your OKRs now? Totally fine to skip — the dashboard shows a hint
+> where they'd go, and you can add them anytime later just by telling Claude Code
+> 'add my OKRs to the dashboard'.*
 >
-> *Paste each OKR as one line: `name | pct | trend`. Example:*
-> *`Launch Q3 campaign | 40 | on-pace`"*
+> *If yes, just tell me about them in plain words (or paste them from wherever they
+> live) — I'll structure them."*
 
-Parse into `dashboard.okrs`. If `skip`, set to empty array.
+If the user shares OKRs in any form, structure each into:
+- `id` — `k1`, `k2`, … in order
+- `name` — short name incl. the target (≤60 chars)
+- `pct` — current % complete (ask if not inferable; 0 if brand new)
+- `trend` — `on-pace | behind | ahead` (ask if not inferable)
+- `short` — a 2-4 char pill label you derive from the name (confirm with the user)
+- `keywords` — 4-8 lowercase substrings you derive from the OKR's domain. These
+  auto-suggest tagging matching tasks/decisions to the OKR on the dashboard.
+  Show the user your keyword guesses and let them add/remove.
+
+Any number of OKRs is supported (3 is typical). If `skip`, set `dashboard.okrs` to
+an empty array.
 
 ## Step 5 — pins (links on the right rail)
 
@@ -145,6 +156,13 @@ Once all fields are gathered, build the full config object. Schema (copy exactly
     "team": { "attention": "...", "people": [...] }
   },
   "slack": { "workspace": "...", "userId": "", "highSignalChannels": [] },
+  "mcp": {
+    "calendar": "Google_Calendar",
+    "gmail": "Gmail",
+    "slack": "Slack",
+    "drive": "Google_Drive",
+    "granola": "Granola"
+  },
   "dashboard": {
     "workstreams": [],
     "classificationKeywords": [],
@@ -161,48 +179,76 @@ Actions:
 1. Write `~/.claude/dashboard-config.local` with the JSON (pretty-printed, 2-space indent).
 2. `mkdir -p` the `dashboardDir` and `dataCacheDir`.
 3. Copy the plugin's static bundle: `cp -R "$PLUGIN_DIR/public/." "$dashboardDir/"`.
-4. Create `~/.claude/dashboard-filters.local` if it doesn't exist with the content of `$PLUGIN_DIR/templates/dashboard-filters.local.example`.
+4. Stamp the bundle version so refresh-time auto-sync knows what's installed:
+   read `version` from `$PLUGIN_DIR/.claude-plugin/plugin.json` and write it to
+   `$dashboardDir/.bundle-version`.
+5. Create `~/.claude/dashboard-filters.local` if it doesn't exist with the content of `$PLUGIN_DIR/templates/dashboard-filters.local.example`.
 
-## Step 8 — MCP server status
+## Step 8 — verify the user's MCP connectors (live check, no static table)
 
-Print a per-server status table. The plugin bundles `.mcp.json` at its root so the 5 servers auto-register, but each needs per-user auth:
+The plugin bundles **no MCP servers** — the dashboard uses the connectors the user
+already has (at most companies these are the standard managed connectors:
+**Google Calendar, Gmail, Slack, Google Drive, Granola**).
+
+Verify each of the 5 capabilities live:
+
+1. For each source, check whether its tools are available in THIS session. Try the
+   default names first (`mcp__Google_Calendar__list_events`, `mcp__Gmail__search_threads`,
+   `mcp__Slack__slack_search_public_and_private`, `mcp__Google_Drive__list_recent_files`,
+   `mcp__Granola__list_meetings`). If a default name is missing, use **ToolSearch** with a
+   capability query (e.g. `"calendar list events"`, `"slack search messages"`) to find
+   what that user's server is actually called.
+2. When a source resolves under a **non-default server name**, record the actual server
+   name in the config's `mcp` section (e.g. `"calendar": "gcal"`) so every refresh tells
+   the agents the right name. Leave defaults for sources that match.
+3. Print a live status table, for example:
 
 ```
-Your MCP servers (5 of them — all needed for the full dashboard):
+Your data sources:
 
-  ┌──────────┬────────────────────────────────────────────────────────────┐
-  │ Server   │ Next step                                                  │
-  ├──────────┼────────────────────────────────────────────────────────────┤
-  │ calendar │ Needs Google Cloud OAuth credentials.json.                 │
-  │          │ Docs: https://github.com/nspady/google-calendar-mcp#setup  │
-  │ gmail    │ Auto-OAuth. On first `/dashboard`, a browser tab opens.    │
-  │ slack    │ Needs SLACK_BOT_TOKEN (xoxb-…) + SLACK_TEAM_ID.            │
-  │          │ Create at: https://api.slack.com/apps                       │
-  │ drive    │ Auto-OAuth. Same flow as Gmail, first run only.            │
-  │ granola  │ Just needs the Granola desktop app running locally.        │
-  └──────────┴────────────────────────────────────────────────────────────┘
-
-If a server fails at dashboard refresh, its data section will show "source unavailable" — the rest of the dashboard still renders. You can set up MCPs incrementally.
+  ✓ Calendar   (Google_Calendar)
+  ✓ Gmail      (Gmail)
+  ✗ Slack      — no Slack MCP found in this session
+  ✓ Drive      (Google_Drive)
+  ✓ Granola    (Granola)
 ```
 
-If the user wants guided setup for a specific MCP, offer to open its README in the browser and paste a sample `.mcp.json` snippet inline.
+4. For every ✗, tell the user exactly how to fix it: open `/mcp` to see configured
+   servers, and connect the missing connector (at Preply: the standard company
+   connectors for Slack / Gmail / Google Calendar / Google Drive / Granola — same ones
+   used in claude.ai). Then they can re-run `/dashboard-setup` to re-verify, or just run
+   `/dashboard` — a missing source only blanks its own modules.
 
-## Step 9 — final message
+Close with: "If a server fails at refresh time, its section shows 'source unavailable' —
+the rest of the dashboard still renders. You can add sources incrementally."
 
-Print exactly:
+## Step 9 — open the dashboard + offer the first refresh
+
+1. Open the dashboard in the user's browser so success is immediate, not homework:
+   `open "<dashboardDir>/Work Dashboard.html"` (macOS) or
+   `xdg-open "<dashboardDir>/Work Dashboard.html"` (Linux). If the open command
+   fails, just print the path. The tab will show the labeled **sample data**
+   banner until the first refresh — tell the user that's expected.
+
+2. Print:
 
 ```
 Setup complete.
 
 Your config: ~/.claude/dashboard-config.local
-Dashboard output: <dashboardDir>/Work Dashboard.html
-Open it once now so the tab stays ready.
+Dashboard: <dashboardDir>/Work Dashboard.html  (just opened — keep the tab pinned)
+The tab shows sample data until the first refresh.
 
-Run /dashboard anytime to refresh with live data from the 5 MCPs.
 Edit ~/.claude/dashboard-config.local to update your team / OKRs / pins later.
 
 — welcome to your Work Dashboard, <firstName>.
 ```
+
+3. Then ask: *"Want me to run your first refresh now? Takes ~1-2 minutes and fills
+   the dashboard with your real data."* If yes, run the refresh exactly the way the
+   `dashboard` skill does — a single Bash call to
+   `${CLAUDE_PLUGIN_ROOT}/skills/dashboard/refresh-headless.sh` (timeout 480000) —
+   and relay its one-line output. Do NOT orchestrate agents yourself.
 
 ## Rules
 
@@ -211,7 +257,7 @@ Edit ~/.claude/dashboard-config.local to update your team / OKRs / pins later.
 - **Always back up** an existing config before overwriting. Never silent-destroy user data.
 - **Validate IANA timezone** against `Intl.DateTimeFormat().resolvedOptions().timeZone`-style names. If the user types a vague "CET" or "Pacific time", offer the canonical name (e.g. "Europe/Madrid", "America/Los_Angeles").
 - **Timezone default**: if the user says "use my system timezone", run `date +%Z` for display and check `/etc/localtime` for the IANA name.
-- **Don't call the 6 agents from this skill.** Setup only. The user explicitly runs `/dashboard` after.
+- **Don't orchestrate the 6 agents from this skill.** The only refresh this skill may trigger is the single `refresh-headless.sh` call in Step 9, with the user's consent.
 - **If the user aborts mid-setup**, discard any partial state — don't write a half-filled config.
 - **Currency / language**: the dashboard is English-only today; don't offer localization options.
 

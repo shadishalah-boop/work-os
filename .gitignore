@@ -11,6 +11,9 @@
 *.swo
 *~
 
+# Python bytecode
+__pycache__/
+
 # Node (if anyone ever adds a toolchain)
 node_modules/
 npm-debug.log*
@@ -27,6 +30,9 @@ dashboard-filters.local
 # Build artifacts (none yet — plugin ships pre-built)
 dist/
 build/
+
+# Runtime logs from bundled MCP servers (e.g. google-calendar-mcp writes ./logs/)
+logs/
 
 # Claude Code session junk
 .claude/settings.local.json

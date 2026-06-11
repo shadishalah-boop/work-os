@@ -4,7 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>Work dashboard</title>
-<link rel="icon" type="image/svg+xml" href="ds/assets/favicon-s.svg"/>
+<link rel="icon" type="image/svg+xml" href="ds/assets/favicon.svg"/>
 <link rel="stylesheet" href="ds/colors_and_type.css"/>
 <link rel="stylesheet" href="ds/layout-tokens.css"/>
 <link rel="stylesheet" href="ds/components/button.css"/>
@@ -19,6 +19,7 @@
 <link rel="stylesheet" href="ds/components/divider.css"/>
 <link rel="stylesheet" href="dashboard.css?v=14"/>
 <link rel="stylesheet" href="dashboard-d.css?v=18"/>
+<link rel="stylesheet" href="custom.css"/>
 <style>
   html, body { margin: 0; padding: 0; background: var(--bg-page); }
   * { box-sizing: border-box; }
@@ -43,14 +44,40 @@
 <script src="helper-client.jsx?v=4"></script>
 
 <!-- App -->
-<script type="text/babel" src="data.jsx"></script>
+<script type="text/babel" src="data.jsx?v=2"></script>
 <script type="text/babel" src="data-override.jsx?v=29"></script>
 <script type="text/babel" src="drive-index.jsx?v=10"></script>
-<script type="text/babel" src="modules-a.jsx?v=18"></script>
-<script type="text/babel" src="modules-b.jsx?v=24"></script>
-<script type="text/babel" src="app.jsx?v=44"></script>
+<script type="text/babel" src="modules-a.jsx?v=19"></script>
+<script type="text/babel" src="modules-b.jsx?v=25"></script>
+<script type="text/babel" src="app.jsx?v=45"></script>
 
 <script>
+// =============================================================================
+// Sample-data banner (v0.5.0): until the first /dashboard refresh rewrites
+// data-override.jsx, the dashboard renders the bundled demo dataset ("Alex").
+// Make that unmistakable so a fresh install never looks broken or like someone
+// else's data. The babel scripts load async, so poll briefly for window.SEED.
+// =============================================================================
+(function demoBanner() {
+  let tries = 0;
+  const t = setInterval(() => {
+    tries += 1;
+    if (!window.SEED && tries < 100) return;       // keep waiting (max ~20s)
+    clearInterval(t);
+    if (!window.SEED || window.SEED.demo !== true) return;
+    const b = document.createElement('div');
+    b.id = 'demo-banner';
+    b.style.cssText = 'position:fixed;bottom:12px;left:50%;transform:translateX(-50%);z-index:9999;background:#121117;color:#fff;padding:9px 16px;border-radius:8px;font:13px/1.4 system-ui,sans-serif;box-shadow:0 4px 16px rgba(0,0,0,.25);display:flex;gap:10px;align-items:center';
+    b.innerHTML = '<span>👋 You\'re looking at <b>sample data</b> — run <code style="background:rgba(255,255,255,.15);padding:1px 6px;border-radius:4px">/dashboard</code> in Claude Code to load yours.</span>';
+    const x = document.createElement('button');
+    x.textContent = '✕';
+    x.style.cssText = 'background:none;border:none;color:#fff;opacity:.7;cursor:pointer;font-size:13px;padding:0';
+    x.onclick = () => b.remove();
+    b.appendChild(x);
+    document.body.appendChild(b);
+  }, 200);
+})();
+
 // =============================================================================
 // Auto-reload (v0.4.0): poll Work Dashboard.html every 30s for cache-version
 // bumps. When the dashboard skill rewrites data-override.jsx or drive-index.jsx,

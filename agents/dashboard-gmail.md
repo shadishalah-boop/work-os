@@ -1,7 +1,7 @@
 ---
 name: dashboard-gmail
 description: Fetches today's actionable Gmail threads for the Work Dashboard's Inbox, Decisions, and Gmail-sourced Tasks sections. Extracts threads where the user is directly addressed, has an explicit ask awaiting their response, or has been waiting on someone else for >2 days. Invoke from the dashboard skill — not directly useful standalone.
-tools: mcp__gmail__search_threads, mcp__gmail__get_thread, ToolSearch, Write
+tools: mcp__Gmail__search_threads, mcp__Gmail__get_thread, mcp__gmail__search_threads, mcp__gmail__get_thread, ToolSearch, Write
 ---
 
 # Dashboard — Gmail agent
@@ -15,14 +15,15 @@ Identity (the orchestrator passes the live values; treat these as the shapes to 
 
 ## What you do
 
-**0. Resolve your Gmail tools — their names can differ by environment.** This plugin
-references the Gmail MCP server as **`gmail`** (see `.mcp.json.example`), so the tools are
-normally **`mcp__gmail__search_threads`** / **`mcp__gmail__get_thread`**. A differently-named
-server, or the headless refresh subprocess, may expose them under other names. Resolve robustly:
-  - First try `mcp__gmail__search_threads` / `…__get_thread` directly.
-  - If unavailable, call **`ToolSearch`** with `query: "gmail search threads"` (or
-    `query: "select:mcp__gmail__search_threads,mcp__gmail__get_thread"` if you know the exact
-    names) to load the schemas, then use them.
+**0. Resolve your Gmail tools — their names can differ by environment.** Your kickoff
+prompt names the Gmail MCP server (default **`Gmail`** — the standard managed connector),
+so the tools are normally **`mcp__Gmail__search_threads`** / **`mcp__Gmail__get_thread`**.
+Resolve robustly:
+  - First try `mcp__<server>__search_threads` / `…__get_thread` with the server name from
+    your kickoff prompt.
+  - Then try the legacy names `mcp__gmail__search_threads` / `…__get_thread`.
+  - If neither is available, call **`ToolSearch`** with `query: "gmail search threads"` to
+    load the schemas, then use them.
   - Use whatever thread search/read tools ToolSearch surfaces.
   Only write `sourceOk:false` (see Rules) after you have genuinely tried ToolSearch and
   found no Gmail tool. **Never fabricate threads** when the tools are missing — write empty
@@ -96,7 +97,7 @@ Write the result to `<dataCacheDir>/gmail.json` using the **Write tool**. The or
 ### Field reference
 - `tag` (inbox) — `decision | reply | mention`. Never `ignore` (filtered out).
 - `channel` (inbox) — inferred from thread content: `Drive | Calendar | Cold outreach | Internal | External`. Keep it short.
-- `at` (inbox) — `HH:MM` Europe/Madrid of the most recent message in the thread.
+- `at` (inbox) — `HH:MM` (user's timezone from the kickoff prompt) of the most recent message in the thread.
 - `preview` — one-line plain-English summary of what's being asked. Never paste the raw email body; synthesize the ask.
 - `href` (decisions) — `https://mail.google.com/mail/u/0/#search/from%3A(First+Last)` URL-encoded. Lets the user jump to the thread.
 - `p` (tasks) — 1 if senior stakeholder or deadline this week; 2 otherwise; 3 if low-stakes.

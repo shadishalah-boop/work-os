@@ -4,6 +4,10 @@
 // =============================================================================
 
 window.SEED = {
+  // Sample-data marker — the generated data-override.jsx sets this to false.
+  // While true, the dashboard shows the "Sample data" banner.
+  demo: true,
+
   user: { name: 'Alex', role: 'Senior PM', tz: 'Europe/Kyiv' },
 
   // Today: April 23, 2026 — Thursday

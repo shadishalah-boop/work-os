@@ -14,6 +14,111 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.5.0 — 2026-06-11
+
+**MCP-only release.** The plugin now works with the MCP connectors you already
+have — no bundled servers, no custom Slack app, no Google Cloud OAuth, no macOS
+Keychain. This makes a fresh install on a colleague's machine zero-auth-setup.
+
+### Bundled `.mcp.json` removed (it was breaking installs)
+
+- The bundled community npx servers are gone. One of them (`granola-mcp`) was
+  **unpublished from npm** and could never start on a fresh install; the calendar
+  server required a per-user Google Cloud OAuth `credentials.json` that stopped
+  most installs cold. `.mcp.json` and `.mcp.json.example` are deleted.
+- Agents now default to the standard managed connector names
+  (`Google_Calendar`, `Gmail`, `Slack`, `Google_Drive`, `Granola`), keep the old
+  lowercase names as a fallback, and fall back further to a ToolSearch capability
+  lookup. A new **`mcp` config section** (see the example template) lets you map
+  any source to a differently-named server.
+
+### Slack agent → Slack MCP (Keychain + curl removed)
+
+- `dashboard-slack` now runs its own searches through the Slack MCP
+  (`slack_search_public_and_private`) instead of `slack-fetch.sh` + an `xoxp-`
+  user token in the macOS Keychain. `slack-fetch.sh` is deleted, `prep.sh` no
+  longer pre-fetches Slack, and the agent works on any OS with zero per-user
+  Slack setup. Output schema unchanged — `build-overrides.py` untouched.
+- Existing users can delete the old token:
+  `security delete-generic-password -s slack_token`.
+
+### Setup wizard verifies connectors live
+
+- `/dashboard-setup` Step 8 no longer prints a static (and stale) auth table —
+  it checks each of the 5 sources against the tools actually available in the
+  session, records non-default server names into the config's `mcp` section,
+  and prints a live ✓/✗ table with exact fix-it steps for anything missing.
+- Fixed stale `work-dashboard` plugin-name references in the setup skill.
+
+### Timezone unhardcoded
+
+- `Europe/Madrid` was baked into 5 of the 6 agents. The orchestrator now passes
+  `user.timezone` from the config (`TZNAME`) in every kickoff prompt, plus
+  absolute Slack search dates (`SINCE_WINDOW`/`SINCE_1D`/`SINCE_30D`) computed by
+  `prep.sh`. The wellness agent's hardcoded `focusTarget: 4` now reads
+  `dashboard.focusTarget` from config too.
+
+### Sample data is now labeled (bundle scrub, round 2)
+
+- **Demo banner** — until the first `/dashboard` refresh, the dashboard renders
+  the bundled "Alex" sample dataset. It now shows a dismissible banner ("You're
+  looking at sample data — run /dashboard to load yours"); the generated
+  `data-override.jsx` switches it off. No more "whose data is this?" on a fresh
+  install.
+- Removed the last real colleague names from code comments and the `?prep-test=1`
+  debug helper; the greeting fallback and the legacy sidebar logo now derive from
+  the configured user name instead of hardcoded "Alex" / "S"; favicon is a generic
+  "W" mark (`favicon.svg`); the Blockers module's fake fallback rows are replaced
+  with a real empty state.
+
+### OKRs — config-driven and easier to enter
+
+- The OKR tagging system (pill labels, colors, keyword auto-suggest, review-notes
+  digest) no longer assumes exactly 3 OKRs with ids `k1/k2/k3`, and the
+  maintainer's personal keyword sets are gone from the code. Any number of OKRs;
+  per-OKR optional `short` (pill label) and `keywords` (auto-tagging) fields in
+  the config — see the example template.
+- `/dashboard-setup` OKR step is now skip-by-default and conversational: describe
+  your OKRs in plain words and the wizard structures them (id/pct/trend/short/
+  keywords) for you. With no OKRs configured, the dashboard shows a hint where
+  they'd go instead of an empty section.
+
+### Install hardening
+
+- **Bundle auto-sync** — the refresh now copies the static bundle when it's
+  missing (manual installs used to get data files with no HTML) and re-syncs it
+  when the plugin version changes (upgrades used to strand users on old JSX
+  forever). Generated data and the new **`custom.css`** (your visual overrides,
+  loaded last, never overwritten) are preserved.
+- **Linux fix (critical)** — the `stat -f || stat -c` mtime pattern returned
+  filesystem info instead of failing on GNU stat, crashing `prep.sh` on Linux
+  whenever a prior refresh existed. GNU order now tried first.
+- **Self-diagnosing refresh line** — failed agents now report *why* (the JSON's
+  `error` field), and a typo'd `dashboard-config.local` is called out loudly
+  instead of silently using defaults.
+- **Cheaper, friendlier headless run** — the orchestrator subprocess is pinned to
+  `--model sonnet`, and an org-disabled `bypassPermissions` now produces a human
+  explanation instead of raw stderr.
+- **Docs/setup truthfulness** — removed nonexistent `claude plugin root` /
+  `claude plugin info` commands (setup uses `${CLAUDE_PLUGIN_ROOT}`); setup now
+  opens the dashboard at the end and offers to run the first refresh; README
+  leads with a 3-step colleague quickstart; the Slack Ask panel and meeting
+  modal no longer instruct token/OAuth setup for optional features.
+
+### Update path for users on v0.4.x
+
+```
+/plugin update work-os
+/dashboard
+```
+
+The refresh re-syncs the bundle automatically. Make sure the five standard
+connectors show in `/mcp`, optionally add the `mcp` section to
+`~/.claude/dashboard-config.local` (only needed for non-default server names),
+and delete the old Slack Keychain entry.
+
+---
+
 ## v0.4.2 — 2026-05-29
 
 **Static bundle scrub.** Removes the last personal data from the shipped `public/`
@@ -203,7 +308,7 @@ personal data in the plugin).
   Surfaces a one-line "Algo suggests: <task>" hint below the Top-3 if any
   open item beats the lowest-scoring Top-3 entry.
 - **Commitments tracker** — new draggable module that surfaces every owed
-  task/decision grouped by recipient (Jose, Christopher, Bertrand, etc.),
+  task/decision grouped by recipient (each stakeholder you owe something to),
   sorted by aging within each stakeholder. Click a recipient row → opens
   the Stakeholder Lens for them.
 - **Quick Capture** — silent global hotkey (⌃⌘T by default) to add a task

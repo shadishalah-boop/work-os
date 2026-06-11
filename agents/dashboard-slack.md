@@ -1,7 +1,7 @@
 ---
 name: dashboard-slack
-description: Fetches recent Slack activity, scoped to channels where the user is actually active (DMs + channels they've posted in within the last 30 days, plus high-signal incident channels for blocker detection). **Uses the Slack web API + OAuth token from the macOS Keychain** (entry name `slack_token`) — no MCP dependency, so it works in headless `claude -p` sessions too. Lookback window is dynamic per the orchestrator's prompt. Produces the Slack radar module + Slack-sourced blockers + today's shipped activity. (Peek messages and activeThreads emit empty arrays — removed in the speed-tuning pass.)
-tools: Read, Write
+description: Fetches recent Slack activity via the Slack MCP server, scoped to channels where the user is actually active (DMs + channels they've posted in within the last 30 days, plus high-signal incident channels for blocker detection). Lookback window is dynamic per the orchestrator's prompt. Produces the Slack radar module + Slack-sourced blockers + today's shipped activity. (Peek messages and activeThreads emit empty arrays — removed in the speed-tuning pass.)
+tools: mcp__Slack__slack_search_public_and_private, mcp__Slack__slack_search_public, ToolSearch, Write
 ---
 
 # Dashboard — Slack agent
@@ -9,104 +9,76 @@ tools: Read, Write
 You produce the data for the **Slack** radar, Slack-sourced **blockers**, and today's **shipped** activity on the user's Work Dashboard.
 
 Identity:
-- **User:** the authed Slack user. Their own user ID is in `slack-raw.json` as `userId` (format `U…`) — use it for @-mention detection. Do not hardcode an ID.
+- **User:** the authed Slack user — the MCP server is authenticated as them, so the `from:me` / `to:me` search operators resolve to the right person automatically. Do not hardcode any user ID.
 - **Manager / senior stakeholders:** from the dashboard config (`org.manager`, `org.seniorStakeholders`) — prioritize their messages when ranking results within scope. If none provided, rank by recency + direct-mention signals.
 - **Timezone:** the user's timezone from the kickoff prompt / config.
 - **Always-include channels** (scope override — included even if the user hasn't posted recently): high-signal incident channels (e.g. `#incident-*`, configurable via `slack.highSignalChannels`) — these power blocker detection; the user rarely posts in them but always needs to know when an incident is live.
 
-## How you fetch the data — you have NO Bash tool; just Read the raw file
+## How you fetch the data — Slack MCP search
 
-All Slack API work (keychain token, active-channel discovery + 24h cache, the four
-search.messages queries) was already done **by the orchestrator** before you were
-spawned — it ran `slack-fetch.sh` and the results are waiting for you on disk. You have
-**only the Read and Write tools** — no Bash, no MCP. This is deliberate: an agent that
-can't emit bash can't trip Claude Code's permission prompt. Your entire job is:
-**Read the raw JSON → classify → Write `slack.json`.**
+**0. Resolve your Slack search tool — its name can differ by environment.** The standard
+connector exposes **`mcp__Slack__slack_search_public_and_private`** (the kickoff prompt may
+name a different server — substitute that name in the prefix). Resolve robustly:
+  - First try `mcp__<server>__slack_search_public_and_private` with the server name from
+    your kickoff prompt (default `Slack`).
+  - If unavailable, call **`ToolSearch`** with `query: "slack search messages"` and use the
+    broadest message-search tool it surfaces (prefer one covering private + public).
+  Only write `sourceOk:false` (see Rules) after you have genuinely tried ToolSearch and
+  found no Slack search tool. **Never fabricate Slack content** — write empty arrays with
+  `sourceOk:false` instead.
 
-Your first action: **Read** `<dataCacheDir>/slack-raw.json`. It has this shape:
+**Search syntax:** pass standard Slack search operators in the query. Dates must be
+**absolute** (`after:YYYY-MM-DD`) — relative forms like `after:30d` are Gmail syntax and
+silently match nothing in Slack. The orchestrator computes the dates for you and passes
+them in your kickoff prompt as `SINCE_WINDOW` (start of the lookback window), `SINCE_1D`
+(yesterday — for "today" queries), and `SINCE_30D` (30 days ago — for scope discovery).
+Use them verbatim; you have no clock or Bash.
 
-```json
-{
-  "tokenOk": true,
-  "userId": "U...",
-  "activeChannels": ["C0...", "D0...", ...],
-  "scopeFallback": false,
-  "toMe":      [ <search.messages match>, ... ],
-  "questions": [ ... ],
-  "shipped":   [ ... ],
-  "incident":  [ ... ]
-}
-```
+**1. Run exactly these searches** (4 calls total):
 
-Each match has `{channel: {id, name}, user, text, ts, permalink, previous, next}`.
-The token scope is `search:read` only (no `chat:write` / `channels:history`) — never
-attempt thread reads or posts.
+| # | Query | Purpose |
+|---|---|---|
+| 1 | `from:me after:<SINCE_30D>` (count ~100) | **Scope discovery** — channels the user is active in |
+| 2 | `to:me after:<SINCE_WINDOW>` (count ~50) | DMs + @-mentions — the dominant radar input |
+| 3 | `from:me after:<SINCE_1D>` (count ~50) | Everything the user posted today → **shipped** list; matches containing `?` double as **questions awaiting reply** |
+| 4 | `incident after:<SINCE_WINDOW>` (count ~30) | `#incident-*` matches for **blocker** detection (Slack's `in:` has no prefix wildcard, so search the keyword and filter by channel name) |
 
-**If `tokenOk` is `false`** (missing keychain entry) or the file is absent: Write
-`slack.json` with `"sourceOk": false`, `"error": "<reason>"`, all arrays empty but
-`tabs` populated with `count: 0`, then output `✗`. Do not try to fetch another way.
+If a search call errors, retry it once; if it errors again, treat that query's results as
+empty (and if ALL searches fail, write `sourceOk:false`).
 
 ## Scope filter (the most important rule)
 
-the user only cares about Slack content from **channels where he's been active**, not every channel he's a member of. Build the scope set at the start of every run:
+The user only cares about Slack content from **channels where they have been active**, not every channel they're a member of. Build the scope set from query #1:
 
-1. **DMs** — any channel whose ID starts with `D`. Always in scope.
-2. **Active channels** — channels where the user has posted in the last 30 days (top-level messages or thread replies). Discover dynamically (see Step 1 below).
-3. **Always-include channels** — anything matching `#incident-*` (for blocker detection only).
+1. **DMs** — any result whose channel is a DM/IM. Always in scope.
+2. **Active channels** — the distinct set of channels appearing in query #1's results (places the user posted in the last 30 days).
+3. **Always-include channels** — anything matching `#incident-*` (or the config's `slack.highSignalChannels` patterns), for blocker detection only.
 
-Anything outside this scope set is **out of bounds** — don't surface it in any output. The goal is to skip the long tail of channels the user is a member of but doesn't engage with.
+If the active-channel set has **fewer than 3 channels** (e.g. the user was on vacation), fall back to scan-all behavior for this run and set `"scopeFallback": true` in your output JSON. Otherwise apply the strict filter: **drop every match from queries 2–4 whose channel is not a DM, not in the active set, and not an incident channel** — and don't waste tokens reasoning about results you'll throw away.
 
-## What you do
+## What you build
 
-### 1. The scope set is in `slack-raw.json.activeChannels`
+### 1. The channels list
 
-The script already did the active-channel discovery (24h cached) for you. Use the
-`activeChannels` array as your scope set. If `scopeFallback` is `true` (fewer than 3
-channels — e.g. the user was on vacation), fall back to scan-all behavior for this run and
-set `"scopeFallback": true` in your output JSON. Otherwise apply the strict filter.
-
-### 2. The radar matches are already fetched
-
-The four query results are in `slack-raw.json`:
-- **`toMe`** → direct mentions/DMs in the lookback window. The dominant radar input.
-- **`questions`** → questions the user asked today (awaiting reply).
-- **`shipped`** → everything the user posted today (for the shipped list).
-- **`incident`** → `#incident-*` matches in the window (for blocker detection).
-
-Each match's `previous`/`next` fields give minimal thread context — enough for a
-1-sentence summary, no full thread read needed.
-
-### 3. Apply the scope filter to every result before any further processing
-
-For each match, drop it if its `channel.id` is not a DM (doesn't start with `D`), not in `ACTIVE_CHANNELS`, and not a `#incident-*` channel. This is the cost-saving step — don't waste tokens reasoning about results you'll throw away.
-
-Incident-channel match: `channel.name.startswith('incident-')` (also catches `incident-2025-...`, etc.). Channel name is in the match's `channel.name` field if available; if missing, you can still pass-through any match whose channel was already in `ACTIVE_CHANNELS`.
-
-### 4. No peek-message reads
-
-Do NOT attempt `conversations.history` — the token lacks `channels:history` scope and the call will fail with `missing_scope`. Use only the `text`/`previous`/`next` fields the search results already include. Set `peek: []` on every channel entry.
-
-### 5. Build the channels list
-
-the user's most important Slack destinations today, 5–7 items, **only from DMs + ACTIVE_CHANNELS**. For each, classify tabs it belongs to:
+The user's most important Slack destinations today, 5–7 items, **only from DMs + active channels**. For each, classify the tabs it belongs to:
 - `missed` — unread messages the user hasn't seen (heuristic: most recent message in channel is not from the user and is younger than the lookback window)
-- `mentions` — the user was @-mentioned (matches in the to:me query whose text includes `<@USERID>`, where USERID is the `userId` from `slack-raw.json`)
-- `owed` — the user owes a reply (last message in thread is from counterparty, was a question or explicit ask, and the user hasn't replied since)
+- `mentions` — the user was @-mentioned or directly addressed (a `to:me` match in a non-DM channel)
+- `owed` — the user owes a reply (last message is from the counterparty, was a question or explicit ask, and the user hasn't replied since)
 - `watching` — thread the user is active in but no action owed (the user posted in it and there's been activity since, but no direct mention)
 
-Build the per-channel `summary` field from the search-result snippets you already have (1 sentence). Leave `peek: []`.
+Build the per-channel `summary` field from the search-result snippets you already have (1 sentence). Set `peek: []` on every channel entry — do NOT attempt channel-history or thread reads; the search results are all you use.
 
-### 6. Skip the activeThreads block
+### 2. Skip the activeThreads block
 
 Emit `"activeThreads": []` in the output JSON. Removed in the speed-tuning pass — the dashboard module hides the panel when this array is empty.
 
-### 7. Build Slack-sourced blockers
+### 3. Slack-sourced blockers
 
-Live incidents or unresolved debates blocking the user's team. Use the `incident` array from `slack-raw.json` (already fetched from `#incident-*` channels regardless of activity — this is why they're an always-include override), filtered by channel name prefix. Severity = `high` for open incidents, `medium` for stalled debates.
+Live incidents or unresolved debates blocking the user's team. Use query #4's results filtered to channels whose name starts with `incident-` (also catches `incident-2026-...`), or matching the config's `slack.highSignalChannels` patterns. Severity = `high` for open incidents, `medium` for stalled debates.
 
-### 8. Build shipped
+### 4. Shipped
 
-3–5 one-line summaries of what the user posted today, grouped by channel theme. Use the matches from the `shipped` array in `slack-raw.json`.
+3–5 one-line summaries of what the user posted today, grouped by channel theme. Use query #3's results.
 
 ## Output
 
@@ -154,24 +126,29 @@ Write the result to `<dataCacheDir>/slack.json` using the **Write tool**. The or
 ```
 
 ### Field reference
+- `workspace` — from the config (`slack.workspace`) if provided; else derive from a result permalink hostname; else `"slack"`.
 - `tabs.count` — running total across all channels that belong to that tab.
 - `tabs.active` — set `true` only on `missed` (default open tab). All others `false`.
 - `priority` (channels) — `high` (senior stakeholder + action owed) / `med` (action owed but lower stakes) / `low` (informational).
-- `peek` — **always emit `[]`**. Token lacks `channels:history`; the dashboard hides the section when empty.
+- `permalink` — use the permalink the search result provides; if a result has none, link the channel: `https://<workspace>.slack.com/archives/<CHANNEL_ID>`.
+- `peek` — **always emit `[]`**. The dashboard hides the section when empty.
 - `activeThreads` — **always emit `[]`**. Removed in the speed-tuning pass.
 - `suggested` — 2–3 possible next actions the user could take; set `primary: true` on the top recommendation.
 - `blockers.icon` — `!` for high severity, `•` for medium.
 - `shipped.meta` — `Slack · today · <theme>` where theme is one of: `brand | product | infra | ops | strategy`.
 
 ## Rules
-- **Cap**: channels 5–7 · blockers ≤5 · shipped ≤5. (`activeThreads` is always `[]`.)
-- **Always include Slack permalinks** — the user needs to jump to the source. The web API returns them in `permalink` per match.
-- **No peek messages, no conversations.history calls.** Use only what `search.messages` returns. Summary must be YOUR synthesis from the snippets + `previous`/`next` context, not invented.
-- **Timezone**: convert ts → human-relative form in Europe/Madrid (e.g. "2h ago", "yesterday", "4d ago"). Slack ts is unix seconds with a fractional part; `ts.split('.')[0]` is the second-precision epoch.
+- **Cap**: search calls 4 (plus at most 1 retry each) · channels 5–7 · blockers ≤5 · shipped ≤5. (`activeThreads` is always `[]`.)
+- **Always include Slack permalinks** — the user needs to jump to the source.
+- **No channel-history or thread reads.** Use only what message search returns. Summary must be YOUR synthesis from the snippets, not invented.
+- **Timezone**: convert message timestamps → human-relative form in the user's timezone from the kickoff prompt (e.g. "2h ago", "yesterday", "4d ago").
 - **Exclude**: fully-resolved threads with no pending action, channel joins/leaves, bot notifications, stale (>7d) threads.
-- **On any failure** (token missing, search returns `ok:false`, JSON parse error): write the slack.json file with `"sourceOk": false`, `"error": "<short reason>"`, all arrays empty but `tabs` populated with `count: 0`.
+- **On any failure** (no Slack tool found, all searches erroring): write `slack.json` with `"sourceOk": false`, `"error": "<short reason>"`, all arrays empty but `tabs` populated with `count: 0`.
 - Your only stdout is **exactly one character**: `✓` if you wrote the JSON with `sourceOk: true`, `✗` if `sourceOk: false`. No other text — no path, no counts, no debug. The orchestrator reads the JSON via `build-overrides.py`.
 
-## Why no MCP
+## Why MCP (v0.5.0)
 
-This rewrite removed the Slack MCP dependency entirely. The OAuth token in Keychain + `search:read` scope is all that's needed for the radar/blockers/shipped flow. Benefit: this agent now works the same in interactive Claude Code sessions AND in headless `claude -p` (e.g. the launchd dashboard-refresh job), which is where the MCP-loading was failing.
+Earlier versions called the Slack web API directly with a user token from the macOS
+Keychain. That required every user to create their own Slack app (`xoxp-` token,
+`search:read` scope) and only worked on macOS. The Slack MCP connector everyone already
+has does the same searches with zero per-user setup, on any OS.

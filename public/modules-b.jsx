@@ -135,14 +135,17 @@ function SlackMod({ data }) {
 
           {askState.status==='no-server' && (
             <div style={{fontSize:12, color:'var(--fg-2)', lineHeight:1.5}}>
-              Open a Terminal and run: <code style={{fontFamily:'var(--font-mono)', background:'var(--grey-100)', padding:'1px 5px', borderRadius:3}}>bash ~/.claude/dashboard-server/start.sh</code>
-              <br/>Then paste your Slack user token (xoxp-…) into <code style={{fontFamily:'var(--font-mono)', background:'var(--grey-100)', padding:'1px 5px', borderRadius:3}}>~/.claude/dashboard-server/slack-token.txt</code>
+              In-dashboard Slack search needs the optional local helper service, which isn't
+              bundled with the plugin — no setup required for the rest of the dashboard.
+              <div style={{marginTop:6}}>
+                <button className="btn btn--ghost btn--sm" onClick={()=>searchSlackNative(askState.query)}>Open in Slack search instead</button>
+              </div>
             </div>
           )}
 
           {askState.status==='no-token' && (
             <div style={{fontSize:12, color:'var(--fg-2)', lineHeight:1.5}}>
-              Paste your Slack user token (xoxp-…) into <code style={{fontFamily:'var(--font-mono)', background:'var(--grey-100)', padding:'1px 5px', borderRadius:3}}>~/.claude/dashboard-server/slack-token.txt</code> and ask again.
+              The optional local helper is running but has no Slack token configured.
               <div style={{marginTop:6}}>
                 <button className="btn btn--ghost btn--sm" onClick={()=>searchSlackNative(askState.query)}>Open in Slack search instead</button>
               </div>
@@ -388,8 +391,8 @@ function ProjectsMod({ data, okrs, decisions, okrApi }) {
         </div>
       ))}
       <div className="sub-section-head">
-        Q2 OKRs<span className="bar"/>
-        {okrApi && (
+        OKRs<span className="bar"/>
+        {okrApi && okrs.length > 0 && (
           <button
             className="okr-generate-btn"
             onClick={generateNotes}
@@ -397,6 +400,13 @@ function ProjectsMod({ data, okrs, decisions, okrApi }) {
           >Generate review notes →</button>
         )}
       </div>
+      {okrs.length === 0 && (
+        <div style={{fontSize:13, color:'var(--fg-2)', padding:'8px 2px 4px'}}>
+          No OKRs configured yet. Ask Claude Code to <em>"add my OKRs to the dashboard"</em> or
+          edit <code style={{fontSize:12}}>~/.claude/dashboard-config.local</code> → <code style={{fontSize:12}}>dashboard.okrs</code>,
+          then run <code style={{fontSize:12}}>/dashboard</code>.
+        </div>
+      )}
       {okrs.map(o => {
         const isOpen = !!expanded[o.id];
         const ev = okrApi ? okrApi.collectEvidence(o.id) : { confirmed: [], suggested: [] };
@@ -638,7 +648,7 @@ function CommitmentsMod({ state }) {
     .concat((state.blocked || []).map(t => ({ ...t, _bucket: 'blocked' })))
     .filter(t => !t.done);
 
-  // Detect the AUDIENCE — meta first (more reliable, e.g. "Granola · Jose 1:1"),
+  // Detect the AUDIENCE — meta first (more reliable, e.g. "Granola · Sam 1:1"),
   // then label. Use the same longest-match-wins ordering as TextWithPeople.
   const sortedKnown = [...known].sort((a, b) => b.match.length - a.match.length);
   const detect = (text) => {
@@ -721,16 +731,16 @@ function CommitmentsMod({ state }) {
 
 // --- Blockers Module ---
 function BlockersMod({ data }) {
-  const rows = data || [
-    { sev: 'high',   title: 'Pricing v3 A/B — 9% conversion dip in tier 2',   meta: 'Trending wrong · needs decision today',  icon: '!' },
-    { sev: 'high',   title: 'Legal waiting on data retention clause edits',    meta: 'Blocking contract close · overdue 2d',    icon: '!' },
-    { sev: 'medium', title: 'Brand mark refresh — approver OOO',               meta: 'Theo out until Friday · review slips',    icon: '•' },
-    { sev: 'low',    title: 'Enterprise SSO integration tests flaky',          meta: 'Not blocking yet · worth a look',         icon: '·' },
-  ];
+  const rows = data || [];
   return (
     <Module title="Risks & blockers" sub="Stuck, waiting, or trending red"
             icon={<span style={{width:28, height:28, borderRadius:8, background:'var(--red-50)', display:'grid', placeItems:'center'}}><Icon name="error-warning" size={16}/></span>}
             className="blockers-mod">
+      {rows.length === 0 && (
+        <div style={{fontSize:13, color:'var(--fg-2)', padding:'10px 2px'}}>
+          Nothing blocked right now. Blockers from Slack incidents and meeting notes land here after a refresh.
+        </div>
+      )}
       {rows.map((r, i) => (
         <div key={i} className="block-row" data-sev={r.sev}>
           <div className="block-icon">{r.icon}</div>
@@ -1529,11 +1539,11 @@ function AddMeetingModal({ open, onClose, prefillTitle }) {
                     background: hasClient ? 'var(--ok, #2c9c5c)' : 'var(--fg-3)',
                   }}/>
                   <span style={{color: hasClient ? 'var(--fg-1)' : 'var(--fg-3)'}}>
-                    {hasClient ? 'Direct send connected — invites email automatically' : 'Set up direct send to skip the Google Calendar tab'}
+                    {hasClient ? 'Direct send connected — invites email automatically' : 'Invites open a pre-filled Google Calendar tab — works as-is'}
                   </span>
                 </div>
                 <button className="btn btn--ghost btn--sm" onClick={()=>setCfgOpen(o=>!o)}>
-                  {cfgOpen ? 'Hide' : (hasClient ? 'Edit' : 'Set up')}
+                  {cfgOpen ? 'Hide' : (hasClient ? 'Edit' : 'Optional: direct send')}
                 </button>
               </div>
               {cfgOpen && (
@@ -1542,7 +1552,9 @@ function AddMeetingModal({ open, onClose, prefillTitle }) {
                   background:'var(--grey-50)', border:'1px solid var(--border-subtle)',
                 }}>
                   <div style={{fontSize:12, color:'var(--fg-2)', marginBottom:8, lineHeight:1.45}}>
-                    Paste your Google OAuth 2.0 <b>Web</b> Client ID. One-time setup:{' '}
+                    <b>Optional, advanced.</b> Direct send creates the event + emails invitees without
+                    opening a tab, but needs your own Google Cloud OAuth client. Skip this unless the
+                    extra click bothers you. Paste a Google OAuth 2.0 <b>Web</b> Client ID. One-time setup:{' '}
                     <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer"
                        style={{color:'var(--accent)'}}>console.cloud.google.com/apis/credentials</a>
                     {' '}→ Create OAuth Client ID → Web app → add{' '}
