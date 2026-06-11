@@ -85,16 +85,29 @@ Save as `team.attention`.
 If user said `no`: set `team.people = []` and `team.attention = ""`.
 If `attention-only`: only ask the attention question.
 
-## Step 4 — optional OKRs
+## Step 4 — optional OKRs (default: skip)
 
 Ask:
 
-> *"Want to add your top OKRs now? You can add up to 3 — each with a name, current % done, and trend (on-pace / behind / ahead). Or say 'skip' and add later.*
+> *"Want to add your OKRs now? Totally fine to skip — the dashboard shows a hint
+> where they'd go, and you can add them anytime later just by telling Claude Code
+> 'add my OKRs to the dashboard'.*
 >
-> *Paste each OKR as one line: `name | pct | trend`. Example:*
-> *`Launch Q3 campaign | 40 | on-pace`"*
+> *If yes, just tell me about them in plain words (or paste them from wherever they
+> live) — I'll structure them."*
 
-Parse into `dashboard.okrs`. If `skip`, set to empty array.
+If the user shares OKRs in any form, structure each into:
+- `id` — `k1`, `k2`, … in order
+- `name` — short name incl. the target (≤60 chars)
+- `pct` — current % complete (ask if not inferable; 0 if brand new)
+- `trend` — `on-pace | behind | ahead` (ask if not inferable)
+- `short` — a 2-4 char pill label you derive from the name (confirm with the user)
+- `keywords` — 4-8 lowercase substrings you derive from the OKR's domain. These
+  auto-suggest tagging matching tasks/decisions to the OKR on the dashboard.
+  Show the user your keyword guesses and let them add/remove.
+
+Any number of OKRs is supported (3 is typical). If `skip`, set `dashboard.okrs` to
+an empty array.
 
 ## Step 5 — pins (links on the right rail)
 

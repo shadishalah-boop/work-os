@@ -253,6 +253,9 @@ jsx = f"""/* global React, window */
 // =============================================================================
 
 (function () {{
+  // Real data is loaded — turn off the sample-data banner from data.jsx.
+  window.SEED.demo = false;
+
   // --- User identity (from config) --------------------------------------
   window.SEED.user = {js_dump(STATIC_USER)};
   window.SEED.greeting = {js_dump(STATIC_GREETING)};

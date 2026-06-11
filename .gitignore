@@ -11,6 +11,9 @@
 *.swo
 *~
 
+# Python bytecode
+__pycache__/
+
 # Node (if anyone ever adds a toolchain)
 node_modules/
 npm-debug.log*

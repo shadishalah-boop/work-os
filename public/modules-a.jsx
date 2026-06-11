@@ -117,8 +117,10 @@ function scoreTask(t, ctx = {}) {
   // OKR alignment via the tagger API (only counts confirmed tags, not suggestions)
   if (ctx.okrApi && typeof ctx.okrApi.getTag === 'function') {
     const tag = ctx.okrApi.getTag(t.label);
-    if (tag === 'k1')      { score += 15; reasons.push('k1·AI'); }
-    else if (tag)          { score += 10; reasons.push(tag); }
+    if (tag) {
+      const short = (ctx.okrApi.META && ctx.okrApi.META[tag] && ctx.okrApi.META[tag].short) || tag;
+      score += 10; reasons.push(short);
+    }
   }
 
   return { score, reasons };
@@ -148,7 +150,8 @@ function scoreAllOpen(SEED, okrApi) {
 function OkrTagger({ label, meta, okrApi }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
-  if (!okrApi) return null;
+  const okrs = (window.SEED && window.SEED.okrs) || [];
+  if (!okrApi || okrs.length === 0) return null;
   const tag = okrApi.getTag(label);
   const suggested = !tag ? okrApi.getSuggestion(label, meta) : null;
   const effective = tag || suggested;
@@ -162,7 +165,6 @@ function OkrTagger({ label, meta, okrApi }) {
     return () => document.removeEventListener('mousedown', handler);
   }, [open]);
 
-  const okrs = (window.SEED && window.SEED.okrs) || [];
   const okrName = (id) => (okrs.find(o => o.id === id) || {}).name || id;
   const M = okrApi.META || {};
 
@@ -199,7 +201,7 @@ function OkrTagger({ label, meta, okrApi }) {
       )}
       {open && (
         <div className="okr-picker">
-          {['k1', 'k2', 'k3'].map(k => (
+          {okrs.map(o => o.id).map(k => (
             <button
               key={k}
               className={'okr-picker-row' + (tag === k ? ' is-current' : '')}

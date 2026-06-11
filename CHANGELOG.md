@@ -58,6 +58,31 @@ Keychain. This makes a fresh install on a colleague's machine zero-auth-setup.
   `prep.sh`. The wellness agent's hardcoded `focusTarget: 4` now reads
   `dashboard.focusTarget` from config too.
 
+### Sample data is now labeled (bundle scrub, round 2)
+
+- **Demo banner** — until the first `/dashboard` refresh, the dashboard renders
+  the bundled "Alex" sample dataset. It now shows a dismissible banner ("You're
+  looking at sample data — run /dashboard to load yours"); the generated
+  `data-override.jsx` switches it off. No more "whose data is this?" on a fresh
+  install.
+- Removed the last real colleague names from code comments and the `?prep-test=1`
+  debug helper; the greeting fallback and the legacy sidebar logo now derive from
+  the configured user name instead of hardcoded "Alex" / "S"; favicon is a generic
+  "W" mark (`favicon.svg`); the Blockers module's fake fallback rows are replaced
+  with a real empty state.
+
+### OKRs — config-driven and easier to enter
+
+- The OKR tagging system (pill labels, colors, keyword auto-suggest, review-notes
+  digest) no longer assumes exactly 3 OKRs with ids `k1/k2/k3`, and the
+  maintainer's personal keyword sets are gone from the code. Any number of OKRs;
+  per-OKR optional `short` (pill label) and `keywords` (auto-tagging) fields in
+  the config — see the example template.
+- `/dashboard-setup` OKR step is now skip-by-default and conversational: describe
+  your OKRs in plain words and the wizard structures them (id/pct/trend/short/
+  keywords) for you. With no OKRs configured, the dashboard shows a hint where
+  they'd go instead of an empty section.
+
 ### Update path for users on v0.4.x
 
 ```
@@ -66,7 +91,9 @@ Keychain. This makes a fresh install on a colleague's machine zero-auth-setup.
 
 Then make sure the five standard connectors show in `/mcp`, optionally add the
 `mcp` section to `~/.claude/dashboard-config.local` (only needed for non-default
-server names), and delete the old Slack Keychain entry.
+server names), and delete the old Slack Keychain entry. To pick up the bundle
+changes (banner, OKR refactor), re-copy `public/` over your `dashboardDir` —
+your config, task state, and layout live elsewhere and are unaffected.
 
 ---
 
@@ -259,7 +286,7 @@ personal data in the plugin).
   Surfaces a one-line "Algo suggests: <task>" hint below the Top-3 if any
   open item beats the lowest-scoring Top-3 entry.
 - **Commitments tracker** — new draggable module that surfaces every owed
-  task/decision grouped by recipient (Jose, Christopher, Bertrand, etc.),
+  task/decision grouped by recipient (each stakeholder you owe something to),
   sorted by aging within each stakeholder. Click a recipient row → opens
   the Stakeholder Lens for them.
 - **Quick Capture** — silent global hotkey (⌃⌘T by default) to add a task

@@ -47,7 +47,7 @@ const { useState: uS, useEffect: uE, useMemo: uM } = React;
       duration: 30,
       title: 'Test prep · imminent meeting',
       type: 'meeting',
-      who: ['Christopher', 'Jose', 'Eze'],
+      who: ['Sam', 'Priya', 'Theo'],
     });
     console.log('[prep-test] injected synthetic meeting at', time, '— remove ?prep-test=1 to clear');
   } catch (e) { /* no-op */ }
@@ -69,7 +69,7 @@ function Rail() {
   ];
   return (
     <aside className="rail">
-      <div className="rail-logo">S</div>
+      <div className="rail-logo">{((window.SEED && window.SEED.user && window.SEED.user.name) || 'W')[0].toUpperCase()}</div>
       {items.map((it, i) => (
         <div key={i} className="rail-item" data-active={it.active}>
           <Icon name={it.icon} size={22}/>
@@ -612,7 +612,7 @@ const SHARE_SECTIONS = [
   { key: 'decisions', label: 'Decisions pending',   defaultOn: true  },
   { key: 'blockers',  label: 'Risks & blockers',    defaultOn: false },
   { key: 'projects',  label: 'Active projects',     defaultOn: false },
-  { key: 'okrs',      label: 'Q2 OKRs (summary per OKR)', defaultOn: true  },
+  { key: 'okrs',      label: 'OKRs (summary per OKR)', defaultOn: true  },
 ];
 
 function ShareModal({ open, onClose }) {
@@ -752,9 +752,8 @@ function ShareModal({ open, onClose }) {
           .concat(classify(S.shipped,   'done'))
           .concat(classify(S.decisions, 'decision'));
 
-        const byOkr = { k1: { done: [], 'in-progress': [], blocked: [], decision: [] },
-                        k2: { done: [], 'in-progress': [], blocked: [], decision: [] },
-                        k3: { done: [], 'in-progress': [], blocked: [], decision: [] } };
+        const byOkr = {};
+        okrs.forEach(k => { byOkr[k.id] = { done: [], 'in-progress': [], blocked: [], decision: [] }; });
         tagged.forEach(t => { if (byOkr[t.tag]) byOkr[t.tag][t.kind].push(t); });
 
         // --- Synthesis helpers — turn item lists into a one-paragraph narrative ---
@@ -782,7 +781,7 @@ function ShareModal({ open, onClose }) {
           return parts.join(' ');
         };
 
-        lines.push(h2('Q2 OKRs'));
+        lines.push(h2('OKRs'));
         okrs.forEach(k => {
           lines.push('');
           lines.push(`${bold(k.id)} · ${k.name} · ${k.pct}% · ${k.trend}`);
@@ -876,10 +875,11 @@ function Hero({ timeOfDay, data, capacityPct, state }) {
   const openFind    = () => window.dispatchEvent(new Event('dash:open-find'));
   const openAddTask = () => window.dispatchEvent(new Event('dash:open-add-task'));
   const g = (window.SEED && window.SEED.greeting) || {};
+  const who = (window.SEED && window.SEED.user && window.SEED.user.name) || 'there';
   const greeting =
-    timeOfDay === 'morning'   ? (g.morning   || 'Morning, <em>Alex</em>.')   :
-    timeOfDay === 'afternoon' ? (g.afternoon || 'Afternoon, <em>Alex</em>.') :
-                                (g.evening   || 'Evening, <em>Alex</em>.');
+    timeOfDay === 'morning'   ? (g.morning   || `Morning, <em>${who}</em>.`)   :
+    timeOfDay === 'afternoon' ? (g.afternoon || `Afternoon, <em>${who}</em>.`) :
+                                (g.evening   || `Evening, <em>${who}</em>.`);
   const sub = buildHeroSubtitle(timeOfDay, state);
   const w = (window.SEED && window.SEED.weather) || null;
   return (
@@ -1116,7 +1116,7 @@ function saveRailWidth(w) {
 }
 
 // Decision archive — every "Log decision" submission persists here forever
-// (no TTL — the whole point is traceability when Jose asks "why X over Y").
+// (no TTL — the whole point is traceability when a stakeholder asks "why X over Y").
 // Keyed locally; export by copying clipboard via the archive view.
 const DECISION_ARCHIVE_KEY = 'dashboard.decisionArchive.v1';
 function loadArchivedDecisions() {
@@ -1139,31 +1139,37 @@ function deleteArchivedDecision(id) {
 }
 
 const OKR_LINKS_KEY = 'dashboard.okrLinks.v1';
-const OKR_META = {
-  k1: { short: 'AI',  color: 'var(--pink-400)', bg: 'var(--pink-100)', ink: 'var(--pink-700)' },
-  k2: { short: 'Fin', color: 'var(--teal-500)', bg: 'var(--teal-100)', ink: 'var(--teal-700)' },
-  k3: { short: 'CEO', color: 'var(--blue-400)', bg: 'var(--blue-100)', ink: 'var(--blue-700)' },
-};
-const OKR_KEYWORDS = {
-  k1: ['ai ', 'claude', ' mcp', 'skill', 'plugin', 'agent', 'workflow', 'automation', 'dashboard', 'work os', 'template', 'export', 'personal os', 'content creation', 'kb updater'],
-  // Default keyword sets per OKR — generic examples. Tune these to your own work
-  // (e.g. add your domain terms and the stakeholders you collaborate with).
-  k2: ['payment', 'finance', 'payout', 'invoice', 'billing', 'treasury', 'budget', 'forecast', 'revenue', 'cost', 'pricing', 'vendor', 'contract', 'compliance'],
-  k3: ['strategy', 'expansion', 'market', 'partnership', 'corp dev', 'm&a', 'acquisition', 'gtm', 'launch', 'research'],
-};
+// META + KEYWORDS are derived from the user's configured OKRs (SEED.okrs) — any
+// number of them, any ids. Per-OKR config fields:
+//   `short`    — optional 2-4 char pill label (defaults to K1, K2, …)
+//   `keywords` — optional lowercase substrings that auto-suggest tags for
+//                matching tasks/decisions (empty = manual tagging only)
+const OKR_PALETTE = [
+  { color: 'var(--pink-400)', bg: 'var(--pink-100)', ink: 'var(--pink-700)' },
+  { color: 'var(--teal-500)', bg: 'var(--teal-100)', ink: 'var(--teal-700)' },
+  { color: 'var(--blue-400)', bg: 'var(--blue-100)', ink: 'var(--blue-700)' },
+  { color: 'var(--yellow-400)', bg: 'var(--yellow-100)', ink: 'var(--grey-900)' },
+];
+const OKR_META = {};
+const OKR_KEYWORDS = {};
+((window.SEED && window.SEED.okrs) || []).forEach((o, i) => {
+  OKR_META[o.id] = { short: o.short || `K${i + 1}`, ...OKR_PALETTE[i % OKR_PALETTE.length] };
+  OKR_KEYWORDS[o.id] = (o.keywords || []).map(k => String(k).toLowerCase());
+});
 function loadOkrLinks() {
   try {
     const raw = JSON.parse(localStorage.getItem(OKR_LINKS_KEY) || '{}');
     const fresh = {};
-    Object.entries(raw).forEach(([k, v]) => { if (v === 'k1' || v === 'k2' || v === 'k3') fresh[k] = v; });
+    Object.entries(raw).forEach(([k, v]) => { if (OKR_META[v]) fresh[k] = v; });
     return fresh;
   } catch { return {}; }
 }
 function suggestOkrFromText(title, meta) {
   const text = ' ' + (title || '').toLowerCase() + ' ' + (meta || '').toLowerCase() + ' ';
-  const scores = { k1: 0, k2: 0, k3: 0 };
+  const scores = {};
   for (const [okr, kws] of Object.entries(OKR_KEYWORDS)) {
-    for (const kw of kws) if (text.includes(kw)) scores[okr] += 1;
+    scores[okr] = 0;
+    for (const kw of kws) if (kw && text.includes(kw)) scores[okr] += 1;
   }
   let best = null, bestScore = 0;
   for (const [okr, sc] of Object.entries(scores)) if (sc > bestScore) { best = okr; bestScore = sc; }

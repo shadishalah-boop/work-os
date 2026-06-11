@@ -388,8 +388,8 @@ function ProjectsMod({ data, okrs, decisions, okrApi }) {
         </div>
       ))}
       <div className="sub-section-head">
-        Q2 OKRs<span className="bar"/>
-        {okrApi && (
+        OKRs<span className="bar"/>
+        {okrApi && okrs.length > 0 && (
           <button
             className="okr-generate-btn"
             onClick={generateNotes}
@@ -397,6 +397,13 @@ function ProjectsMod({ data, okrs, decisions, okrApi }) {
           >Generate review notes →</button>
         )}
       </div>
+      {okrs.length === 0 && (
+        <div style={{fontSize:13, color:'var(--fg-2)', padding:'8px 2px 4px'}}>
+          No OKRs configured yet. Ask Claude Code to <em>"add my OKRs to the dashboard"</em> or
+          edit <code style={{fontSize:12}}>~/.claude/dashboard-config.local</code> → <code style={{fontSize:12}}>dashboard.okrs</code>,
+          then run <code style={{fontSize:12}}>/dashboard</code>.
+        </div>
+      )}
       {okrs.map(o => {
         const isOpen = !!expanded[o.id];
         const ev = okrApi ? okrApi.collectEvidence(o.id) : { confirmed: [], suggested: [] };
@@ -638,7 +645,7 @@ function CommitmentsMod({ state }) {
     .concat((state.blocked || []).map(t => ({ ...t, _bucket: 'blocked' })))
     .filter(t => !t.done);
 
-  // Detect the AUDIENCE — meta first (more reliable, e.g. "Granola · Jose 1:1"),
+  // Detect the AUDIENCE — meta first (more reliable, e.g. "Granola · Sam 1:1"),
   // then label. Use the same longest-match-wins ordering as TextWithPeople.
   const sortedKnown = [...known].sort((a, b) => b.match.length - a.match.length);
   const detect = (text) => {
@@ -721,16 +728,16 @@ function CommitmentsMod({ state }) {
 
 // --- Blockers Module ---
 function BlockersMod({ data }) {
-  const rows = data || [
-    { sev: 'high',   title: 'Pricing v3 A/B — 9% conversion dip in tier 2',   meta: 'Trending wrong · needs decision today',  icon: '!' },
-    { sev: 'high',   title: 'Legal waiting on data retention clause edits',    meta: 'Blocking contract close · overdue 2d',    icon: '!' },
-    { sev: 'medium', title: 'Brand mark refresh — approver OOO',               meta: 'Theo out until Friday · review slips',    icon: '•' },
-    { sev: 'low',    title: 'Enterprise SSO integration tests flaky',          meta: 'Not blocking yet · worth a look',         icon: '·' },
-  ];
+  const rows = data || [];
   return (
     <Module title="Risks & blockers" sub="Stuck, waiting, or trending red"
             icon={<span style={{width:28, height:28, borderRadius:8, background:'var(--red-50)', display:'grid', placeItems:'center'}}><Icon name="error-warning" size={16}/></span>}
             className="blockers-mod">
+      {rows.length === 0 && (
+        <div style={{fontSize:13, color:'var(--fg-2)', padding:'10px 2px'}}>
+          Nothing blocked right now. Blockers from Slack incidents and meeting notes land here after a refresh.
+        </div>
+      )}
       {rows.map((r, i) => (
         <div key={i} className="block-row" data-sev={r.sev}>
           <div className="block-icon">{r.icon}</div>
