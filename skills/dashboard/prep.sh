@@ -66,9 +66,14 @@ START_TS=$(date '+%s')
 # `after:YYYY-MM-DD` dates (relative `after:Nd` is Gmail syntax Slack ignores).
 since() { date -v-"${1}"d '+%Y-%m-%d' 2>/dev/null || date -d "-${1} days" '+%Y-%m-%d'; }
 
-# User timezone + per-source MCP server names from config (defaults = the
-# standard managed connectors most users already have).
-TZNAME="$(_cfg user.timezone 'Europe/Madrid')"
+# User timezone — resolved LIVE every refresh: an explicit config value pins a
+# fixed zone, otherwise the system zone is auto-detected (so a traveling user's
+# times follow their laptop). Single source of truth: tzresolve.py.
+TZNAME="$(python3 "$SCRIPT_DIR/tzresolve.py" "$CONFIG_FILE" 2>/dev/null)"
+[ -z "$TZNAME" ] && TZNAME="UTC"
+
+# Per-source MCP server names from config (defaults = the standard managed
+# connectors most users already have).
 MCP_CALENDAR="$(_cfg mcp.calendar 'Google_Calendar')"
 MCP_GMAIL="$(_cfg mcp.gmail 'Gmail')"
 MCP_SLACK="$(_cfg mcp.slack 'Slack')"

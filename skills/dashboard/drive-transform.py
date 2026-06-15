@@ -18,12 +18,22 @@ Per-user values (data cache dir, "my" email for owner detection) come from
 """
 import json
 import os
+import sys
 import datetime
 
 try:
     from zoneinfo import ZoneInfo
 except Exception:  # pragma: no cover
     ZoneInfo = None
+
+# Shared timezone resolver (lives next to this script).
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    from tzresolve import resolve_timezone
+except Exception:  # pragma: no cover
+    def resolve_timezone(cfg, fallback="UTC"):
+        v = (cfg or {}).get("user", {}).get("timezone") if isinstance(cfg, dict) else None
+        return v.strip() if isinstance(v, str) and v.strip() and v.strip().lower() != "auto" else fallback
 
 HOME = os.path.expanduser("~")
 CONFIG_PATH = os.path.join(HOME, ".claude", "dashboard-config.local")
@@ -49,8 +59,11 @@ def cfg_get(dotted, default=None):
 DATA = os.path.expanduser(cfg_get("output.dataCacheDir", "~/.claude/dashboard-data"))
 RAW = os.path.join(DATA, "drive-raw.json")
 OUT = os.path.join(DATA, "drive.json")
-_tzname = cfg_get("user.timezone", "Europe/Madrid")
-TZ = ZoneInfo(_tzname) if ZoneInfo else datetime.timezone.utc
+_tzname = resolve_timezone(CFG)   # explicit pin > live system zone > UTC
+try:
+    TZ = ZoneInfo(_tzname) if ZoneInfo else datetime.timezone.utc
+except Exception:
+    TZ = datetime.timezone.utc   # invalid/unknown zone name → never crash
 ME_EMAIL = (cfg_get("user.email", "") or "").lower()
 
 KIND = {

@@ -1,13 +1,25 @@
 ---
 name: dashboard-setup
-description: Interactive onboarding for the Work Dashboard plugin. Walks the user through creating `~/.claude/dashboard-config.local`, initializes output directories, copies the static bundle, and prints per-MCP-server auth instructions. Run this once after installing the plugin; after that, use `/dashboard` to refresh.
+description: Interactive onboarding for the Work Dashboard plugin. Creates `~/.claude/dashboard-config.local`, auto-fills the user's identity from their connectors, copies the static bundle, verifies MCP connectors, and runs the first refresh. ALSO handles on-demand requests after install like "add my team to the dashboard", "add my OKRs to the dashboard", or "update my pins" (see the Appendix). Run once after installing; then use `/dashboard` to refresh.
 ---
 
 # Work Dashboard — interactive setup
 
-First-time setup wizard. Gathers the user's identity, team, OKRs, and pins; writes `~/.claude/dashboard-config.local`; copies the static HTML bundle into the user's chosen output directory; then prints per-MCP-server next steps.
+First-time setup wizard. Auto-detects the user's identity and timezone from their
+connected accounts, confirms a couple of quick things, writes
+`~/.claude/dashboard-config.local`, copies the static HTML bundle, verifies
+connectors live, opens the dashboard, and offers the first refresh.
 
-**Design intent:** the user typing in this conversation is a NON-TECHNICAL human. Ask one clear question at a time when the answer branches. Batch obvious related fields into a single message when the user will paste multiple lines. Never dump a raw JSON template and say "fill it in."
+**Team roster and OKRs are intentionally NOT part of setup** — they start empty and
+the dashboard prompts the user to add them later (the People and OKR cards show a
+one-line CTA). When the user takes that CTA ("add my team / OKRs to the dashboard"),
+handle it via the **Appendix** at the end of this file. This keeps first-run to the
+bare minimum: confirm who you are, pick where files go, see real data.
+
+**Design intent:** the user typing in this conversation is a NON-TECHNICAL human.
+**Detect, don't interrogate** — pre-fill every field you can from their connectors
+(Step 2) and have them confirm. Ask one clear question at a time when the answer
+branches. Never dump a raw JSON template and say "fill it in."
 
 ## Step 0 — locate the plugin
 
@@ -32,82 +44,82 @@ Read `~/.claude/dashboard-config.local`. If it exists and is valid JSON, ask:
 
 Act on the user's response:
 - **Reset**: back up to `~/.claude/dashboard-config.local.bak-$(date +%Y%m%d-%H%M%S)`, then proceed to Step 2.
-- **Edit**: display the current JSON, ask which section they want to change, Edit-tool the file, confirm, then skip to Step 8.
+- **Edit**: display the current JSON, ask which section they want to change, Edit-tool the file, confirm, then skip to Step 6.
 - **Cancel**: print "No changes made" and exit the skill.
 
 If no file exists, proceed to Step 2.
 
-## Step 2 — gather identity (one batched question)
+## Step 2 — auto-fill identity from the user's connectors, then confirm
 
-Send a single message to the user:
+The goal: the user **confirms** their details instead of typing them. Detect
+everything you can from the MCP connectors they've already authenticated, then ask
+only for what's missing. Do NOT lead with a blank form.
 
-> *"Let's set up your dashboard. Paste answers to these (or skip any with 'none' — you can always edit later):*
->
-> *1. First name (what you're called on the dashboard, e.g. 'Alex'):*
-> *2. Full name (for formal header, e.g. 'Alex Rivera'):*
-> *3. Role title (e.g. 'Head of Marketing'):*
-> *4. Work email:*
-> *5. Timezone (IANA name, e.g. 'Europe/Madrid' · 'America/New_York' · 'Asia/Singapore'):*
-> *6. Company name:*
-> *7. Your manager's name + role (e.g. 'Chris Lin, VP Marketing' — or 'none' if you're the manager):*
+### 2a. Timezone — auto-detected, never asked
+
+It's detected from the computer and re-detected on every refresh (so a traveling
+user's times follow their laptop). Detect it now just to show the value:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/dashboard/tzresolve.py"
+```
+
+With no config yet this prints the live system zone — hold it as `DETECTED_TZ`.
+Store `user.timezone` as `"auto"` unless the user later asks to pin a fixed zone.
+
+### 2b. Auto-detect name / email / role / company (read-only profile lookups)
+
+Make these calls (all read-only, all on the user's own accounts). Resolve each
+server name from the standard defaults — `Slack`, `Granola`, `Google_Calendar`,
+`Gmail` — or, if a call 404s on the name, find the tool via `ToolSearch`
+(e.g. `query: "slack read user profile"`). Skip any source that isn't connected;
+this whole step is best-effort. Stop collecting a field once you have it.
+
+Priority chain per field:
+
+- **Full name + role/title + email + company, in one shot:**
+  `slack_read_user_profile` with **no `user_id`** (defaults to the logged-in user).
+  Its profile typically carries `real_name`/`display_name`, `title` (role),
+  `email`, and the org/team name. This single call usually fills most fields.
+- **Email** (if Slack didn't provide it): `get_account_info` (Granola) returns the
+  signed-in email; or `list_calendars` (Google Calendar) — the calendar with
+  `primary: true` has an `id` equal to the user's email address.
+- **Full name** (if still missing): from Gmail, `search_threads` for `from:me`
+  (newest) and read the display name on the From header; or a Calendar event the
+  user organizes (`organizer.displayName`).
+- **Company** (if not from Slack org): derive from the email domain — drop
+  everything up to `@`, take the registrable label, title-case it
+  (`shadi.shalah@preply.com` → `Preply`; `a@mail.acme.co` → `Acme`).
+- **First name**: the first token of the full name.
+
+### 2c. One confirmation message (pre-filled)
+
+Show what you found and ask only for the gaps. Mark anything not detected clearly.
+Example:
+
+> *"I pulled these from your connected accounts — just reply **'looks good'** to
+> accept, or send any corrections:*
+> *• Name: **Shadi Shalah** (first name: Shadi)*
+> *• Work email: **shadi.shalah@preply.com***
+> *• Company: **Preply***
+> *• Role/title: **Senior PM** ← found in Slack*
+> *• Timezone: follows your computer automatically — detected **`DETECTED_TZ`** (reply with an IANA zone only to pin a fixed one)*
+> *• Manager (optional): not detected — name + role, or 'none'?*
 > *"*
 
-Parse the response. If any field is missing or malformed, ask a targeted follow-up for just that field.
+Fill any field the user corrects. Don't re-ask for fields they've confirmed.
+`workingHours` defaults to `09:00–18:00 Mon–Fri` unless they mention otherwise.
 
-Defaults: `workingHours` = `09:00–18:00 Mon–Fri` unless the user proactively mentions different hours.
+### 2d. Fallback — manual entry
 
-## Step 3 — optional team roster
+If the connectors returned **nothing** (e.g. none authenticated yet), fall back to
+the plain batched question:
 
-Ask:
+> *"I couldn't reach your connectors yet, so paste these (skip any with 'none'):
+> first name · full name · role · work email · company · manager (name + role).
+> Timezone is handled automatically (detected `DETECTED_TZ`)."*
 
-> *"Want to add your team roster now? (They show up in the 'Your people' card on the dashboard.) Answer:*
-> *- `yes` — I'll ask for their names one block at a time*
-> *- `no` — leave it empty, you can add later*
-> *- `attention-only` — I'll just ask who needs your attention this week (shown as a red-flagged note)"*
-
-If `yes`, ask:
-
-> *"Paste each teammate as one line: `Name | Role note | status (active or ooo)`. End with a blank line. Example:*
-> *`Sam Chen | Sr. PM | active`*
-> *`Dev Patel | PM · onboarding | active`*
-> *`Priya K. | Designer · OOO till May 5 | ooo`"*
-
-Parse lines into `team.people`.
-
-Ask separately:
-
-> *"In one sentence, who on your team needs the most attention this week? (This is shown at the top of the People card — use HTML `<b>name</b>` if you want to highlight specific people.)"*
-
-Save as `team.attention`.
-
-If user said `no`: set `team.people = []` and `team.attention = ""`.
-If `attention-only`: only ask the attention question.
-
-## Step 4 — optional OKRs (default: skip)
-
-Ask:
-
-> *"Want to add your OKRs now? Totally fine to skip — the dashboard shows a hint
-> where they'd go, and you can add them anytime later just by telling Claude Code
-> 'add my OKRs to the dashboard'.*
->
-> *If yes, just tell me about them in plain words (or paste them from wherever they
-> live) — I'll structure them."*
-
-If the user shares OKRs in any form, structure each into:
-- `id` — `k1`, `k2`, … in order
-- `name` — short name incl. the target (≤60 chars)
-- `pct` — current % complete (ask if not inferable; 0 if brand new)
-- `trend` — `on-pace | behind | ahead` (ask if not inferable)
-- `short` — a 2-4 char pill label you derive from the name (confirm with the user)
-- `keywords` — 4-8 lowercase substrings you derive from the OKR's domain. These
-  auto-suggest tagging matching tasks/decisions to the OKR on the dashboard.
-  Show the user your keyword guesses and let them add/remove.
-
-Any number of OKRs is supported (3 is typical). If `skip`, set `dashboard.okrs` to
-an empty array.
-
-## Step 5 — pins (links on the right rail)
+## Step 3 — pins (links on the right rail)
 
 Ask:
 
@@ -125,7 +137,7 @@ Build the `dashboard.pins` array. Each pin needs: `id`, `label`, `sub`, `letter`
 
 Use these bg colors rotating: `var(--teal-100)`, `var(--pink-100)`, `var(--red-100)`, `var(--blue-100)`, `var(--yellow-100)`, `var(--grey-100)`.
 
-## Step 6 — output directories (just confirm defaults)
+## Step 4 — output directories (just confirm defaults)
 
 Ask:
 
@@ -137,23 +149,26 @@ Ask:
 >
 > *Or give me your own absolute paths."*
 
-## Step 7 — write config + create dirs + copy bundle
+## Step 5 — write config + create dirs + copy bundle
 
-Once all fields are gathered, build the full config object. Schema (copy exactly — fields in this order):
+Once all fields are gathered, build the full config object. **Team and OKRs start
+empty on purpose** (`org.team.people: []`, `org.team.attention: ""`,
+`dashboard.okrs: []`) — the dashboard prompts for them later; see the Appendix.
+Schema (copy exactly — fields in this order):
 
 ```json
 {
   "_README": "Private config for <firstName>'s work-dashboard plugin. Never bundled. Never committed.",
   "user": {
     "name": "...", "fullName": "...", "role": "...", "email": "...",
-    "timezone": "...",
+    "timezone": "auto",
     "workingHours": { "start": "09:00", "end": "18:00", "days": ["Mon","Tue","Wed","Thu","Fri"] }
   },
   "org": {
     "company": "...",
     "manager": { "name": "...", "role": "..." },
     "seniorStakeholders": [],
-    "team": { "attention": "...", "people": [...] }
+    "team": { "attention": "", "people": [] }
   },
   "slack": { "workspace": "...", "userId": "", "highSignalChannels": [] },
   "mcp": {
@@ -166,7 +181,7 @@ Once all fields are gathered, build the full config object. Schema (copy exactly
   "dashboard": {
     "workstreams": [],
     "classificationKeywords": [],
-    "okrs": [...],
+    "okrs": [],
     "pins": [...],
     "weather": { "city": "..." },
     "focusTarget": 4
@@ -184,7 +199,7 @@ Actions:
    `$dashboardDir/.bundle-version`.
 5. Create `~/.claude/dashboard-filters.local` if it doesn't exist with the content of `$PLUGIN_DIR/templates/dashboard-filters.local.example`.
 
-## Step 8 — verify the user's MCP connectors (live check, no static table)
+## Step 6 — verify the user's MCP connectors (live check, no static table)
 
 The plugin bundles **no MCP servers** — the dashboard uses the connectors the user
 already has (at most companies these are the standard managed connectors:
@@ -222,7 +237,7 @@ Your data sources:
 Close with: "If a server fails at refresh time, its section shows 'source unavailable' —
 the rest of the dashboard still renders. You can add sources incrementally."
 
-## Step 9 — open the dashboard + offer the first refresh
+## Step 7 — open the dashboard + offer the first refresh
 
 1. Open the dashboard in the user's browser so success is immediate, not homework:
    `open "<dashboardDir>/Work Dashboard.html"` (macOS) or
@@ -263,11 +278,44 @@ Edit ~/.claude/dashboard-config.local to update your team / OKRs / pins later.
 - **One question at a time when there's a branch.** Batch only obvious related fields.
 - **Never paste a raw JSON block at the user and ask them to edit it.** That defeats the point of this skill.
 - **Always back up** an existing config before overwriting. Never silent-destroy user data.
-- **Validate IANA timezone** against `Intl.DateTimeFormat().resolvedOptions().timeZone`-style names. If the user types a vague "CET" or "Pacific time", offer the canonical name (e.g. "Europe/Madrid", "America/Los_Angeles").
-- **Timezone default**: if the user says "use my system timezone", run `date +%Z` for display and check `/etc/localtime` for the IANA name.
-- **Don't orchestrate the 6 agents from this skill.** The only refresh this skill may trigger is the single `refresh-headless.sh` call in Step 9, with the user's consent.
+- **Timezone is auto by default** — store `"auto"`, which makes every refresh detect the system zone live (handles travel). Only if the user explicitly wants to PIN a fixed zone, store an IANA name; if they give a vague "CET"/"Pacific time", offer the canonical form (e.g. "Europe/Madrid", "America/Los_Angeles") and confirm before storing it.
+- **Don't orchestrate the 6 agents from this skill.** The only refresh this skill may trigger is the single `refresh-headless.sh` call in Step 7, with the user's consent.
 - **If the user aborts mid-setup**, discard any partial state — don't write a half-filled config.
 - **Currency / language**: the dashboard is English-only today; don't offer localization options.
+
+## Appendix — add team / OKRs / pins AFTER install (on demand)
+
+Team and OKRs are deliberately left out of first-run setup. The dashboard's People
+and OKR cards each show a one-line prompt; when the user acts on it — e.g. *"add my
+team to the dashboard"*, *"add my OKRs to the dashboard"*, *"update my pins"* — do
+this (it can be a tiny, focused interaction, not the whole wizard):
+
+1. Read `~/.claude/dashboard-config.local` (back it up first if you're replacing a
+   whole section).
+2. Fill the relevant section:
+
+   **Team** → `org.team.people` = array of
+   `{ "name", "note", "manager": false, "ooo": false, "status": "active" }`, and
+   optionally `org.team.attention` (one sentence, HTML allowed, shown atop the card).
+   Ask the user to name their teammates, or offer to read them from a Slack channel
+   / Google contacts if they point you at a source.
+
+   **OKRs** → `dashboard.okrs` = array; structure each as:
+   - `id` — `k1`, `k2`, … in order
+   - `name` — short name incl. the target (≤60 chars)
+   - `pct` — current % (0 if new) · `trend` — `on-pace | behind | ahead`
+   - `short` — a 2-4 char pill label you derive (confirm with the user)
+   - `keywords` — 4-8 lowercase domain substrings for auto-tagging matching
+     tasks/decisions; show your guesses and let the user adjust.
+   Let the user describe OKRs in plain words or paste them from wherever they live.
+
+   **Pins** → `dashboard.pins` (same shape as Step 3).
+
+3. Write the file back, then run the refresh once so the card populates — the single
+   `${CLAUDE_PLUGIN_ROOT}/skills/dashboard/refresh-headless.sh` call (the merge step
+   reads the config and rewrites the overlay). Tell the user to reload the tab.
+
+Keep it conversational and scoped — only touch the section the user asked about.
 
 ## Why a separate skill
 

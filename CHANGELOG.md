@@ -14,6 +14,51 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.5.2 — 2026-06-15
+
+**Frictionless onboarding.** Setup now detects almost everything instead of asking:
+your timezone from the computer, and your identity from the accounts you've already
+connected.
+
+### Auto-filled identity
+
+- `/dashboard-setup` Step 2 pulls **name, work email, role/title, and company** from
+  your connectors — primarily one read-only `slack_read_user_profile` call (current
+  user), with Granola `get_account_info` and Google Calendar `list_calendars`
+  (primary calendar id = your email) as fallbacks, and company derived from your
+  email domain. You confirm a pre-filled summary and fill only the gaps (usually
+  just an optional manager). Falls back to manual entry if no connector is reachable.
+
+### Team & OKRs moved out of setup
+
+First-run no longer asks for your team roster or OKRs — they start empty and the
+dashboard's People and OKR cards show a one-line prompt to add them later ("tell
+Claude Code 'add my team to the dashboard'"). The setup skill's Appendix handles
+those on-demand requests. This trims onboarding to: confirm identity → pick file
+location → see real data. (The People card gained the same empty-state CTA the OKR
+card already had.)
+
+### Automatic timezone
+
+The dashboard detects your timezone from your computer and re-detects it on
+**every refresh** — so when you travel, your meeting times, "now" line, and
+relative labels follow your laptop with no action from you.
+
+- New `skills/dashboard/tzresolve.py` — one shared resolver used by `prep.sh`
+  (passed to all agents), `build-overrides.py`, and `drive-transform.py`.
+  Resolution order: an explicit IANA zone in `user.timezone` **pins** a fixed zone;
+  otherwise the live system zone is auto-detected (via `$TZ`, `/etc/localtime`,
+  `/etc/timezone`, or `timedatectl`); otherwise UTC. Dependency-free, macOS + Linux.
+- `/dashboard-setup` no longer asks for an IANA timezone string (the sharpest
+  friction point for non-technical users). It detects the zone, shows it for
+  confirmation, and stores `"timezone": "auto"` by default.
+- The old hardcoded `Europe/Madrid` fallback is gone from `build-overrides.py` and
+  `drive-transform.py`; both now route through the resolver (UTC as neutral
+  fallback) and never crash on an unknown zone name.
+- To pin a fixed zone (e.g. always HQ time), set `user.timezone` to an IANA name.
+
+---
+
 ## v0.5.1 — 2026-06-11
 
 **Hands-free refresh.** New `skills/dashboard/schedule.sh` sets up (and removes)
