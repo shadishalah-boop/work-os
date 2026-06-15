@@ -17,7 +17,7 @@ In Claude Code:
 /dashboard-setup
 ```
 
-The setup wizard asks a few questions (name, timezone, team — all skippable),
+The setup wizard mostly just confirms what it auto-detected (your identity + timezone),
 verifies your connectors, opens the dashboard in your browser, and offers to run
 your first refresh. After that, `/dashboard` anytime for fresh data. That's it.
 
@@ -98,7 +98,7 @@ Then run the guided setup — it writes your config file, creates the output dir
 /dashboard-setup
 ```
 
-The wizard **auto-fills your identity** (name, email, role, company) from the accounts you've already connected and **auto-detects your timezone** — you mostly just confirm. Team, OKRs, and pins are optional and skippable. Takes ~2–3 minutes.
+The wizard **auto-fills your identity** (name, email, role, company) from the accounts you've already connected and **auto-detects your timezone** — you mostly just confirm, pick where files go, and see real data. Your **team roster and OKRs aren't asked during setup**: the dashboard shows a prompt in the People and OKR cards, and you add them later just by telling Claude Code *"add my team to the dashboard"* / *"add my OKRs to the dashboard"*. Takes ~2–3 minutes.
 
 If you prefer manual setup, see **Manual install** below.
 
@@ -216,9 +216,13 @@ that polling on `file://` pages — served over localhost it works everywhere. W
 
 ## Customizing
 
+### Add your team & OKRs (after install)
+
+These aren't asked during setup — the dashboard's People and OKR cards show a prompt instead. Add them anytime by telling Claude Code *"add my team to the dashboard"* or *"add my OKRs to the dashboard"*, and it'll structure them into your config and refresh. (Or edit `~/.claude/dashboard-config.local` directly — `org.team` and `dashboard.okrs` — and rerun `/dashboard`.)
+
 ### Edit static blocks
 
-Your team roster, OKRs, pins, and weather city live in `~/.claude/dashboard-config.local`. Edit the JSON and rerun the skill — no code changes needed.
+Your team roster, OKRs, pins, and weather city all live in `~/.claude/dashboard-config.local`. Edit the JSON and rerun the skill — no code changes needed.
 
 ### Edit visuals
 

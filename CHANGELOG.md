@@ -29,6 +29,15 @@ connected.
   email domain. You confirm a pre-filled summary and fill only the gaps (usually
   just an optional manager). Falls back to manual entry if no connector is reachable.
 
+### Team & OKRs moved out of setup
+
+First-run no longer asks for your team roster or OKRs — they start empty and the
+dashboard's People and OKR cards show a one-line prompt to add them later ("tell
+Claude Code 'add my team to the dashboard'"). The setup skill's Appendix handles
+those on-demand requests. This trims onboarding to: confirm identity → pick file
+location → see real data. (The People card gained the same empty-state CTA the OKR
+card already had.)
+
 ### Automatic timezone
 
 The dashboard detects your timezone from your computer and re-detects it on

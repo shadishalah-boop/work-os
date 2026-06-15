@@ -613,6 +613,12 @@ function TeamMod({ data }) {
         </div>
       )}
       <div className="team-grid">
+        {people.length === 0 && (
+          <div style={{fontSize:13, color:'var(--fg-2)', padding:'8px 2px', gridColumn:'1 / -1'}}>
+            No team added yet. Tell Claude Code <em>"add my team to the dashboard"</em>, or edit{' '}
+            <code style={{fontSize:12}}>~/.claude/dashboard-config.local</code> → <code style={{fontSize:12}}>org.team</code>, then run <code style={{fontSize:12}}>/dashboard</code>.
+          </div>
+        )}
         {people.map((p, i) => (
           <div key={i} className="team-person" data-out={p.ooo}
                onClick={() => window.dispatchEvent(new CustomEvent('dash:open-lens', { detail: { person: p } }))}
