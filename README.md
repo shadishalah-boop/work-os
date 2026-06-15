@@ -17,7 +17,7 @@ In Claude Code:
 /dashboard-setup
 ```
 
-The setup wizard mostly just confirms what it auto-detected (your identity + timezone),
+The setup wizard is near-zero-questions: it confirms what it auto-detected (your identity + timezone) and uses sensible defaults for everything else — pins and file location are set automatically, no prompts,
 verifies your connectors, opens the dashboard in your browser, and offers to run
 your first refresh. After that, `/dashboard` anytime for fresh data. That's it.
 

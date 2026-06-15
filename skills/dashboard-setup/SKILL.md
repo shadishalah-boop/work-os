@@ -5,10 +5,13 @@ description: Interactive onboarding for the Work Dashboard plugin. Creates `~/.c
 
 # Work Dashboard — interactive setup
 
-First-time setup wizard. Auto-detects the user's identity and timezone from their
-connected accounts, confirms a couple of quick things, writes
-`~/.claude/dashboard-config.local`, copies the static HTML bundle, verifies
-connectors live, opens the dashboard, and offers the first refresh.
+First-time setup wizard. Designed to be **near-zero-questions**: it auto-detects the
+user's identity and timezone from their connected accounts (one confirmation), then
+does everything else with sensible defaults — pins, output location, config — without
+asking. Writes `~/.claude/dashboard-config.local`, copies the static HTML bundle,
+verifies connectors, starts the permanent server, runs the first refresh, and opens
+the dashboard. The ONLY thing the user actively answers is the identity confirmation
+(and the existing-config Reset/Edit/Cancel choice, if a config already exists).
 
 **Team roster and OKRs are intentionally NOT part of setup** — they start empty and
 the dashboard prompts the user to add them later (the People and OKR cards show a
@@ -44,7 +47,7 @@ Read `~/.claude/dashboard-config.local`. If it exists and is valid JSON, ask:
 
 Act on the user's response:
 - **Reset**: back up to `~/.claude/dashboard-config.local.bak-$(date +%Y%m%d-%H%M%S)`, then proceed to Step 2.
-- **Edit**: display the current JSON, ask which section they want to change, Edit-tool the file, confirm, then skip to Step 6.
+- **Edit**: display the current JSON, ask which section they want to change, Edit-tool the file, confirm, then skip to Step 4.
 - **Cancel**: print "No changes made" and exit the skill.
 
 If no file exists, proceed to Step 2.
@@ -119,45 +122,25 @@ the plain batched question:
 > first name · full name · role · work email · company · manager (name + role).
 > Timezone is handled automatically (detected `DETECTED_TZ`)."*
 
-## Step 3 — pins (links on the right rail)
+## Step 3 — write config + create dirs + copy bundle
 
-Ask:
+**Pins and output paths use defaults silently — do NOT ask about either.**
 
-> *"The dashboard shows 6 'pin' cards for quick access to your most-used tools. Defaults:*
-> *1. Google Calendar (week view)*
-> *2. Gmail inbox*
-> *3. Slack workspace — what's your Slack workspace subdomain? (e.g. 'acme' for acme.slack.com, or 'none' to skip)*
-> *4. Google Drive*
-> *5. Granola (meeting notes)*
-> *6. One custom pin of your choice — paste: `label | URL` or 'none' for no 6th pin*
->
-> *Reply 'defaults' to accept pins 1-2, 4-5 as-is and only fill in 3 (Slack) + 6 (custom)."*
+**Pins** — build `dashboard.pins` with these 5 defaults (no question). For Slack,
+derive the workspace subdomain from the user's email domain or company
+(`shadi.shalah@preply.com` → `preply` → `https://preply.slack.com`); if unknown, use
+`https://slack.com`. Each pin needs `id`, `label`, `sub`, `letter`, `bg`, `href`:
+  1. Google Calendar · `Week view` · `C` · `var(--teal-100)` · `https://calendar.google.com/calendar/u/0/r/week`
+  2. Gmail · `Inbox` · `M` · `var(--pink-100)` · `https://mail.google.com/mail/u/0/#inbox`
+  3. Slack · `Workspace` · `#` · `var(--red-100)` · `https://<subdomain>.slack.com`
+  4. Google Drive · `Files` · `D` · `var(--blue-100)` · `https://drive.google.com`
+  5. Granola · `Meeting notes` · `G` · `var(--yellow-100)` · `https://app.granola.ai`
 
-Build the `dashboard.pins` array. Each pin needs: `id`, `label`, `sub`, `letter` (one-char), `bg` (color var), `href`.
-
-Use these bg colors rotating: `var(--teal-100)`, `var(--pink-100)`, `var(--red-100)`, `var(--blue-100)`, `var(--yellow-100)`, `var(--grey-100)`.
-
-## Step 4 — output directories (just confirm defaults)
-
-Ask:
-
-> *"Last question: where should I put the dashboard files?*
->
-> *Defaults (press enter / reply 'ok' to accept):*
-> *- Static bundle: `~/.claude/dashboard-os/`*
-> *- Agent cache: `~/.claude/dashboard-data/`*
->
-> *Or give me your own absolute paths."*
-
-**macOS TCC warning — important.** Do NOT put the bundle under `~/Documents`,
-`~/Desktop`, or `~/Downloads`. Those are privacy-protected, and the permanent
-server + scheduled refresh run via launchd, which is **denied read/write** there
-unless the user grants Full Disk Access. The default `~/.claude/dashboard-os` is
-exempt. If the user insists on a custom path inside one of those folders, warn them
-clearly and suggest `~/.claude/dashboard-os` or `~/Library/Application Support/work-os`
-instead.
-
-## Step 5 — write config + create dirs + copy bundle
+**Output paths** — use the defaults, no question:
+  - `output.dashboardDir` = `~/.claude/dashboard-os`
+  - `output.dataCacheDir` = `~/.claude/dashboard-data`
+  (Never use `~/Documents`/`~/Desktop`/`~/Downloads` — macOS TCC blocks the launchd
+  server/refresh there; `~/.claude` is exempt.)
 
 Once all fields are gathered, build the full config object. **Team and OKRs start
 empty on purpose** (`org.team.people: []`, `org.team.attention: ""`,
@@ -194,7 +177,7 @@ Schema (copy exactly — fields in this order):
     "weather": { "city": "..." },
     "focusTarget": 4
   },
-  "output": { "dashboardDir": "...", "dataCacheDir": "..." }
+  "output": { "dashboardDir": "~/.claude/dashboard-os", "dataCacheDir": "~/.claude/dashboard-data" }
 }
 ```
 
@@ -207,7 +190,7 @@ Actions:
    `$dashboardDir/.bundle-version`.
 5. Create `~/.claude/dashboard-filters.local` if it doesn't exist with the content of `$PLUGIN_DIR/templates/dashboard-filters.local.example`.
 
-## Step 6 — verify the user's MCP connectors (live check, no static table)
+## Step 4 — verify the user's MCP connectors (live check, no static table)
 
 The plugin bundles **no MCP servers** — the dashboard uses the connectors the user
 already has (at most companies these are the standard managed connectors:
@@ -247,7 +230,7 @@ Your data sources:
 Close with: "If a server fails at refresh time, its section shows 'source unavailable' —
 the rest of the dashboard still renders. You can add sources incrementally."
 
-## Step 7 — start the permanent server, refresh, open the dashboard
+## Step 5 — start the permanent server, refresh, open the dashboard
 
 The dashboard must be viewed over `http://localhost`, never as a `file://` page —
 opening the HTML directly makes the browser block Babel from loading the `.jsx`
@@ -296,7 +279,7 @@ To remove everything later: /dashboard-uninstall
 - **Never paste a raw JSON block at the user and ask them to edit it.** That defeats the point of this skill.
 - **Always back up** an existing config before overwriting. Never silent-destroy user data.
 - **Timezone is auto by default** — store `"auto"`, which makes every refresh detect the system zone live (handles travel). Only if the user explicitly wants to PIN a fixed zone, store an IANA name; if they give a vague "CET"/"Pacific time", offer the canonical form (e.g. "Europe/Madrid", "America/Los_Angeles") and confirm before storing it.
-- **Don't orchestrate the 6 agents from this skill.** The only refresh this skill may trigger is the single `refresh-headless.sh` call in Step 7, with the user's consent.
+- **Don't orchestrate the agents from this skill.** The only refresh this skill may trigger is the one in Step 5 (interactive Slack + `refresh-headless.sh`), with the user's consent.
 - **If the user aborts mid-setup**, discard any partial state — don't write a half-filled config.
 - **Currency / language**: the dashboard is English-only today; don't offer localization options.
 
