@@ -1,7 +1,7 @@
 ---
 name: dashboard-slack
 description: Fetches recent Slack activity via the Slack MCP server, scoped to channels where the user is actually active (DMs + channels they've posted in within the last 30 days, plus high-signal incident channels for blocker detection). Lookback window is dynamic per the orchestrator's prompt. Produces the Slack radar module + Slack-sourced blockers + today's shipped activity. (Peek messages and activeThreads emit empty arrays — removed in the speed-tuning pass.)
-tools: mcp__Slack__slack_search_public_and_private, mcp__Slack__slack_search_public, ToolSearch, Write
+tools: mcp__claude_ai_Slack__slack_search_public_and_private, mcp__claude_ai_Slack__slack_search_public, mcp__Slack__slack_search_public_and_private, mcp__Slack__slack_search_public, ToolSearch, Read, Write
 ---
 
 # Dashboard — Slack agent
@@ -89,7 +89,7 @@ Live incidents or unresolved debates blocking the user's team. Use query #4's re
 
 ## Output
 
-Write the result to `<dataCacheDir>/slack.json` using the **Write tool**. The orchestrator **deletes this file before spawning you**, so it does not exist yet — a single Write call creates it fresh, and you do **not** need to Read it first. **Never use `cat`, `echo`, `tee`, or a heredoc to write it** — those can't be statically analyzed and force a manual permission prompt. If a Write ever reports the file already exists, just Write again — do not fall back to a shell command. Schema:
+Write the result to `<dataCacheDir>/slack.json` using the **Write tool**. A single Write creates it fresh. **If the Write reports the file already exists** (a stale file from a prior run), **Read it once, then Write again** — never leave the data unwritten. **Never use `cat`, `echo`, `tee`, or a heredoc** — those force a manual permission prompt. Schema:
 
 ```json
 {

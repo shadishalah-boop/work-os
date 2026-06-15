@@ -1,7 +1,7 @@
 ---
 name: dashboard-gmail
 description: Fetches today's actionable Gmail threads for the Work Dashboard's Inbox, Decisions, and Gmail-sourced Tasks sections. Extracts threads where the user is directly addressed, has an explicit ask awaiting their response, or has been waiting on someone else for >2 days. Invoke from the dashboard skill — not directly useful standalone.
-tools: mcp__claude_ai_Gmail__search_threads, mcp__claude_ai_Gmail__get_thread, mcp__Gmail__search_threads, mcp__Gmail__get_thread, mcp__gmail__search_threads, mcp__gmail__get_thread, ToolSearch, Write
+tools: mcp__claude_ai_Gmail__search_threads, mcp__claude_ai_Gmail__get_thread, mcp__Gmail__search_threads, mcp__Gmail__get_thread, mcp__gmail__search_threads, mcp__gmail__get_thread, ToolSearch, Read, Write
 ---
 
 # Dashboard — Gmail agent
@@ -21,9 +21,11 @@ so the tools are normally **`mcp__Gmail__search_threads`** / **`mcp__Gmail__get_
 Resolve robustly:
   - First try `mcp__<server>__search_threads` / `…__get_thread` with the server name from
     your kickoff prompt.
-  - Then try the legacy names `mcp__gmail__search_threads` / `…__get_thread`.
-  - If neither is available, call **`ToolSearch`** with `query: "gmail search threads"` to
-    load the schemas, then use them.
+  - Then the **`claude_ai_`-prefixed** names `mcp__claude_ai_Gmail__search_threads` /
+    `…__get_thread` — claude.ai-managed connectors (the common case) use this prefix.
+  - Then the legacy names `mcp__gmail__search_threads` / `…__get_thread`.
+  - If none resolve, call **`ToolSearch`** with `query: "gmail search threads"` and use what
+    it surfaces (ToolSearch only sees your frontmatter allowlist, which includes `claude_ai_`).
   - Use whatever thread search/read tools ToolSearch surfaces.
   Only write `sourceOk:false` (see Rules) after you have genuinely tried ToolSearch and
   found no Gmail tool. **Never fabricate threads** when the tools are missing — write empty
@@ -44,7 +46,7 @@ Resolve robustly:
 
 ## Output
 
-Write the result to `<dataCacheDir>/gmail.json` using the **Write tool**. The orchestrator **deletes this file before spawning you**, so it does not exist yet — a single Write call creates it fresh, and you do **not** need to Read it first. **Never use `cat`, `echo`, `tee`, or a heredoc (`<< EOF`) to write the file** — Claude Code can't statically analyze those, so they force a manual permission prompt on every refresh. The Write tool is pre-approved for this path; bash file-writes are not. If a Write ever reports the file already exists, just Write again — do not fall back to a shell command. Schema:
+Write the result to `<dataCacheDir>/gmail.json` using the **Write tool**. The orchestrator normally deletes this file before you run, so a single Write creates it fresh. **If the Write reports the file already exists** (a stale file from a prior run), **Read it once, then Write again** — you have the Read tool for exactly this; never leave the data unwritten. **Never use `cat`, `echo`, `tee`, or a heredoc (`<< EOF`)** to write the file — Claude Code can't statically analyze those, forcing a permission prompt. Schema:
 
 ```json
 {

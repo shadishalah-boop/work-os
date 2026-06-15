@@ -1,7 +1,7 @@
 ---
 name: dashboard-granola
 description: Fetches the last 7 days of Granola meeting notes and extracts action items, commitments, projects, decisions, and blockers for the Work Dashboard's Top-3, Tasks, Projects, Blockers, and Decisions modules. Invoke from the dashboard skill — not directly useful standalone.
-tools: mcp__claude_ai_Granola__list_meetings, mcp__claude_ai_Granola__get_meetings, mcp__Granola__list_meetings, mcp__Granola__get_meetings, mcp__granola__list_meetings, mcp__granola__get_meetings, ToolSearch, Write
+tools: mcp__claude_ai_Granola__list_meetings, mcp__claude_ai_Granola__get_meetings, mcp__Granola__list_meetings, mcp__Granola__get_meetings, mcp__granola__list_meetings, mcp__granola__get_meetings, ToolSearch, Read, Write
 ---
 
 # Dashboard — Granola agent
@@ -19,10 +19,13 @@ Identity (the orchestrator passes the live values; the dashboard config supplies
 prompt names the Granola MCP server (default **`Granola`** — the standard managed
 connector), so the tools are normally **`mcp__Granola__list_meetings`** /
 **`mcp__Granola__get_meetings`**. Resolve robustly: try the `mcp__<server>__…` names from
-your kickoff prompt first, then the legacy `mcp__granola__…` names; if neither is
-available, call **`ToolSearch`** with `query: "granola list meetings"` and use what it
-surfaces. Only write `sourceOk:false` after genuinely trying ToolSearch and finding no
-Granola tool — never fabricate meetings.
+your kickoff prompt first; then the **`claude_ai_`-prefixed** names
+`mcp__claude_ai_Granola__list_meetings` / `…__get_meetings` (claude.ai-managed connectors
+use this prefix); then the legacy `mcp__granola__…` names; if none resolve, call
+**`ToolSearch`** with `query: "granola list meetings"` and use what it surfaces (ToolSearch
+only sees your frontmatter allowlist, which includes `claude_ai_`). Only write
+`sourceOk:false` after genuinely trying ToolSearch and finding no Granola tool — never
+fabricate meetings.
 
 1. List meetings from the last **N days** via **a single `list_meetings` call**, where **N is the lookback window the orchestrator specifies in your prompt** (typically 1 on Tue-Fri, 3 on Monday/weekend; default to 7 only if no window is given). `list_meetings` returns titles, dates, participants, and IDs only — **no notes content**. If `list_meetings` fails for a real reason, write the JSON with `sourceOk: false`.
 2. **Fetch the notes/summary for those meetings** via a single `get_meetings` call passing the IDs from step 1 (max 10 per call — if step 1 returned >10, just pass the 10 most recent). `get_meetings` returns the AI-generated summary for each meeting, which contains the action items and decisions you need to extract. **Do NOT** call `get_meeting_transcript` — full transcripts are 10-50× the size and rarely surface items the summary missed. **Do NOT** call `query_granola_meetings` for this purpose either — it's a natural-language search that frequently returns "no meetings found" for very recent meetings that aren't yet indexed, even when `get_meetings` returns rich summaries for the same IDs.
@@ -41,7 +44,7 @@ Granola tool — never fabricate meetings.
 
 ## Output
 
-Write the result to `<dataCacheDir>/granola.json` using the **Write tool**. The orchestrator **deletes this file before spawning you**, so it does not exist yet — a single Write call creates it fresh, and you do **not** need to Read it first. **Never use `cat`, `echo`, `tee`, or a heredoc (`<< EOF`) to write the file** — Claude Code can't statically analyze those, so they force a manual permission prompt on every refresh. The Write tool is pre-approved for this path; bash file-writes are not. If a Write ever reports the file already exists, just Write again — do not fall back to a shell command. Schema:
+Write the result to `<dataCacheDir>/granola.json` using the **Write tool**. The orchestrator normally deletes this file before you run, so a single Write creates it fresh. **If the Write reports the file already exists** (a stale file from a prior run), **Read it once, then Write again** — you have the Read tool for exactly this; never leave the data unwritten. **Never use `cat`, `echo`, `tee`, or a heredoc (`<< EOF`)** to write the file — Claude Code can't statically analyze those, forcing a permission prompt. Schema:
 
 ```json
 {
