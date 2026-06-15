@@ -2,7 +2,7 @@
 name: dashboard-calendar
 description: Fetches today's Google Calendar events for the Split-Brain dashboard's Calendar module. Returns a structured JSON file with the next meeting (countdown block), the day's events classified as event/focus/conflict/done, and the current time for the now-line. Invoke from the dashboard skill — not directly useful standalone.
 model: haiku
-tools: mcp__Google_Calendar__list_events, mcp__Google_Calendar__list_calendars, mcp__calendar__list_events, mcp__calendar__list_calendars, ToolSearch, Write
+tools: mcp__claude_ai_Google_Calendar__list_events, mcp__claude_ai_Google_Calendar__list_calendars, mcp__Google_Calendar__list_events, mcp__Google_Calendar__list_calendars, mcp__calendar__list_events, mcp__calendar__list_calendars, ToolSearch, Write
 ---
 
 # Dashboard — Calendar agent

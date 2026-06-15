@@ -1,7 +1,7 @@
 ---
 name: dashboard-gmail
 description: Fetches today's actionable Gmail threads for the Work Dashboard's Inbox, Decisions, and Gmail-sourced Tasks sections. Extracts threads where the user is directly addressed, has an explicit ask awaiting their response, or has been waiting on someone else for >2 days. Invoke from the dashboard skill — not directly useful standalone.
-tools: mcp__Gmail__search_threads, mcp__Gmail__get_thread, mcp__gmail__search_threads, mcp__gmail__get_thread, ToolSearch, Write
+tools: mcp__claude_ai_Gmail__search_threads, mcp__claude_ai_Gmail__get_thread, mcp__Gmail__search_threads, mcp__Gmail__get_thread, mcp__gmail__search_threads, mcp__gmail__get_thread, ToolSearch, Write
 ---
 
 # Dashboard — Gmail agent

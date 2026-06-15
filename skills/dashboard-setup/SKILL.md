@@ -251,10 +251,12 @@ open the `localhost` URL. Do NOT just `open` the HTML file.
    ```
    Capture the `http://localhost:PORT/Work%20Dashboard.html` URL it prints.
 
-2. **Run the first refresh** — the full `dashboard` flow (so Slack is included):
-   first the interactive Slack step, then the headless call. Do it exactly as the
-   `dashboard` skill's "How to refresh" section describes (Step 1 `slack-prep.sh` +
-   `dashboard-slack` agent, then Step 2 `refresh-headless.sh`). Relay the final line.
+2. **Run the first refresh** — do it exactly as the `dashboard` skill's "How to
+   refresh" section describes: it runs **entirely in this interactive session**
+   (prep → in-session agents + inline Slack → merge), because claude.ai connectors
+   aren't visible to a headless subprocess. The first run will ask to approve each
+   connector tool — tell the user to choose **"don't ask again"** so future refreshes
+   are prompt-free. Relay the final confirmation line.
 
 3. **Open the dashboard at the localhost URL** (not the file path):
    `open "http://localhost:PORT/Work%20Dashboard.html"` (macOS) /
@@ -275,11 +277,13 @@ To remove everything later: /dashboard-uninstall
 — welcome to your Work Dashboard, <firstName>.
 ```
 
-5. Finally offer scheduled auto-refresh: *"Want the data to refresh itself on a
-   schedule (weekdays 8:00 + 13:00 by default)? Note: scheduled runs update
-   everything except Slack (Slack needs you to run /dashboard so it can ask consent)."*
-   If yes: `bash "${CLAUDE_PLUGIN_ROOT}/skills/dashboard/schedule.sh" install`
-   (append `--times "..."` for custom times). Relay the output.
+5. **Refresh cadence — set expectations, don't install a scheduled job.** With
+   claude.ai-managed connectors, a *scheduled* (headless launchd/cron) refresh can't
+   see the connectors, so it would fetch nothing. Tell the user: "Your data refreshes
+   whenever you run **/dashboard** — the permanent server is already running, so just
+   reload the tab after. (A timed auto-refresh isn't possible with claude.ai
+   connectors, since background jobs can't access them.)" Only set up
+   `schedule.sh install` if the user explicitly has headless-capable MCP servers.
 
 ## Rules
 
@@ -287,7 +291,7 @@ To remove everything later: /dashboard-uninstall
 - **Never paste a raw JSON block at the user and ask them to edit it.** That defeats the point of this skill.
 - **Always back up** an existing config before overwriting. Never silent-destroy user data.
 - **Timezone is auto by default** — store `"auto"`, which makes every refresh detect the system zone live (handles travel). Only if the user explicitly wants to PIN a fixed zone, store an IANA name; if they give a vague "CET"/"Pacific time", offer the canonical form (e.g. "Europe/Madrid", "America/Los_Angeles") and confirm before storing it.
-- **Don't orchestrate the agents from this skill.** The only refresh this skill may trigger is the one in Step 5 (interactive Slack + `refresh-headless.sh`), with the user's consent.
+- **Don't orchestrate the agents from this skill.** The only refresh this skill may trigger is the one in Step 5 — the `dashboard` skill's in-session flow — with the user's consent.
 - **If the user aborts mid-setup**, discard any partial state — don't write a half-filled config.
 - **Currency / language**: the dashboard is English-only today; don't offer localization options.
 
