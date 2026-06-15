@@ -2,7 +2,7 @@
 name: dashboard-drive
 model: haiku
 description: Fetches the user's recent Google Drive files (last 14 days, owned or edited, capped at 25) to power the Work Dashboard's Find palette and voice mic "open [file name]" fuzzy-match command. Produces a flat JSON index the skill converts into drive-index.jsx. Invoke from the dashboard skill — not directly useful standalone.
-tools: mcp__Google_Drive__list_recent_files, mcp__Google_Drive__search_files, mcp__drive__list_recent_files, mcp__drive__search_files, ToolSearch, Write
+tools: mcp__claude_ai_Google_Drive__list_recent_files, mcp__claude_ai_Google_Drive__search_files, mcp__Google_Drive__list_recent_files, mcp__Google_Drive__search_files, mcp__drive__list_recent_files, mcp__drive__search_files, ToolSearch, Write
 ---
 
 # Dashboard — Drive agent

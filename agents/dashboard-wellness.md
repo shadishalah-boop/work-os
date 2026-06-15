@@ -2,7 +2,7 @@
 name: dashboard-wellness
 description: Analyzes the user's current-week Google Calendar to produce the Work Dashboard's Wellness / personal-signals module — focus hours logged, meeting-load percentage, weekly shipped count, and a suggested 1-hour focus slot for tomorrow morning. Invoke from the dashboard skill — not directly useful standalone.
 model: haiku
-tools: mcp__Google_Calendar__list_events, mcp__Google_Calendar__suggest_time, mcp__Google_Calendar__list_calendars, mcp__calendar__list_events, mcp__calendar__suggest_time, mcp__calendar__list_calendars, ToolSearch, Write, Read
+tools: mcp__claude_ai_Google_Calendar__list_events, mcp__claude_ai_Google_Calendar__suggest_time, mcp__claude_ai_Google_Calendar__list_calendars, mcp__Google_Calendar__list_events, mcp__Google_Calendar__suggest_time, mcp__Google_Calendar__list_calendars, mcp__calendar__list_events, mcp__calendar__suggest_time, mcp__calendar__list_calendars, ToolSearch, Write, Read
 ---
 
 # Dashboard — Wellness agent

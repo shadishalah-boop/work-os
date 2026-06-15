@@ -209,21 +209,23 @@ bash <plugin>/skills/dashboard/schedule.sh status       # show server URL + sche
 
 Then open `http://localhost:8787/Work%20Dashboard.html`.
 
-## Optional: scheduled auto-refresh
+## How refreshing works (interactive only, with claude.ai connectors)
 
-Want the data to refresh on its own? Ask Claude Code *"set up the dashboard
-auto-refresh schedule"*, or:
+The refresh runs **in your interactive Claude Code session** — `/dashboard` fetches
+all six sources there and merges them. This is required because **claude.ai-managed
+connectors only exist in the interactive session**; a background/headless process
+can't see them. So:
 
-```bash
-bash <plugin>/skills/dashboard/schedule.sh install                      # weekdays 08:00 + 13:00
-bash <plugin>/skills/dashboard/schedule.sh install --times "08:00 12:00 16:00"
-bash <plugin>/skills/dashboard/schedule.sh uninstall                    # remove schedule + server
-```
+- **To refresh:** run `/dashboard`, then reload the tab (or it auto-reloads). The
+  first refresh asks you to approve each connector once — choose **"don't ask again"**
+  and future refreshes are silent.
+- **Timed auto-refresh isn't possible** with claude.ai-managed connectors, because a
+  scheduled (launchd/cron) job runs headless and can't access them. The permanent
+  *server* still runs in the background; only the data fetch must be interactive.
 
-macOS uses a launchd LaunchAgent; Linux uses tagged crontab entries. Runs the same
-headless refresh and logs to `~/.claude/dashboard-refresh.log`. **Note:** scheduled
-runs update everything *except Slack* — Slack search needs interactive consent, so it
-only refreshes when you run `/dashboard` yourself (the rest keep your last Slack data).
+> `schedule.sh install` (a timed launchd/cron refresh) exists only for the rare case
+> of MCP servers that load headlessly. Don't use it with claude.ai connectors — it
+> would fetch nothing.
 
 ## Uninstalling
 

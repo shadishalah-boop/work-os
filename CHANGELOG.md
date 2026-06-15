@@ -14,6 +14,30 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.6.0 — 2026-06-15
+
+**Refresh now runs in-session (headless removed).** A live install proved that
+**claude.ai-managed MCP connectors are invisible to a headless `claude -p`
+subprocess** — they exist only in the interactive session. The v0.4+ headless-refresh
+architecture therefore fetched nothing for that (common) connector type: all six
+sources failed in the subprocess. Fixed by running the whole refresh in the
+interactive session.
+
+- `/dashboard` now: `prep.sh` → **in-session** fan-out to the 5 data agents + inline
+  Slack → `wait-and-merge.sh`. No more headless subprocess for fetching.
+- Each data agent's frontmatter now includes the **`claude_ai_`-prefixed** tool names
+  (the real managed-connector names), plus a fallback: if a sub-agent still can't see
+  a connector, the main session performs that agent's spec inline.
+- **Trade-off (unavoidable):** the first refresh asks to approve each connector tool
+  once — choose "don't ask again" and it's silent thereafter. This is the cost of
+  session-scoped connectors; headless's zero-prompt promise was incompatible with them.
+- **Scheduled auto-refresh of data is not possible** with claude.ai connectors (a
+  background job can't see them). Setup no longer offers it; the permanent localhost
+  *server* still runs in the background. `refresh-headless.sh` / `headless-prompt.md`
+  are deprecated (kept only for headless-capable connectors).
+
+---
+
 ## v0.5.7 — 2026-06-15
 
 **Slack actually works now + no setup approval prompts.** Two fixes from a live install.

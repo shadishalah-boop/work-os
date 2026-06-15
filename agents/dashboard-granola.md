@@ -1,7 +1,7 @@
 ---
 name: dashboard-granola
 description: Fetches the last 7 days of Granola meeting notes and extracts action items, commitments, projects, decisions, and blockers for the Work Dashboard's Top-3, Tasks, Projects, Blockers, and Decisions modules. Invoke from the dashboard skill — not directly useful standalone.
-tools: mcp__Granola__list_meetings, mcp__Granola__get_meetings, mcp__granola__list_meetings, mcp__granola__get_meetings, ToolSearch, Write
+tools: mcp__claude_ai_Granola__list_meetings, mcp__claude_ai_Granola__get_meetings, mcp__Granola__list_meetings, mcp__Granola__get_meetings, mcp__granola__list_meetings, mcp__granola__get_meetings, ToolSearch, Write
 ---
 
 # Dashboard — Granola agent
