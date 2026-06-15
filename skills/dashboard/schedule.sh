@@ -38,11 +38,27 @@ dash_url() { echo "http://localhost:${1}/Work%20Dashboard.html"; }
 # --------------------------------------------------------------------------
 # serve — permanent localhost server (the dashboard's display requirement)
 # --------------------------------------------------------------------------
+# Warn if the dashboard lives in a macOS TCC-protected folder, where launchd
+# processes are denied access (server returns 404 / refresh can't write).
+tcc_check() {
+  case "$DASH_DIR" in
+    "$HOME/Documents"/*|"$HOME/Desktop"/*|"$HOME/Downloads"/*)
+      echo "⚠️  WARNING: $DASH_DIR is in a macOS privacy-protected folder." >&2
+      echo "   launchd (the permanent server + scheduled refresh) is blocked from" >&2
+      echo "   reading it, so you'll get a blank/404 page. Move the dashboard out of" >&2
+      echo "   Documents/Desktop/Downloads (set output.dashboardDir to" >&2
+      echo "   ~/.claude/dashboard-os in ~/.claude/dashboard-config.local and re-run" >&2
+      echo "   setup), or grant your terminal/launchd Full Disk Access." >&2
+      ;;
+  esac
+}
+
 serve() {
   local port="${1:-$DEFAULT_PORT}"
   [[ "$port" =~ ^[0-9]+$ ]] || { echo "serve: bad port '$port' (use a number)" >&2; exit 2; }
   mkdir -p "$DASH_DIR"
   echo "$port" > "$PORTFILE"
+  is_macos && tcc_check
 
   if is_macos; then
     mkdir -p "$HOME/Library/LaunchAgents"
@@ -76,6 +92,26 @@ EOF
   fi
   echo "Open your dashboard at:"
   echo "  $(dash_url "$port")"
+
+  # Validate the launchd server can actually read DASH_DIR (catches TCC denial,
+  # which serves 404 even though the files exist). Give it a moment to bind.
+  if command -v curl >/dev/null 2>&1; then
+    sleep 1
+    code=$(curl -s -o /dev/null -w '%{http_code}' "$(dash_url "$port")" 2>/dev/null || echo 000)
+    if [ "$code" != "200" ]; then
+      echo "" >&2
+      echo "⚠️  Server is up but returned HTTP $code for the dashboard." >&2
+      if is_macos; then
+        echo "   On macOS this is almost always TCC privacy protection denying launchd" >&2
+        echo "   access to $DASH_DIR. Move the bundle to ~/.claude/dashboard-os (out of" >&2
+        echo "   Documents/Desktop/Downloads) and re-run, or grant Full Disk Access." >&2
+      else
+        echo "   Check that $DASH_DIR exists and contains 'Work Dashboard.html'." >&2
+      fi
+    else
+      echo "Verified: server returns HTTP 200. ✅"
+    fi
+  fi
 }
 
 unserve() {

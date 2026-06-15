@@ -22,4 +22,7 @@ print(os.path.expanduser(v) if isinstance(v, str) and v else os.path.expanduser(
 }
 
 DATA_DIR="$(_cfg output.dataCacheDir '~/.claude/dashboard-data')"
-DASH_DIR="$(_cfg output.dashboardDir '~/Documents/work-dashboard')"
+# Default is under ~/.claude (NOT ~/Documents) on purpose: macOS TCC privacy
+# protection blocks launchd-spawned processes (the permanent server + scheduled
+# refresh) from reading ~/Documents / ~/Desktop / ~/Downloads. ~/.claude is exempt.
+DASH_DIR="$(_cfg output.dashboardDir '~/.claude/dashboard-os')"

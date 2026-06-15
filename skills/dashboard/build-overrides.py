@@ -10,7 +10,7 @@ here. If the config is missing, generic placeholders are used so the dashboard
 still renders.
 
 Paths (data cache dir, dashboard output dir) also come from the config, falling
-back to ~/.claude/dashboard-data and ~/Documents/work-dashboard.
+back to ~/.claude/dashboard-data and ~/.claude/dashboard-os.
 """
 
 import json
@@ -68,7 +68,7 @@ def cfg_path(dotted, default):
 
 
 DATA_DIR = cfg_path("output.dataCacheDir", "~/.claude/dashboard-data")
-OUT_DIR = cfg_path("output.dashboardDir", "~/Documents/work-dashboard")
+OUT_DIR = cfg_path("output.dashboardDir", "~/.claude/dashboard-os")
 DATA_OVERRIDE = OUT_DIR / "data-override.jsx"
 DRIVE_INDEX = OUT_DIR / "drive-index.jsx"
 HTML_FILE = OUT_DIR / "Work Dashboard.html"

@@ -191,6 +191,11 @@ The dashboard **must be served over `http://localhost`, not opened as a file.**
 Double-clicking `Work Dashboard.html` (a `file://` page) gives a **blank screen**,
 because the browser blocks Babel from loading the `.jsx` files over `file://`.
 
+> **macOS:** keep the dashboard out of `~/Documents`, `~/Desktop`, and `~/Downloads`.
+> Those are privacy-protected (TCC), and the launchd server + scheduled refresh are
+> denied access there (blank/404 page). The default `~/.claude/dashboard-os` is exempt;
+> `schedule.sh serve` warns and self-checks if you've chosen a protected folder.
+
 `/dashboard-setup` handles this for you: it starts a **permanent** localhost server
 (launchd on macOS — survives reboots) and opens the right URL. You normally never
 think about it. To manage it manually:
