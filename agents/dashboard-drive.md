@@ -2,7 +2,7 @@
 name: dashboard-drive
 model: haiku
 description: Fetches the user's recent Google Drive files (last 14 days, owned or edited, capped at 25) to power the Work Dashboard's Find palette and voice mic "open [file name]" fuzzy-match command. Produces a flat JSON index the skill converts into drive-index.jsx. Invoke from the dashboard skill — not directly useful standalone.
-tools: mcp__claude_ai_Google_Drive__list_recent_files, mcp__claude_ai_Google_Drive__search_files, mcp__Google_Drive__list_recent_files, mcp__Google_Drive__search_files, mcp__drive__list_recent_files, mcp__drive__search_files, ToolSearch, Write
+tools: mcp__claude_ai_Google_Drive__list_recent_files, mcp__claude_ai_Google_Drive__search_files, mcp__Google_Drive__list_recent_files, mcp__Google_Drive__search_files, mcp__drive__list_recent_files, mcp__drive__search_files, ToolSearch, Read, Write
 ---
 
 # Dashboard — Drive agent
@@ -18,11 +18,15 @@ Identity (from the dashboard config / kickoff prompt):
 **Resolve your Drive tool.** Your kickoff prompt names the Drive MCP server (default
 **`Google_Drive`** — the standard managed connector), so the tool is normally
 **`mcp__Google_Drive__list_recent_files`**. Try the `mcp__<server>__…` name from your
-kickoff prompt first, then the legacy `mcp__drive__list_recent_files`; if neither is
-available, call **`ToolSearch`** with `query: "drive recent files"` and use whatever
-recent-files tool it surfaces.
+kickoff prompt first; then the **`claude_ai_`-prefixed** name
+`mcp__claude_ai_Google_Drive__list_recent_files` (claude.ai-managed connectors use this
+prefix); then the legacy `mcp__drive__list_recent_files`; if none resolve, call
+**`ToolSearch`** with `query: "drive recent files"` and use what it surfaces (ToolSearch
+only sees your frontmatter allowlist, which includes `claude_ai_`).
 
-You have **only the Drive MCP tools, ToolSearch, and the Write tool** — no Bash. This is
+You have the Drive MCP tools, ToolSearch, and the Read + Write tools — no Bash. (If a
+Write reports `drive-raw.json` already exists from a stale run, Read it once then Write
+again.) This is
 deliberate: an agent that can't emit bash can't trip Claude Code's permission prompt. The
 tedious mimeType→kind / URL / timestamp / dedup math lives in a committed script
 (`drive-transform.py`) that **the orchestrator runs for you** after you finish — you do

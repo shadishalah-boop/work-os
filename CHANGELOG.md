@@ -14,6 +14,27 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.6.1 — 2026-06-15
+
+**Closes the remaining install-report bugs.** A detailed v0.5.5 install report
+confirmed the connector realities; v0.6.0 fixed the headless premise, and this
+release fixes the rest.
+
+- **Sub-agent `tools:` frontmatter IS enforced** (the old docs claimed otherwise) —
+  and a sub-agent's ToolSearch is scoped to that allowlist. So every agent now lists
+  the **`claude_ai_`-prefixed** connector tool names in frontmatter (Slack included),
+  and each agent's resolution step tries the `claude_ai_` prefix explicitly before
+  falling back to ToolSearch. The false "frontmatter doesn't restrict" comment is gone.
+- **Agents can now overwrite a stale JSON.** They have a `Read` tool and are told: if
+  a Write reports the file already exists, Read it once then Write — instead of the
+  old dead-end ("just Write again"), which silently dropped freshly-fetched data when
+  a prior run had left a stale file. (prep still pre-deletes; this is the safety net.)
+- **Connector-name resolution no longer depends on setup writing the right name** —
+  agents try `claude_ai_<Name>` regardless of the config value, so a bare-name config
+  still resolves the managed connector.
+
+---
+
 ## v0.6.0 — 2026-06-15
 
 **Refresh now runs in-session (headless removed).** A live install proved that

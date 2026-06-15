@@ -2,7 +2,7 @@
 name: dashboard-calendar
 description: Fetches today's Google Calendar events for the Split-Brain dashboard's Calendar module. Returns a structured JSON file with the next meeting (countdown block), the day's events classified as event/focus/conflict/done, and the current time for the now-line. Invoke from the dashboard skill — not directly useful standalone.
 model: haiku
-tools: mcp__claude_ai_Google_Calendar__list_events, mcp__claude_ai_Google_Calendar__list_calendars, mcp__Google_Calendar__list_events, mcp__Google_Calendar__list_calendars, mcp__calendar__list_events, mcp__calendar__list_calendars, ToolSearch, Write
+tools: mcp__claude_ai_Google_Calendar__list_events, mcp__claude_ai_Google_Calendar__list_calendars, mcp__Google_Calendar__list_events, mcp__Google_Calendar__list_calendars, mcp__calendar__list_events, mcp__calendar__list_calendars, ToolSearch, Read, Write
 ---
 
 # Dashboard — Calendar agent
@@ -32,9 +32,12 @@ prompt names the calendar MCP server (default **`Google_Calendar`** — the stan
 connector), so the tool is normally **`mcp__Google_Calendar__list_events`** /
 `…__list_calendars`. Resolve it robustly:
   - First try `mcp__<server>__list_events` with the server name from your kickoff prompt.
-  - Then try the legacy name `mcp__calendar__list_events`.
-  - If neither is available, call **`ToolSearch`** with `query: "calendar list events"` to
-    load the schemas, then call what it surfaces.
+  - Then try the **`claude_ai_`-prefixed** name `mcp__claude_ai_Google_Calendar__list_events`
+    — claude.ai-managed connectors (the common case) use this prefix.
+  - Then the legacy name `mcp__calendar__list_events`.
+  - If none resolve, call **`ToolSearch`** with `query: "calendar list events"` and call
+    what it surfaces (your ToolSearch only sees tools in your frontmatter allowlist, which
+    already includes the `claude_ai_` names).
   - Use whatever calendar list-events / list-calendars tool ToolSearch surfaces.
   Only write `sourceOk:false` (step Rules) after you have genuinely tried ToolSearch and
   found no calendar tool. **Never fabricate events or times** when the tool is missing —
@@ -66,7 +69,7 @@ connector), so the tool is normally **`mcp__Google_Calendar__list_events`** /
 
 ## Output
 
-Write the result to `<dataCacheDir>/calendar.json` using the **Write tool**. The orchestrator **deletes this file before spawning you**, so it does not exist yet — a single Write call creates it fresh, and you do **not** need to Read it first. **Never use `cat`, `echo`, `tee`, or a heredoc (`<< EOF`) to write the file** — Claude Code can't statically analyze those, so they force a manual permission prompt on every refresh. The Write tool is pre-approved for this path; bash file-writes are not. If a Write ever reports the file already exists, just Write again — do not fall back to a shell command. Schema:
+Write the result to `<dataCacheDir>/calendar.json` using the **Write tool**. The orchestrator normally deletes this file before you run, so a single Write creates it fresh. **If the Write reports the file already exists** (a stale file from a prior run), **Read it once, then Write again** — you have the Read tool for exactly this; never leave the data unwritten. **Never use `cat`, `echo`, `tee`, or a heredoc (`<< EOF`)** to write the file — Claude Code can't statically analyze those, forcing a permission prompt. Schema:
 
 ```json
 {

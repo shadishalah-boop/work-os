@@ -19,9 +19,11 @@ Identity (from the dashboard config / kickoff prompt):
 prompt names the calendar MCP server (default **`Google_Calendar`** — the standard managed
 connector), so the tool is normally **`mcp__Google_Calendar__list_events`** (and
 `…__suggest_time`, `…__list_calendars`). Resolve robustly: try the
-`mcp__<server>__…` name from your kickoff prompt first, then the legacy
-`mcp__calendar__…` name; if neither is available, call **`ToolSearch`** with
-`query: "calendar list events"` and use whatever it surfaces.
+`mcp__<server>__…` name from your kickoff prompt first; then the **`claude_ai_`-prefixed**
+`mcp__claude_ai_Google_Calendar__…` names (claude.ai-managed connectors use this prefix);
+then the legacy `mcp__calendar__…` name; if none resolve, call **`ToolSearch`** with
+`query: "calendar list events"` and use what it surfaces (ToolSearch only sees your
+frontmatter allowlist, which includes `claude_ai_`).
 **If you cannot reach any calendar list-events tool, write the file with `sourceOk:false`,
 `error:"calendar tool not available"`, and zeroed metrics (`focusTarget:4`, `streak:0`) —
 do NOT fabricate focusHours/meetingHours/pctMeetings.** If `suggest_time` specifically is
@@ -48,7 +50,7 @@ tomorrow 09:00–10:00.
 
 ## Output
 
-Write the result to `<dataCacheDir>/wellness.json` using the **Write tool**. The orchestrator **deletes this file before spawning you**, so it does not exist yet — a single Write call creates it fresh, and you do **not** need to Read it first. **Never use `cat`, `echo`, `tee`, or a heredoc (`<< EOF`) to write the file** — Claude Code can't statically analyze those, so they force a manual permission prompt on every refresh. The Write tool is pre-approved for this path; bash file-writes are not. If a Write ever reports the file already exists, just Write again — do not fall back to a shell command. Schema:
+Write the result to `<dataCacheDir>/wellness.json` using the **Write tool**. The orchestrator normally deletes this file before you run, so a single Write creates it fresh. **If the Write reports the file already exists** (a stale file from a prior run), **Read it once, then Write again** — you have the Read tool for exactly this; never leave the data unwritten. **Never use `cat`, `echo`, `tee`, or a heredoc (`<< EOF`)** to write the file — Claude Code can't statically analyze those, forcing a permission prompt. Schema:
 
 ```json
 {

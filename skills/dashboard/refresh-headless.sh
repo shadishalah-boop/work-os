@@ -12,8 +12,12 @@
 #   (b) lightweight (haiku) agents shell out via `cat <<EOF` heredocs / `python3
 #       <<EOF` / `cp` to do computation — unparseable by the static analyzer;
 #   (c) overwrite-needs-Read Write fallbacks.
-# Sub-agent `tools:` frontmatter does not actually restrict tools in this runtime,
-# so "remove Bash from the agents" doesn't help.
+# NOTE (corrected): sub-agent `tools:` frontmatter DOES restrict tools in this
+# runtime — and a sub-agent's ToolSearch is scoped to that allowlist. That's why
+# every agent must list its connector tool names (incl. the claude_ai_-prefixed
+# ones) explicitly. This headless path is DEPRECATED anyway: claude.ai-managed
+# connectors are invisible to `claude -p`, so it fetches nothing. The live refresh
+# runs in-session (see SKILL.md). Kept only for headless-capable MCP setups.
 #
 # The reliable fix: move the whole orchestration into a non-interactive subprocess
 # where bypassPermissions runs it ungated. The interactive session then sees exactly
