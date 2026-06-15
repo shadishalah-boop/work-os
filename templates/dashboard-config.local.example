@@ -42,7 +42,7 @@
   },
 
   "mcp": {
-    "_README": "Server names of your MCP connectors, as shown by /mcp. Defaults below match the standard managed connectors — only change these if yours are named differently (the agents also fall back to a capability search).",
+    "_README": "Server names of your MCP connectors, as shown by /mcp. /dashboard-setup auto-detects and fills these. NOTE: claude.ai-managed connectors are often prefixed, e.g. 'claude_ai_Google_Calendar', 'claude_ai_Slack' — use the exact name from /mcp. The agents also fall back to a capability search if a name is wrong.",
     "calendar": "Google_Calendar",
     "gmail": "Gmail",
     "slack": "Slack",
@@ -94,7 +94,7 @@
   },
 
   "output": {
-    "dashboardDir": "~/Documents/work-dashboard",
+    "dashboardDir": "~/.claude/dashboard-os",
     "dataCacheDir": "~/.claude/dashboard-data"
   }
 }

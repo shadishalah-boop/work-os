@@ -14,6 +14,36 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.5.4 — 2026-06-15
+
+**macOS hardening, from a real first install.** Fixes the issues a live Mac setup
+hit (full report drove these changes).
+
+### Default output path moved out of `~/Documents` (macOS TCC) — CRITICAL
+
+macOS privacy protection (TCC) denies launchd-spawned processes read/write access
+to `~/Documents`, `~/Desktop`, and `~/Downloads` without Full Disk Access. Since the
+permanent server and the scheduled refresh both run via launchd, the old default
+`~/Documents/...` made them fail (server served 404; scheduled refresh couldn't
+write) — even though a manually-started server worked. The default `dashboardDir` is
+now **`~/.claude/dashboard-os`** (TCC-exempt). `_config.sh`, `build-overrides.py`,
+the setup wizard, and the config template all updated.
+
+- `schedule.sh serve` now **warns** if the bundle is under a protected folder, and
+  **validates** after install (curls the server; on non-200 it explains the TCC
+  cause and the fix instead of silently serving 404s).
+- Setup's output-directory step warns against Documents/Desktop/Downloads.
+
+### Connector names: `claude_ai_` prefix
+
+Real claude.ai-managed connectors resolve under names like
+`claude_ai_Google_Calendar` / `claude_ai_Slack`, not the bare defaults. Setup now
+tries the prefixed variants before falling back to a capability search, and the
+config template documents this. (Detection already worked via fallback; this makes
+it first-class.)
+
+---
+
 ## v0.5.3 — 2026-06-15
 
 **Renders reliably, fixes Slack, easy to remove.** Addresses the three things that

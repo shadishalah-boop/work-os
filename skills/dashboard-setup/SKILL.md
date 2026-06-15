@@ -144,10 +144,18 @@ Ask:
 > *"Last question: where should I put the dashboard files?*
 >
 > *Defaults (press enter / reply 'ok' to accept):*
-> *- Static bundle: `~/Documents/Claude/work-dashboard/`*
+> *- Static bundle: `~/.claude/dashboard-os/`*
 > *- Agent cache: `~/.claude/dashboard-data/`*
 >
 > *Or give me your own absolute paths."*
+
+**macOS TCC warning — important.** Do NOT put the bundle under `~/Documents`,
+`~/Desktop`, or `~/Downloads`. Those are privacy-protected, and the permanent
+server + scheduled refresh run via launchd, which is **denied read/write** there
+unless the user grants Full Disk Access. The default `~/.claude/dashboard-os` is
+exempt. If the user insists on a custom path inside one of those folders, warn them
+clearly and suggest `~/.claude/dashboard-os` or `~/Library/Application Support/work-os`
+instead.
 
 ## Step 5 — write config + create dirs + copy bundle
 
@@ -208,11 +216,13 @@ already has (at most companies these are the standard managed connectors:
 Verify each of the 5 capabilities live:
 
 1. For each source, check whether its tools are available in THIS session. Try the
-   default names first (`mcp__Google_Calendar__list_events`, `mcp__Gmail__search_threads`,
+   bare names first (`mcp__Google_Calendar__list_events`, `mcp__Gmail__search_threads`,
    `mcp__Slack__slack_search_public_and_private`, `mcp__Google_Drive__list_recent_files`,
-   `mcp__Granola__list_meetings`). If a default name is missing, use **ToolSearch** with a
-   capability query (e.g. `"calendar list events"`, `"slack search messages"`) to find
-   what that user's server is actually called.
+   `mcp__Granola__list_meetings`), THEN the **`claude_ai_`-prefixed** variants that
+   claude.ai-managed connectors commonly use (`mcp__claude_ai_Google_Calendar__list_events`,
+   `mcp__claude_ai_Slack__slack_search_public_and_private`, etc.). If neither resolves,
+   use **ToolSearch** with a capability query (e.g. `"calendar list events"`,
+   `"slack search messages"`) to find what that user's server is actually called.
 2. When a source resolves under a **non-default server name**, record the actual server
    name in the config's `mcp` section (e.g. `"calendar": "gcal"`) so every refresh tells
    the agents the right name. Leave defaults for sources that match.
