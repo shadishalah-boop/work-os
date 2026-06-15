@@ -248,7 +248,11 @@ claude plugin uninstall work-os@work-os
 
 ### Add your team & OKRs (after install)
 
-These aren't asked during setup — the dashboard's People and OKR cards show a prompt instead. Add them anytime by telling Claude Code *"add my team to the dashboard"* or *"add my OKRs to the dashboard"*, and it'll structure them into your config and refresh. (Or edit `~/.claude/dashboard-config.local` directly — `org.team` and `dashboard.okrs` — and rerun `/dashboard`.)
+These aren't asked during setup — the dashboard's People and OKR cards show a prompt instead. Three ways to add them:
+
+- **OKRs, right in the dashboard:** click **Paste OKRs** on the OKR card and paste one per line (`name | percent | trend`). Saved in your browser, kept across refreshes — no Claude Code needed.
+- **Ask Claude Code:** *"add my team to the dashboard"* / *"add my OKRs to the dashboard"* — it structures them into your config and refreshes.
+- **Edit the config:** `~/.claude/dashboard-config.local` → `org.team` / `dashboard.okrs`, then rerun `/dashboard`.
 
 ### Edit static blocks
 

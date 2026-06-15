@@ -321,6 +321,18 @@ function ProjectsMod({ data, okrs, decisions, okrApi }) {
     catch { return []; }
   });
   const [openArchiveId, setOpenArchiveId] = useStateB(null);
+  const [okrEditOpen, setOkrEditOpen] = useStateB(false);
+  const [okrDraft, setOkrDraft] = useStateB('');
+  const openOkrEditor = () => {
+    const cur = (window.DashboardOkrs && window.DashboardOkrs.load()) || [];
+    setOkrDraft(cur.map(o => `${o.name} | ${o.pct} | ${o.trend}`).join('\n'));
+    setOkrEditOpen(true);
+  };
+  const saveOkrs = () => {
+    if (!window.DashboardOkrs) return;
+    window.DashboardOkrs.save(window.DashboardOkrs.parse(okrDraft));
+    window.location.reload();   // reload so OKR metadata/colors rebuild from the merged list
+  };
   useEffectB(() => { setDecList(decisions); }, [decisions]);
   // Re-read the archive on every save so the view stays fresh.
   useEffectB(() => {
@@ -392,6 +404,11 @@ function ProjectsMod({ data, okrs, decisions, okrApi }) {
       ))}
       <div className="sub-section-head">
         OKRs<span className="bar"/>
+        <button
+          className="okr-generate-btn"
+          onClick={openOkrEditor}
+          title="Paste or edit your OKRs right here — saved in this browser, kept across refreshes"
+        >{okrs.length > 0 ? 'Edit OKRs' : 'Paste OKRs'}</button>
         {okrApi && okrs.length > 0 && (
           <button
             className="okr-generate-btn"
@@ -400,11 +417,29 @@ function ProjectsMod({ data, okrs, decisions, okrApi }) {
           >Generate review notes →</button>
         )}
       </div>
-      {okrs.length === 0 && (
+      {okrEditOpen && (
+        <div style={{padding:'10px', marginBottom:10, border:'1px solid var(--border-default)', borderRadius:8, background:'var(--bg-1)'}}>
+          <div style={{fontSize:12, color:'var(--fg-2)', marginBottom:6, lineHeight:1.5}}>
+            One OKR per line — <code style={{fontSize:11}}>name | percent | trend</code> (percent & trend optional;
+            trend = on-pace / behind / ahead). Saved in this browser and kept across refreshes.
+          </div>
+          <textarea
+            value={okrDraft}
+            onChange={e => setOkrDraft(e.target.value)}
+            rows={6}
+            placeholder={"Lift activation 15% | 40 | on-pace\nCut time-to-first-lesson <48h | 20 | behind\nReach NPS 60+ | 78 | ahead"}
+            style={{width:'100%', boxSizing:'border-box', padding:'8px 10px', border:'1px solid var(--border-default)', borderRadius:8, font:'13px/1.5 var(--font-mono, ui-monospace), monospace', resize:'vertical'}}
+          />
+          <div style={{display:'flex', gap:8, marginTop:8}}>
+            <button className="btn btn--primary btn--sm" onClick={saveOkrs}>Save OKRs</button>
+            <button className="btn btn--ghost btn--sm" onClick={() => setOkrEditOpen(false)}>Cancel</button>
+          </div>
+        </div>
+      )}
+      {okrs.length === 0 && !okrEditOpen && (
         <div style={{fontSize:13, color:'var(--fg-2)', padding:'8px 2px 4px'}}>
-          No OKRs configured yet. Ask Claude Code to <em>"add my OKRs to the dashboard"</em> or
-          edit <code style={{fontSize:12}}>~/.claude/dashboard-config.local</code> → <code style={{fontSize:12}}>dashboard.okrs</code>,
-          then run <code style={{fontSize:12}}>/dashboard</code>.
+          No OKRs yet. Click <button onClick={openOkrEditor} style={{background:'none', border:'none', padding:0, color:'var(--accent, var(--blue-600))', cursor:'pointer', font:'inherit', textDecoration:'underline'}}>Paste OKRs</button> above to add them here,
+          or tell Claude Code <em>"add my OKRs to the dashboard"</em>.
         </div>
       )}
       {okrs.map(o => {

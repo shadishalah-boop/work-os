@@ -1138,9 +1138,52 @@ function deleteArchivedDecision(id) {
   window.dispatchEvent(new CustomEvent('dash:decision-archived', { detail: { id, deleted: true } }));
 }
 
+// --- User-pasted OKRs (added from the dashboard's "Paste OKRs" UI) ------------
+// Stored in localStorage and merged into SEED.okrs *before* the metadata below is
+// built, so the tagger, review-notes, and Projects card all see them. Survives
+// /dashboard refreshes (those only rewrite SEED.okrs from config). window.SEED
+// already exists by now (data.jsx + data-override.jsx loaded before app.jsx).
+const USER_OKRS_KEY = 'dashboard.userOkrs.v1';
+function loadUserOkrs() {
+  try { const a = JSON.parse(localStorage.getItem(USER_OKRS_KEY) || '[]'); return Array.isArray(a) ? a : []; }
+  catch { return []; }
+}
+// Parse pasted text → OKR objects. One per line: "name | percent | trend"
+// (percent and trend optional; trend = on-pace | behind | ahead).
+function parseOkrs(text) {
+  const out = [];
+  (text || '').split(/\r?\n/).forEach((raw) => {
+    const line = raw.trim();
+    if (!line) return;
+    const parts = line.split('|').map(s => s.trim());
+    const name = parts[0];
+    if (!name) return;
+    let pct = 0, trend = 'on-pace';
+    if (parts[1]) { const m = parts[1].match(/\d{1,3}/); if (m) pct = Math.max(0, Math.min(100, parseInt(m[0], 10))); }
+    if (parts[2]) { const t = parts[2].toLowerCase(); trend = (t.includes('behind') || t.includes('risk')) ? 'behind' : t.includes('ahead') ? 'ahead' : 'on-pace'; }
+    const short = ((name.match(/[A-Za-z][A-Za-z0-9]*/g) || []).slice(0, 3).map(w => w[0]).join('').toUpperCase().slice(0, 4)) || 'OKR';
+    const keywords = Array.from(new Set(name.toLowerCase().match(/[a-z]{4,}/g) || [])).slice(0, 8);
+    out.push({ name, pct, trend, short, keywords });
+  });
+  return out;
+}
+function saveUserOkrs(list) {
+  const withIds = (list || []).map((o, i) => ({ ...o, id: 'uk' + (i + 1) }));  // uk* never collides with config k1..kN
+  try { localStorage.setItem(USER_OKRS_KEY, JSON.stringify(withIds)); } catch { /* quota */ }
+  return withIds;
+}
+window.DashboardOkrs = { KEY: USER_OKRS_KEY, load: loadUserOkrs, parse: parseOkrs, save: saveUserOkrs };
+(function mergeUserOkrs() {
+  window.SEED = window.SEED || {};
+  const base = Array.isArray(window.SEED.okrs) ? window.SEED.okrs : [];
+  const ids = new Set(base.map(o => o.id));
+  const user = loadUserOkrs().filter(o => !ids.has(o.id));
+  if (user.length) window.SEED.okrs = base.concat(user);
+})();
+
 const OKR_LINKS_KEY = 'dashboard.okrLinks.v1';
-// META + KEYWORDS are derived from the user's configured OKRs (SEED.okrs) — any
-// number of them, any ids. Per-OKR config fields:
+// META + KEYWORDS are derived from the user's OKRs (SEED.okrs, config + pasted) —
+// any number, any ids. Per-OKR fields:
 //   `short`    — optional 2-4 char pill label (defaults to K1, K2, …)
 //   `keywords` — optional lowercase substrings that auto-suggest tags for
 //                matching tasks/decisions (empty = manual tagging only)

@@ -14,6 +14,21 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.5.5 — 2026-06-15
+
+**Paste OKRs from the dashboard.** The OKR card now has an **Edit / Paste OKRs**
+button — paste them straight into the dashboard, no Claude Code or config editing
+needed. One OKR per line (`name | percent | trend`; percent and trend optional).
+
+- Saved in the browser (`localStorage`, like the dashboard's other edits) and merged
+  into `window.SEED.okrs`, so the OKR tagger, auto-suggest keywords, pill labels, and
+  "Generate review notes" all pick them up. Survives `/dashboard` refreshes.
+- Pill label and auto-tag keywords are derived from each OKR's name automatically.
+- The empty state now offers a one-click **Paste OKRs** link in addition to the
+  "ask Claude Code" path. Config-defined OKRs still work and are shown alongside.
+
+---
+
 ## v0.5.4 — 2026-06-15
 
 **macOS hardening, from a real first install.** Fixes the issues a live Mac setup
