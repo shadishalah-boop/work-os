@@ -14,6 +14,16 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.5.6 — 2026-06-15
+
+**Near-zero-questions setup.** Removed the last two setup prompts — **pins** and
+**output location** are now silent defaults. The only thing the user actively
+answers is the identity confirmation (plus the Reset/Edit/Cancel choice if a config
+already exists). Pins are the 5 standard quick-links (Slack subdomain derived from
+the email domain); output goes to `~/.claude/dashboard-os` automatically.
+
+---
+
 ## v0.5.5 — 2026-06-15
 
 **Paste OKRs from the dashboard.** The OKR card now has an **Edit / Paste OKRs**
