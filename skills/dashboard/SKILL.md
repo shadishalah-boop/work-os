@@ -23,36 +23,37 @@ local React-in-browser dashboard. All per-user identity and paths come from
 
 ## How to refresh — two steps: interactive Slack, then the headless call
 
-### Step 1 — refresh Slack (interactive; required, because Slack search needs consent)
+### Step 1 — refresh Slack YOURSELF, in the main session (do NOT spawn a sub-agent)
 
-Slack's MCP search (`slack_search_public_and_private`) requires **user consent**,
-which the headless subprocess can't give — so Slack is fetched here, in the
-interactive session, BEFORE the headless step. (You may see a one-time Slack
-consent prompt; that's expected and is the whole reason this step exists.)
+Slack must be fetched by **you, the main interactive assistant** — NOT via the
+`Agent`/sub-agent tool. Two reasons, both confirmed in the field:
+- **Sub-agents are sandboxed** to the bare `mcp__Slack__*` tool names and CANNOT
+  reach this session's managed connector, which is often exposed under a prefix like
+  `mcp__claude_ai_Slack__…`. A spawned `dashboard-slack` agent therefore finds no
+  Slack tool and fails. The MAIN session CAN reach the prefixed connector.
+- Slack's `slack_search_public_and_private` needs **user consent**, which only an
+  interactive session can grant (you may see a one-time consent prompt — expected).
 
-1. Get the cache dir + dates:
-   ```
-   Bash(command: "bash ${CLAUDE_PLUGIN_ROOT}/skills/dashboard/slack-prep.sh",
-        description: "Slack prep (paths + dates)")
-   ```
-   Capture `DATA_DIR`, `TODAY`, `SINCE_WINDOW`, `SINCE_1D`, `SINCE_30D`, `MCP_SLACK`,
-   `WORKSPACE`, `TZNAME`.
-2. Spawn ONE `dashboard-slack` agent with the captured values:
-   ```
-   Agent(subagent_type: "dashboard-slack",
-         prompt: "Refresh slack data. Today is <TODAY>; timezone=<TZNAME>. Your Slack
-                  MCP server is named <MCP_SLACK>; workspace=<WORKSPACE>. Absolute
-                  dates for Slack search operators: SINCE_WINDOW=<SINCE_WINDOW>;
-                  SINCE_1D=<SINCE_1D>; SINCE_30D=<SINCE_30D>. Write the JSON to
-                  <DATA_DIR>/slack.json.")
-   ```
-   If the user has no Slack connector or declines consent, continue anyway — the
-   agent writes `sourceOk:false` and the rest of the dashboard renders fine. Do not
-   block the refresh on Slack.
+Do this yourself, inline:
 
-> Scheduled/headless refreshes (launchd/cron) skip this step — they can't get
-> consent — so they keep the **last** `slack.json` from an interactive run. Run
-> `/dashboard` yourself to refresh Slack.
+1. Get paths/dates: `Bash(command: "bash ${CLAUDE_PLUGIN_ROOT}/skills/dashboard/slack-prep.sh", description: "Slack prep")`.
+   Capture `DATA_DIR`, `SINCE_WINDOW`, `SINCE_1D`, `SINCE_30D`, `MCP_SLACK`, `WORKSPACE`, `TZNAME`.
+2. **Resolve the Slack search tool in THIS session**, in order:
+   `mcp__<MCP_SLACK>__slack_search_public_and_private` (MCP_SLACK from config may be
+   `claude_ai_Slack`) → `mcp__claude_ai_Slack__slack_search_public_and_private` →
+   `mcp__Slack__slack_search_public_and_private` → else `ToolSearch` with
+   `query: "slack search messages"`. Use whatever resolves.
+3. Run the 4 searches (absolute dates):
+   `to:me after:<SINCE_WINDOW>` · `from:me after:<SINCE_1D>` (questions = those
+   containing `?`) · `from:me after:<SINCE_1D>` (shipped) · `incident after:<SINCE_WINDOW>`.
+4. Build `slack.json` following the schema + scope/classification rules in
+   `agents/dashboard-slack.md` (Read it for the exact schema — apply the scope filter:
+   DMs + channels you posted in + `#incident-*`). **Write** it to `<DATA_DIR>/slack.json`.
+5. If no Slack tool resolves at all, Write `slack.json` with `"sourceOk": false` and
+   continue — the rest of the dashboard renders fine. Never block the refresh on Slack.
+
+> Scheduled/headless refreshes (launchd/cron) skip this step (no interactive session
+> for consent), so they keep the **last** `slack.json`. Run `/dashboard` to refresh Slack.
 
 ### Step 2 — the one headless call (everything else + merge)
 

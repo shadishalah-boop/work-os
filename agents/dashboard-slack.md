@@ -6,6 +6,12 @@ tools: mcp__Slack__slack_search_public_and_private, mcp__Slack__slack_search_pub
 
 # Dashboard — Slack agent
 
+> **This spec is performed by the MAIN interactive session** (see the `dashboard`
+> skill, Step 1), NOT spawned as a sub-agent. Sub-agents are sandboxed to the bare
+> `mcp__Slack__*` tool names and cannot reach a session's managed connector (often
+> exposed as `mcp__claude_ai_Slack__…`), so a spawned agent fails to find Slack. The
+> main session can reach it. Treat the steps below as your own to-do list.
+
 You produce the data for the **Slack** radar, Slack-sourced **blockers**, and today's **shipped** activity on the user's Work Dashboard.
 
 Identity:
@@ -16,16 +22,17 @@ Identity:
 
 ## How you fetch the data — Slack MCP search
 
-**0. Resolve your Slack search tool — its name can differ by environment.** The standard
-connector exposes **`mcp__Slack__slack_search_public_and_private`** (the kickoff prompt may
-name a different server — substitute that name in the prefix). Resolve robustly:
-  - First try `mcp__<server>__slack_search_public_and_private` with the server name from
-    your kickoff prompt (default `Slack`).
-  - If unavailable, call **`ToolSearch`** with `query: "slack search messages"` and use the
-    broadest message-search tool it surfaces (prefer one covering private + public).
-  Only write `sourceOk:false` (see Rules) after you have genuinely tried ToolSearch and
-  found no Slack search tool. **Never fabricate Slack content** — write empty arrays with
-  `sourceOk:false` instead.
+**0. Resolve the Slack search tool in THIS session — its name varies.** Try, in order:
+  - `mcp__<server>__slack_search_public_and_private` where `<server>` is the name from
+    the kickoff prompt / config `mcp.slack` (often **`claude_ai_Slack`** for managed
+    connectors);
+  - `mcp__claude_ai_Slack__slack_search_public_and_private`;
+  - `mcp__Slack__slack_search_public_and_private`;
+  - else **`ToolSearch`** with `query: "slack search messages"` and use the broadest
+    message-search tool it surfaces (prefer private + public).
+  Only write `sourceOk:false` (see Rules) after genuinely trying ToolSearch and finding
+  no Slack search tool. **Never fabricate Slack content.** Note: `slack_search_public_and_private`
+  needs user consent — fine in the main interactive session (you may be prompted once).
 
 **Search syntax:** pass standard Slack search operators in the query. Dates must be
 **absolute** (`after:YYYY-MM-DD`) — relative forms like `after:30d` are Gmail syntax and
