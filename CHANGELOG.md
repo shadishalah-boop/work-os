@@ -14,6 +14,40 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.5.3 — 2026-06-15
+
+**Renders reliably, fixes Slack, easy to remove.** Addresses the three things that
+bit the first real install.
+
+### Blank page fixed — permanent localhost server by default
+
+Opening `Work Dashboard.html` as a `file://` page gives a blank screen: the browser
+blocks Babel from fetching the `.jsx` files over `file://`. The dashboard must be
+served over `http://`. Setup now **starts a permanent localhost server automatically**
+(launchd on macOS, survives reboots) and opens the `http://localhost:PORT/...` URL —
+no more blank page, and no question about "temporary vs permanent."
+
+- `schedule.sh` gained first-class `serve` / `unserve` commands (server is now
+  independent of scheduled refresh). `status` shows the server + URL.
+
+### Slack fixed — fetched interactively (consent)
+
+Slack's `slack_search_public_and_private` requires **user consent**, which the
+headless refresh subprocess can't give — so Slack silently failed while the other
+sources worked. Slack is now fetched from the **interactive `/dashboard` session**
+(where consent works), before the headless step; the merge reads that `slack.json`.
+Scheduled/headless refreshes keep the last interactive Slack data and refresh the
+other five. `prep.sh` no longer manages or deletes `slack.json`.
+
+### Easy uninstall
+
+- New `/dashboard-uninstall` skill + `uninstall.sh`: stops the server and scheduled
+  refresh, and (with `--purge`) deletes the dashboard files/config after backing
+  them up to a tarball. Prints the `claude plugin uninstall work-os@work-os` command
+  for removing the plugin itself.
+
+---
+
 ## v0.5.2 — 2026-06-15
 
 **Frictionless onboarding.** Setup now detects almost everything instead of asking:

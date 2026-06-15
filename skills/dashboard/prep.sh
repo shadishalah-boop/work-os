@@ -100,20 +100,22 @@ else
 fi
 
 # --- Per-agent TTL (same-day cache). Live agents always run; slow ones reuse JSON. ---
+# NOTE: slack is NOT here — it's fetched from the INTERACTIVE session (its MCP
+# search needs user consent the headless subprocess can't give), so its slack.json
+# is produced before this runs and must be preserved, not managed/deleted here.
 ttl_for_agent() {
   case "$1" in
-    calendar|gmail|slack) echo 0     ;;  # always run
+    calendar|gmail)       echo 0     ;;  # always run
     granola)              echo 7200  ;;  # 2h
     drive|wellness)       echo 14400 ;;  # 4h
   esac
 }
 
-# GNU first, BSD fallback — see the NOTE above.
 stat_mtime() { stat -c '%Y' "$1" 2>/dev/null || stat -f '%m' "$1" 2>/dev/null; }
 
 RUN_AGENTS=""
 SKIP_AGENTS=""
-for agent in calendar granola gmail slack drive wellness; do
+for agent in calendar granola gmail drive wellness; do
   ttl=$(ttl_for_agent "$agent")
   json="$DATA_DIR/${agent}.json"
   if [ ! -f "$json" ] || [ "$ttl" -eq 0 ]; then

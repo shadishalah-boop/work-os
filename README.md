@@ -135,15 +135,15 @@ them into your local config.
 
 ## First run
 
-After `/dashboard-setup` completes, open `<dashboardDir>/Work Dashboard.html` in your browser (the setup wizard prints the exact path). Keep the tab pinned.
+`/dashboard-setup` does the first run for you — it starts the localhost server, runs the first refresh, and opens the dashboard at its `http://localhost:PORT/Work%20Dashboard.html` URL. Keep that tab pinned (open it over **localhost**, never as a file — see "Viewing the dashboard").
 
-Then:
+To refresh anytime after:
 
 ```
 /dashboard
 ```
 
-This fans out to 6 agents in parallel (~30–60s), merges their JSON, and rewrites the dynamic JSX files. Reload the browser tab to see fresh data.
+This fetches Slack (interactively, for consent), fans out to 5 more agents in parallel (~30–60s), merges their JSON, and rewrites the dynamic JSX files. The tab auto-reloads.
 
 ---
 
@@ -185,32 +185,57 @@ You can edit your config or filters at any time — changes apply on the next ru
 
 ---
 
-## Optional: scheduled auto-refresh (hands-free dashboard)
+## Viewing the dashboard (always over `localhost`)
 
-One command sets it up — ask Claude Code:
+The dashboard **must be served over `http://localhost`, not opened as a file.**
+Double-clicking `Work Dashboard.html` (a `file://` page) gives a **blank screen**,
+because the browser blocks Babel from loading the `.jsx` files over `file://`.
 
-> *"Set up the dashboard auto-refresh schedule"*
-
-…or run the helper yourself from the plugin directory:
+`/dashboard-setup` handles this for you: it starts a **permanent** localhost server
+(launchd on macOS — survives reboots) and opens the right URL. You normally never
+think about it. To manage it manually:
 
 ```bash
-bash <plugin>/skills/dashboard/schedule.sh install                       # weekdays 08:00 + 13:00
-bash <plugin>/skills/dashboard/schedule.sh install --times "08:00 12:00 16:00"
-bash <plugin>/skills/dashboard/schedule.sh install --serve               # + local server (see below)
-bash <plugin>/skills/dashboard/schedule.sh status                        # what's scheduled + last log lines
-bash <plugin>/skills/dashboard/schedule.sh uninstall
+bash <plugin>/skills/dashboard/schedule.sh serve        # start permanent server (default port 8787)
+bash <plugin>/skills/dashboard/schedule.sh serve 9000   # custom port
+bash <plugin>/skills/dashboard/schedule.sh unserve      # stop it
+bash <plugin>/skills/dashboard/schedule.sh status       # show server URL + schedule + last log
 ```
 
-On macOS this installs a launchd LaunchAgent; on Linux, tagged crontab entries.
-The job runs the same headless refresh `/dashboard` uses and logs to
-`~/.claude/dashboard-refresh.log`.
+Then open `http://localhost:8787/Work%20Dashboard.html`.
 
-**To make the open tab update itself too** (the full zero-touch experience), use
-`--serve`: it runs a tiny localhost-only server for your dashboard folder, and you
-open `http://localhost:8787/Work%20Dashboard.html` instead of the file directly.
-Why: the dashboard polls itself for fresh data and auto-reloads, but Chrome blocks
-that polling on `file://` pages — served over localhost it works everywhere. Without
-`--serve`, scheduled refreshes still happen; you just reload the tab when you sit down.
+## Optional: scheduled auto-refresh
+
+Want the data to refresh on its own? Ask Claude Code *"set up the dashboard
+auto-refresh schedule"*, or:
+
+```bash
+bash <plugin>/skills/dashboard/schedule.sh install                      # weekdays 08:00 + 13:00
+bash <plugin>/skills/dashboard/schedule.sh install --times "08:00 12:00 16:00"
+bash <plugin>/skills/dashboard/schedule.sh uninstall                    # remove schedule + server
+```
+
+macOS uses a launchd LaunchAgent; Linux uses tagged crontab entries. Runs the same
+headless refresh and logs to `~/.claude/dashboard-refresh.log`. **Note:** scheduled
+runs update everything *except Slack* — Slack search needs interactive consent, so it
+only refreshes when you run `/dashboard` yourself (the rest keep your last Slack data).
+
+## Uninstalling
+
+Tell Claude Code **`/dashboard-uninstall`** (or *"remove the dashboard"*). It stops
+the server and any schedule, and can optionally delete your files/config (backing
+them up first). Or run it directly:
+
+```bash
+bash <plugin>/skills/dashboard/uninstall.sh            # stop helpers, keep your files
+bash <plugin>/skills/dashboard/uninstall.sh --purge    # also delete files/config (backs up to a tarball)
+```
+
+Then remove the plugin itself:
+
+```
+claude plugin uninstall work-os@work-os
+```
 
 ---
 
@@ -248,7 +273,9 @@ Each agent lives in `agents/dashboard-<name>.md`. To change what an agent does, 
 
 **Refresh fails immediately mentioning "bypass"** — Your (org-managed) Claude Code settings disable `bypassPermissions`, which the zero-prompt refresh needs. Ask your admin about `disableBypassPermissionsMode`.
 
-**"Fresh data" banner never appears** — Chrome blocks `fetch()` on `file://` pages, so the auto-reload poller can't work when the dashboard is opened as a local file there. Reload the tab manually after a refresh, or use a browser that allows local-file fetch.
+**Blank page / "Fresh data" banner never appears** — You're opening the dashboard as a `file://` page. It must be served over `http://localhost` (the browser blocks Babel and the auto-reload poller on `file://`). Run `bash <plugin>/skills/dashboard/schedule.sh serve` and open the `http://localhost:PORT/Work%20Dashboard.html` URL it prints. `/dashboard-setup` sets this up automatically.
+
+**Slack section empty after a scheduled refresh** — Slack search needs interactive consent, so scheduled/headless runs can't fetch it. Run `/dashboard` yourself to refresh Slack; the other sources update on schedule.
 
 **Dashboard shows yesterday's data** — Browser cache. Hard-reload (Cmd/Ctrl + Shift + R). If that doesn't help, confirm the skill actually ran — check `<output.dataCacheDir>/*.json` timestamps.
 
