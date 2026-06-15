@@ -14,6 +14,32 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.5.7 — 2026-06-15
+
+**Slack actually works now + no setup approval prompts.** Two fixes from a live install.
+
+### Slack: run it in the main session, not a sub-agent
+
+The `dashboard-slack` **sub-agent** is sandboxed to the bare `mcp__Slack__*` tool
+names and **cannot reach a session's managed connector** (commonly exposed as
+`mcp__claude_ai_Slack__…`), so spawning it always failed with "no Slack search tool
+found." The refresh now performs the Slack search **inline in the main interactive
+session** (which can reach the prefixed connector and can grant the required
+consent). Tool resolution tries `claude_ai_Slack` and other prefixes before
+falling back to ToolSearch. `agents/dashboard-slack.md` is now a spec the main
+session follows, not a spawned agent.
+
+### Setup: one allowlistable call instead of approval prompts
+
+Setup used to run several ad-hoc heredoc bash blocks (write config, copy bundle,
+stamp, filters) — each un-analyzable, so each triggered a permission prompt. All of
+it now runs through one committed script, **`setup-finalize.sh`**, invoked as a
+single `bash setup-finalize.sh /tmp/work-os-setup.json` call (the config is staged
+to a temp file, so there's no sensitive-path Write prompt either). Approve once with
+"don't ask again" and setup is prompt-free.
+
+---
+
 ## v0.5.6 — 2026-06-15
 
 **Near-zero-questions setup.** Removed the last two setup prompts — **pins** and
