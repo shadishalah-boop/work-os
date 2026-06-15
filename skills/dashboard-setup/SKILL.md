@@ -5,9 +5,15 @@ description: Interactive onboarding for the Work Dashboard plugin. Walks the use
 
 # Work Dashboard — interactive setup
 
-First-time setup wizard. Gathers the user's identity, team, OKRs, and pins; writes `~/.claude/dashboard-config.local`; copies the static HTML bundle into the user's chosen output directory; then prints per-MCP-server next steps.
+First-time setup wizard. Auto-detects the user's identity and timezone from their
+connected accounts, confirms team/OKRs/pins, writes `~/.claude/dashboard-config.local`,
+copies the static HTML bundle, verifies connectors live, opens the dashboard, and
+offers the first refresh.
 
-**Design intent:** the user typing in this conversation is a NON-TECHNICAL human. Ask one clear question at a time when the answer branches. Batch obvious related fields into a single message when the user will paste multiple lines. Never dump a raw JSON template and say "fill it in."
+**Design intent:** the user typing in this conversation is a NON-TECHNICAL human.
+**Detect, don't interrogate** — pre-fill every field you can from their connectors
+(Step 2) and have them confirm. Ask one clear question at a time when the answer
+branches. Never dump a raw JSON template and say "fill it in."
 
 ## Step 0 — locate the plugin
 
@@ -37,34 +43,75 @@ Act on the user's response:
 
 If no file exists, proceed to Step 2.
 
-## Step 2 — gather identity (one batched question)
+## Step 2 — auto-fill identity from the user's connectors, then confirm
 
-**Timezone is NOT asked** — it's auto-detected from the computer and re-detected on
-every refresh, so a traveling user's times always follow their laptop. Detect it
-now (purely to show the user what was found):
+The goal: the user **confirms** their details instead of typing them. Detect
+everything you can from the MCP connectors they've already authenticated, then ask
+only for what's missing. Do NOT lead with a blank form.
+
+### 2a. Timezone — auto-detected, never asked
+
+It's detected from the computer and re-detected on every refresh (so a traveling
+user's times follow their laptop). Detect it now just to show the value:
 
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/skills/dashboard/tzresolve.py"
 ```
 
 With no config yet this prints the live system zone — hold it as `DETECTED_TZ`.
+Store `user.timezone` as `"auto"` unless the user later asks to pin a fixed zone.
 
-Then send a single message:
+### 2b. Auto-detect name / email / role / company (read-only profile lookups)
 
-> *"Let's set up your dashboard. Paste answers to these (or skip any with 'none' — you can always edit later):*
->
-> *1. First name (what you're called on the dashboard, e.g. 'Alex'):*
-> *2. Full name (for formal header, e.g. 'Alex Rivera'):*
-> *3. Role title (e.g. 'Head of Marketing'):*
-> *4. Work email:*
-> *5. Company name:*
-> *6. Your manager's name + role (e.g. 'Chris Lin, VP Marketing' — or 'none' if you're the manager):*
->
-> *Your timezone follows your computer automatically (I detected `DETECTED_TZ`), so times stay correct even when you travel. Only reply with an IANA zone here if you'd rather PIN a fixed one."*
+Make these calls (all read-only, all on the user's own accounts). Resolve each
+server name from the standard defaults — `Slack`, `Granola`, `Google_Calendar`,
+`Gmail` — or, if a call 404s on the name, find the tool via `ToolSearch`
+(e.g. `query: "slack read user profile"`). Skip any source that isn't connected;
+this whole step is best-effort. Stop collecting a field once you have it.
 
-Parse the response. If any field is missing or malformed, ask a targeted follow-up for just that field. Leave `user.timezone` as `"auto"` unless the user explicitly asks to pin a fixed zone (then store that IANA name).
+Priority chain per field:
 
-Defaults: `workingHours` = `09:00–18:00 Mon–Fri` unless the user proactively mentions different hours.
+- **Full name + role/title + email + company, in one shot:**
+  `slack_read_user_profile` with **no `user_id`** (defaults to the logged-in user).
+  Its profile typically carries `real_name`/`display_name`, `title` (role),
+  `email`, and the org/team name. This single call usually fills most fields.
+- **Email** (if Slack didn't provide it): `get_account_info` (Granola) returns the
+  signed-in email; or `list_calendars` (Google Calendar) — the calendar with
+  `primary: true` has an `id` equal to the user's email address.
+- **Full name** (if still missing): from Gmail, `search_threads` for `from:me`
+  (newest) and read the display name on the From header; or a Calendar event the
+  user organizes (`organizer.displayName`).
+- **Company** (if not from Slack org): derive from the email domain — drop
+  everything up to `@`, take the registrable label, title-case it
+  (`shadi.shalah@preply.com` → `Preply`; `a@mail.acme.co` → `Acme`).
+- **First name**: the first token of the full name.
+
+### 2c. One confirmation message (pre-filled)
+
+Show what you found and ask only for the gaps. Mark anything not detected clearly.
+Example:
+
+> *"I pulled these from your connected accounts — just reply **'looks good'** to
+> accept, or send any corrections:*
+> *• Name: **Shadi Shalah** (first name: Shadi)*
+> *• Work email: **shadi.shalah@preply.com***
+> *• Company: **Preply***
+> *• Role/title: **Senior PM** ← found in Slack*
+> *• Timezone: follows your computer automatically — detected **`DETECTED_TZ`** (reply with an IANA zone only to pin a fixed one)*
+> *• Manager (optional): not detected — name + role, or 'none'?*
+> *"*
+
+Fill any field the user corrects. Don't re-ask for fields they've confirmed.
+`workingHours` defaults to `09:00–18:00 Mon–Fri` unless they mention otherwise.
+
+### 2d. Fallback — manual entry
+
+If the connectors returned **nothing** (e.g. none authenticated yet), fall back to
+the plain batched question:
+
+> *"I couldn't reach your connectors yet, so paste these (skip any with 'none'):
+> first name · full name · role · work email · company · manager (name + role).
+> Timezone is handled automatically (detected `DETECTED_TZ`)."*
 
 ## Step 3 — optional team roster
 

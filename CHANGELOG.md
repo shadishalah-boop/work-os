@@ -16,9 +16,24 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ## v0.5.2 — 2026-06-15
 
-**Automatic timezone.** The dashboard now detects your timezone from your computer
-and re-detects it on **every refresh** — so when you travel, your meeting times,
-"now" line, and relative labels follow your laptop with no action from you.
+**Frictionless onboarding.** Setup now detects almost everything instead of asking:
+your timezone from the computer, and your identity from the accounts you've already
+connected.
+
+### Auto-filled identity
+
+- `/dashboard-setup` Step 2 pulls **name, work email, role/title, and company** from
+  your connectors — primarily one read-only `slack_read_user_profile` call (current
+  user), with Granola `get_account_info` and Google Calendar `list_calendars`
+  (primary calendar id = your email) as fallbacks, and company derived from your
+  email domain. You confirm a pre-filled summary and fill only the gaps (usually
+  just an optional manager). Falls back to manual entry if no connector is reachable.
+
+### Automatic timezone
+
+The dashboard detects your timezone from your computer and re-detects it on
+**every refresh** — so when you travel, your meeting times, "now" line, and
+relative labels follow your laptop with no action from you.
 
 - New `skills/dashboard/tzresolve.py` — one shared resolver used by `prep.sh`
   (passed to all agents), `build-overrides.py`, and `drive-transform.py`.

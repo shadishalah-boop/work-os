@@ -98,7 +98,7 @@ Then run the guided setup — it writes your config file, creates the output dir
 /dashboard-setup
 ```
 
-The wizard asks ~7 quick questions (name, role, timezone, manager, company, Slack workspace, custom pins). Everything optional can be skipped and edited later. Takes ~3 minutes.
+The wizard **auto-fills your identity** (name, email, role, company) from the accounts you've already connected and **auto-detects your timezone** — you mostly just confirm. Team, OKRs, and pins are optional and skippable. Takes ~2–3 minutes.
 
 If you prefer manual setup, see **Manual install** below.
 
