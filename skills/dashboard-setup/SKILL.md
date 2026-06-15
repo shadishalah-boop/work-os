@@ -237,41 +237,48 @@ Your data sources:
 Close with: "If a server fails at refresh time, its section shows 'source unavailable' —
 the rest of the dashboard still renders. You can add sources incrementally."
 
-## Step 7 — open the dashboard + offer the first refresh
+## Step 7 — start the permanent server, refresh, open the dashboard
 
-1. Open the dashboard in the user's browser so success is immediate, not homework:
-   `open "<dashboardDir>/Work Dashboard.html"` (macOS) or
-   `xdg-open "<dashboardDir>/Work Dashboard.html"` (Linux). If the open command
-   fails, just print the path. The tab will show the labeled **sample data**
-   banner until the first refresh — tell the user that's expected.
+The dashboard must be viewed over `http://localhost`, never as a `file://` page —
+opening the HTML directly makes the browser block Babel from loading the `.jsx`
+files, so you get a **blank page**. So always start the permanent local server and
+open the `localhost` URL. Do NOT just `open` the HTML file.
 
-2. Print:
+1. **Start the permanent server** (runs at login, survives reboots — no need to ask):
+   ```bash
+   bash "${CLAUDE_PLUGIN_ROOT}/skills/dashboard/schedule.sh" serve
+   ```
+   Capture the `http://localhost:PORT/Work%20Dashboard.html` URL it prints.
+
+2. **Run the first refresh** — the full `dashboard` flow (so Slack is included):
+   first the interactive Slack step, then the headless call. Do it exactly as the
+   `dashboard` skill's "How to refresh" section describes (Step 1 `slack-prep.sh` +
+   `dashboard-slack` agent, then Step 2 `refresh-headless.sh`). Relay the final line.
+
+3. **Open the dashboard at the localhost URL** (not the file path):
+   `open "http://localhost:PORT/Work%20Dashboard.html"` (macOS) /
+   `xdg-open ...` (Linux). If `open` fails, just print the URL.
+
+4. Print:
 
 ```
-Setup complete.
+Setup complete. ✅
+
+Dashboard (keep this tab pinned):
+  http://localhost:PORT/Work%20Dashboard.html
 
 Your config: ~/.claude/dashboard-config.local
-Dashboard: <dashboardDir>/Work Dashboard.html  (just opened — keep the tab pinned)
-The tab shows sample data until the first refresh.
-
-Edit ~/.claude/dashboard-config.local to update your team / OKRs / pins later.
+Add your team or OKRs anytime: just tell me "add my team / OKRs to the dashboard".
+To remove everything later: /dashboard-uninstall
 
 — welcome to your Work Dashboard, <firstName>.
 ```
 
-3. Then ask: *"Want me to run your first refresh now? Takes ~1-2 minutes and fills
-   the dashboard with your real data."* If yes, run the refresh exactly the way the
-   `dashboard` skill does — a single Bash call to
-   `${CLAUDE_PLUGIN_ROOT}/skills/dashboard/refresh-headless.sh` (timeout 480000) —
-   and relay its one-line output. Do NOT orchestrate agents yourself.
-
-4. Finally offer hands-free mode: *"Want the dashboard to refresh itself on a
-   schedule (weekdays 8:00 + 13:00 by default)? I can set that up now — you can
-   change times or remove it anytime."* If yes, run
-   `bash ${CLAUDE_PLUGIN_ROOT}/skills/dashboard/schedule.sh install` (append
-   `--times "..."` if the user wants different times; mention `--serve` if they
-   want the open tab to auto-reload too — see README "scheduled auto-refresh").
-   Relay the script's output.
+5. Finally offer scheduled auto-refresh: *"Want the data to refresh itself on a
+   schedule (weekdays 8:00 + 13:00 by default)? Note: scheduled runs update
+   everything except Slack (Slack needs you to run /dashboard so it can ask consent)."*
+   If yes: `bash "${CLAUDE_PLUGIN_ROOT}/skills/dashboard/schedule.sh" install`
+   (append `--times "..."` for custom times). Relay the output.
 
 ## Rules
 

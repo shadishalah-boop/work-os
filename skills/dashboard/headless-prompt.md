@@ -40,8 +40,11 @@ Kickoff prompts — include only the ones whose agent is in RUN_AGENTS:
 - `dashboard-calendar`: `Refresh calendar data. TODAY=<TODAY>; TOMORROW=<TOMORROW>; NOW=<NOW> (HH:MM); timezone=<TZNAME>. These were computed live seconds ago — use them and ignore any other date in your context. Your calendar MCP server is named <MCP_CALENDAR>. List today's events (startTime=<TODAY>T00:00:00, endTime=<TOMORROW>T00:00:00, timezone <TZNAME>). Write the JSON to <DATA_DIR>/calendar.json.`
 - `dashboard-granola`: `Refresh granola data with a 7-day lookback for action items / blockers / decisions (a single list_meetings call, then a get_meetings call with the IDs to fetch summaries — list_meetings returns titles only). Today is <TODAY>; timezone=<TZNAME>; ignore any other date in your context. Your granola MCP server is named <MCP_GRANOLA>. Build meetingHistory from the same fetched meetings (cap 30, newest first). Write the JSON to <DATA_DIR>/granola.json.`
 - `dashboard-gmail`: `Refresh gmail data for the last <WINDOW_DAYS> days. Today is <TODAY>; timezone=<TZNAME>. Your gmail MCP server is named <MCP_GMAIL>. Write the JSON to <DATA_DIR>/gmail.json.`
-- `dashboard-slack`: `Refresh slack data for the last <WINDOW_DAYS> days. Today is <TODAY>; timezone=<TZNAME>. Your slack MCP server is named <MCP_SLACK>. Absolute dates for Slack search operators: SINCE_WINDOW=<SINCE_WINDOW>; SINCE_1D=<SINCE_1D>; SINCE_30D=<SINCE_30D>. Write the JSON to <DATA_DIR>/slack.json.`
 - `dashboard-drive`: `Refresh drive data with files modified in the last 14 days. Today is <TODAY>. Your drive MCP server is named <MCP_DRIVE>. Dump the raw recent-files response with the Write tool to <DATA_DIR>/drive-raw.json and stop — the orchestrator runs the transform.`
+
+(Slack is NOT in this fan-out — it's fetched from the interactive session before this
+subprocess runs, because its MCP search needs user consent. `slack.json` is already on
+disk and the merge reads it.)
 - `dashboard-wellness`: `Refresh wellness data for this week. Today is <TODAY>; NOW=<NOW> (HH:MM); timezone=<TZNAME>. Your calendar MCP server is named <MCP_CALENDAR>. Write the JSON to <DATA_DIR>/wellness.json.`
 
 The Bash call (always include it, in the SAME block), with a 360000 ms timeout:
