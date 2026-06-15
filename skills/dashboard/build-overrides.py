@@ -16,7 +16,18 @@ back to ~/.claude/dashboard-data and ~/Documents/work-dashboard.
 import json
 import os
 import re
+import sys
 from pathlib import Path
+
+# Shared timezone resolver (lives next to this script). Falls back to a tiny
+# inline version if the import ever fails, so a refresh never crashes over tz.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    from tzresolve import resolve_timezone
+except Exception:  # pragma: no cover
+    def resolve_timezone(cfg, fallback="UTC"):
+        v = (cfg or {}).get("user", {}).get("timezone") if isinstance(cfg, dict) else None
+        return v.strip() if isinstance(v, str) and v.strip() and v.strip().lower() != "auto" else fallback
 
 HOME = Path.home()
 CONFIG_PATH = HOME / ".claude" / "dashboard-config.local"
@@ -68,7 +79,7 @@ HTML_FILE = OUT_DIR / "Work Dashboard.html"
 # ---------------------------------------------------------------------------
 _name = cfg_get("user.name", "there")
 _role = cfg_get("user.role", "")
-_tz = cfg_get("user.timezone", "Europe/Madrid")
+_tz = resolve_timezone(CFG)   # explicit pin > live system zone > UTC
 
 STATIC_USER = {"name": _name, "role": _role, "tz": _tz}
 

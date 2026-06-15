@@ -45,7 +45,7 @@ readable "couldn't load the dashboard libraries — check your connection" messa
 **Caveat for implementation:** requires fetching the files, which depends on the
 execution environment's outbound network policy.
 
-Tentative version: **v0.5.2**.
+Tentative version: **v0.5.3** (v0.5.2 shipped the timezone auto-detect).
 
 ### Optional follow-on (bigger change, lower priority)
 Pre-compile the JSX to plain JS at bundle-sync time to eliminate the in-browser

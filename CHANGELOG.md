@@ -14,6 +14,27 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.5.2 — 2026-06-15
+
+**Automatic timezone.** The dashboard now detects your timezone from your computer
+and re-detects it on **every refresh** — so when you travel, your meeting times,
+"now" line, and relative labels follow your laptop with no action from you.
+
+- New `skills/dashboard/tzresolve.py` — one shared resolver used by `prep.sh`
+  (passed to all agents), `build-overrides.py`, and `drive-transform.py`.
+  Resolution order: an explicit IANA zone in `user.timezone` **pins** a fixed zone;
+  otherwise the live system zone is auto-detected (via `$TZ`, `/etc/localtime`,
+  `/etc/timezone`, or `timedatectl`); otherwise UTC. Dependency-free, macOS + Linux.
+- `/dashboard-setup` no longer asks for an IANA timezone string (the sharpest
+  friction point for non-technical users). It detects the zone, shows it for
+  confirmation, and stores `"timezone": "auto"` by default.
+- The old hardcoded `Europe/Madrid` fallback is gone from `build-overrides.py` and
+  `drive-transform.py`; both now route through the resolver (UTC as neutral
+  fallback) and never crash on an unknown zone name.
+- To pin a fixed zone (e.g. always HQ time), set `user.timezone` to an IANA name.
+
+---
+
 ## v0.5.1 — 2026-06-11
 
 **Hands-free refresh.** New `skills/dashboard/schedule.sh` sets up (and removes)

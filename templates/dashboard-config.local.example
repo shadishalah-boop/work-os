@@ -3,6 +3,7 @@
     "COPY this file to ~/.claude/dashboard-config.local and edit the values.",
     "The dashboard skill reads this on every refresh. Restart is not needed — edits apply on the next /dashboard run.",
     "All fields are optional; omit any you don't care about and sensible defaults will be used.",
+    "timezone: keep it 'auto' to follow your computer's zone live on every refresh (great for travel). Set an IANA name like 'America/New_York' or 'Asia/Singapore' only to PIN a fixed zone.",
     "This file is NEVER bundled into a plugin share — it stays on your machine."
   ],
 
@@ -11,7 +12,7 @@
     "fullName": "Alex Rivera",
     "role": "Senior PM",
     "email": "alex@example.com",
-    "timezone": "Europe/Madrid",
+    "timezone": "auto",
     "workingHours": { "start": "09:00", "end": "18:30", "days": ["Mon", "Tue", "Wed", "Thu", "Fri"] }
   },
 

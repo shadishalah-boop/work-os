@@ -75,6 +75,8 @@ work-os/
 
 Run `/mcp` to see what you have connected. `/dashboard-setup` verifies all five live and records any non-default server names in your config (`mcp` section) — the agents also fall back to a capability search, so differently-named or self-hosted servers work too.
 
+**Timezone is automatic.** Your zone is detected from your computer and re-detected on *every* refresh, so meeting times stay correct even when you travel. To pin a fixed zone instead (e.g. always show HQ time), set `user.timezone` to an IANA name like `America/New_York` in your config; leave it `"auto"` to follow the machine.
+
 If a server is unreachable, its agent returns `sourceOk: false` and the dashboard renders the rest cleanly — the unavailable sections just show empty arrays. You can add sources incrementally.
 
 > **Upgrading from ≤v0.4.x?** The bundled `.mcp.json` community servers are gone (one of them, `granola-mcp`, was unpublished from npm and broke fresh installs), and the Slack `xoxp-` token + macOS Keychain setup is no longer needed — the Slack agent now uses the Slack MCP. You can delete the Keychain entry: `security delete-generic-password -s slack_token`.

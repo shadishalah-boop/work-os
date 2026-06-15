@@ -39,7 +39,17 @@ If no file exists, proceed to Step 2.
 
 ## Step 2 — gather identity (one batched question)
 
-Send a single message to the user:
+**Timezone is NOT asked** — it's auto-detected from the computer and re-detected on
+every refresh, so a traveling user's times always follow their laptop. Detect it
+now (purely to show the user what was found):
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/dashboard/tzresolve.py"
+```
+
+With no config yet this prints the live system zone — hold it as `DETECTED_TZ`.
+
+Then send a single message:
 
 > *"Let's set up your dashboard. Paste answers to these (or skip any with 'none' — you can always edit later):*
 >
@@ -47,12 +57,12 @@ Send a single message to the user:
 > *2. Full name (for formal header, e.g. 'Alex Rivera'):*
 > *3. Role title (e.g. 'Head of Marketing'):*
 > *4. Work email:*
-> *5. Timezone (IANA name, e.g. 'Europe/Madrid' · 'America/New_York' · 'Asia/Singapore'):*
-> *6. Company name:*
-> *7. Your manager's name + role (e.g. 'Chris Lin, VP Marketing' — or 'none' if you're the manager):*
-> *"*
+> *5. Company name:*
+> *6. Your manager's name + role (e.g. 'Chris Lin, VP Marketing' — or 'none' if you're the manager):*
+>
+> *Your timezone follows your computer automatically (I detected `DETECTED_TZ`), so times stay correct even when you travel. Only reply with an IANA zone here if you'd rather PIN a fixed one."*
 
-Parse the response. If any field is missing or malformed, ask a targeted follow-up for just that field.
+Parse the response. If any field is missing or malformed, ask a targeted follow-up for just that field. Leave `user.timezone` as `"auto"` unless the user explicitly asks to pin a fixed zone (then store that IANA name).
 
 Defaults: `workingHours` = `09:00–18:00 Mon–Fri` unless the user proactively mentions different hours.
 
@@ -146,7 +156,7 @@ Once all fields are gathered, build the full config object. Schema (copy exactly
   "_README": "Private config for <firstName>'s work-dashboard plugin. Never bundled. Never committed.",
   "user": {
     "name": "...", "fullName": "...", "role": "...", "email": "...",
-    "timezone": "...",
+    "timezone": "auto",
     "workingHours": { "start": "09:00", "end": "18:00", "days": ["Mon","Tue","Wed","Thu","Fri"] }
   },
   "org": {
@@ -263,8 +273,7 @@ Edit ~/.claude/dashboard-config.local to update your team / OKRs / pins later.
 - **One question at a time when there's a branch.** Batch only obvious related fields.
 - **Never paste a raw JSON block at the user and ask them to edit it.** That defeats the point of this skill.
 - **Always back up** an existing config before overwriting. Never silent-destroy user data.
-- **Validate IANA timezone** against `Intl.DateTimeFormat().resolvedOptions().timeZone`-style names. If the user types a vague "CET" or "Pacific time", offer the canonical name (e.g. "Europe/Madrid", "America/Los_Angeles").
-- **Timezone default**: if the user says "use my system timezone", run `date +%Z` for display and check `/etc/localtime` for the IANA name.
+- **Timezone is auto by default** — store `"auto"`, which makes every refresh detect the system zone live (handles travel). Only if the user explicitly wants to PIN a fixed zone, store an IANA name; if they give a vague "CET"/"Pacific time", offer the canonical form (e.g. "Europe/Madrid", "America/Los_Angeles") and confirm before storing it.
 - **Don't orchestrate the 6 agents from this skill.** The only refresh this skill may trigger is the single `refresh-headless.sh` call in Step 9, with the user's consent.
 - **If the user aborts mid-setup**, discard any partial state — don't write a half-filled config.
 - **Currency / language**: the dashboard is English-only today; don't offer localization options.
