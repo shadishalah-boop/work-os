@@ -14,6 +14,25 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.8.1 — 2026-06-16
+
+**Slack now included in the headless/button refresh + a "refresh in progress" banner.**
+
+- **Slack in headless** — the headless refresh runs under
+  `--permission-mode bypassPermissions`, which clears Slack's consent gate, so the
+  orchestrator now fetches Slack **inline** in `headless-prompt.md` (STEP 1b) using the
+  `claude_ai_Slack` tool name and small/concise search responses. So the ↻ button and
+  any headless refresh now cover all six sources. Safety: on any Slack failure it leaves
+  the last good `slack.json` untouched (never blanks it); `prep.sh` doesn't pre-delete
+  `slack.json`.
+- **Refresh-in-progress banner** — a prominent top bar ("🔄 Refreshing your dashboard
+  data…") appears whenever a refresh is running, driven by the server's
+  `/refresh-status` (so it shows for the button from any tab) plus instant feedback on
+  click. Turns to "✓ Dashboard refreshed" before the auto-reload swaps in the data.
+  Silent if the server doesn't expose `/refresh-status`. `app.jsx?v=48`.
+
+---
+
 ## v0.8.0 — 2026-06-16
 
 **One-press Refresh button on the dashboard — no Claude Code session needed.**
