@@ -6,18 +6,19 @@ Usage:  serve.py <port> <dashboard-dir>
 Serves the static dashboard bundle over http://127.0.0.1:<port> AND exposes:
   POST /refresh         → kicks off a background data refresh, returns immediately
   GET  /refresh-status  → {"running": bool, "last": "<last line>", "ok": bool}
-  POST /slack-send      → stages a Slack DRAFT (never sends), returns {"ok": bool, ...}
+  POST /slack-send      → SENDS a Slack message, returns {"ok": bool, ...}
 
-This is what lets a button ON the dashboard refresh the data — or stage a Slack
+This is what lets a button ON the dashboard refresh the data — or send a Slack
 reply — without an interactive Claude Code session: each runs a headless `claude -p`
-helper (refresh-headless.sh / slack-draft-headless.sh) launched through a LOGIN
+helper (refresh-headless.sh / slack-send-headless.sh) launched through a LOGIN
 shell so `claude` is on PATH even when this server was started by launchd (whose
 PATH is otherwise minimal).
 
-/slack-send is DRAFT-ONLY by design: sending is irreversible, so a dashboard button
-must never send. It stages a draft in Slack for you to review and send there. To
-actually send, use the /dashboard-slack-send skill in an interactive session (it
-confirms the recipient + text first).
+/slack-send sends for real. Sending is irreversible, so the DASHBOARD guards against
+accidental fires before it ever calls this: one-click "suggested reply" chips need a
+second confirming click, and the compose box only sends what you typed. (To send with
+a full confirmation of recipient + text, use the /dashboard-slack-send skill in an
+interactive session.)
 
 Caveats (honest):
   • Needs the `claude` CLI installed and `bypassPermissions` allowed.
@@ -41,14 +42,14 @@ PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8787
 DASH_DIR = sys.argv[2] if len(sys.argv) > 2 else os.getcwd()
 SKILL_DIR = os.path.dirname(os.path.abspath(__file__))
 REFRESH = os.path.join(SKILL_DIR, "refresh-headless.sh")
-SLACK_DRAFT = os.path.join(SKILL_DIR, "slack-draft-headless.sh")
+SLACK_SEND = os.path.join(SKILL_DIR, "slack-send-headless.sh")
 LOGIN_SHELL = "/bin/zsh" if os.path.exists("/bin/zsh") else "/bin/bash"
 
 _state = {"running": False, "last": None, "ok": None, "started_at": None}
 _lock = threading.Lock()
 
 REFRESH_TIMEOUT = 300  # seconds — hard cap so a stuck refresh always resolves (~5 min)
-SLACK_DRAFT_TIMEOUT = 120  # seconds — a single draft is light; bound it tightly
+SLACK_SEND_TIMEOUT = 120  # seconds — a single send is light; bound it tightly
 
 
 def _run_refresh():
@@ -79,8 +80,8 @@ def _run_refresh():
             _state["running"] = False
 
 
-def _slack_draft_prompt(text, permalink, channel):
-    """Build the headless prompt that stages a Slack DRAFT (never sends).
+def _slack_send_prompt(text, permalink, channel):
+    """Build the headless prompt that SENDS a Slack message.
 
     `text` is passed as DATA inside the prompt (not interpolated into any shell),
     so there is no shell-escaping concern — it reaches `claude` via a temp file
@@ -94,12 +95,14 @@ def _slack_draft_prompt(text, permalink, channel):
     if channel:
         target.append(f"- Channel hint (name or id): {channel}")
     target_block = "\n".join(target) if target else "- (no target given — infer nothing; FAIL if you cannot resolve a channel)"
-    return f"""You are staging a Slack DRAFT on the user's behalf. DO NOT SEND anything.
+    return f"""You are sending a Slack message on the user's behalf. The user has already
+confirmed this send from their dashboard, so send it — do not ask for further
+confirmation and do not create a draft.
 
-Resolve the draft tool, in order: mcp__claude_ai_Slack__slack_send_message_draft,
-else mcp__Slack__slack_send_message_draft, else use ToolSearch with the query
-"slack send message draft" and use the matching draft tool. Use the DRAFT variant —
-never slack_send_message (no _draft), never slack_schedule_message.
+Resolve the send tool, in order: mcp__claude_ai_Slack__slack_send_message,
+else mcp__Slack__slack_send_message, else use ToolSearch with the query
+"slack send message" and use the matching send tool. Use the real send tool —
+NOT the _draft variant, NOT slack_schedule_message.
 
 Target:
 {target_block}
@@ -108,11 +111,11 @@ Steps:
 1. Resolve the destination channel id (and thread_ts if the permalink points at a
    thread). If you only have a channel name, resolve it with slack_search_channels.
    NEVER invent a channel or user id. If you cannot resolve a real destination,
-   print exactly "DRAFT_FAIL could not resolve a channel" and stop.
-2. Call the DRAFT tool to stage a draft in that channel/thread with the message text
-   below, used VERBATIM (do not rewrite, summarize, or add to it).
-3. Do NOT send. Print exactly ONE final line: "DRAFT_OK <channel-or-name>" on success,
-   or "DRAFT_FAIL <short reason>" on failure. No other output.
+   print exactly "SEND_FAIL could not resolve a channel" and stop (do not send).
+2. Call the send tool to post the message text below to that channel/thread, used
+   VERBATIM (do not rewrite, summarize, or add to it).
+3. Print exactly ONE final line: "SEND_OK <channel-or-name>" on success, or
+   "SEND_FAIL <short reason>" on failure. No other output.
 
 Message text (verbatim):
 ---
@@ -121,31 +124,31 @@ Message text (verbatim):
 """
 
 
-def _run_slack_draft(text, permalink, channel, result):
-    """Run the headless draft helper; fill `result` with ok/message."""
+def _run_slack_send(text, permalink, channel, result):
+    """Run the headless send helper; fill `result` with ok/message."""
     tmp_path = None
     try:
         with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
-            f.write(_slack_draft_prompt(text, permalink, channel))
+            f.write(_slack_send_prompt(text, permalink, channel))
             tmp_path = f.name
         proc = subprocess.run(
-            [LOGIN_SHELL, "-lc", f"bash {shlex.quote(SLACK_DRAFT)} {shlex.quote(tmp_path)}"],
-            capture_output=True, text=True, timeout=SLACK_DRAFT_TIMEOUT,
+            [LOGIN_SHELL, "-lc", f"bash {shlex.quote(SLACK_SEND)} {shlex.quote(tmp_path)}"],
+            capture_output=True, text=True, timeout=SLACK_SEND_TIMEOUT,
         )
         out = ((proc.stdout or "") + "\n" + (proc.stderr or "")).strip()
-        ok = "DRAFT_OK" in out
+        ok = "SEND_OK" in out
         # Surface the single status line if present, else a trimmed tail.
         line = next((ln.strip() for ln in reversed(out.splitlines())
-                     if "DRAFT_OK" in ln or "DRAFT_FAIL" in ln), "")
+                     if "SEND_OK" in ln or "SEND_FAIL" in ln), "")
         result["ok"] = ok
         result["message"] = line or (out.splitlines()[-1].strip() if out else "(no output)")
     except subprocess.TimeoutExpired:
         result["ok"] = False
-        result["message"] = (f"Draft timed out after {SLACK_DRAFT_TIMEOUT // 60} min. "
+        result["message"] = (f"Send timed out after {SLACK_SEND_TIMEOUT // 60} min. "
                              "Headless Slack may need consent — use /dashboard-slack-send instead.")
     except Exception as e:
         result["ok"] = False
-        result["message"] = f"draft error: {e}"
+        result["message"] = f"send error: {e}"
     finally:
         if tmp_path:
             try:
@@ -196,10 +199,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             text = (body.get("text") or "").strip()
             if not text:
                 return self._json(400, {"ok": False, "message": "empty message"})
-            # Synchronous + draft-only: the dashboard waits, then falls back to
-            # copy+open if this returns ok:false. Bounded by SLACK_DRAFT_TIMEOUT.
+            # Synchronous: the dashboard waits, then falls back to copy+open if this
+            # returns ok:false. Bounded by SLACK_SEND_TIMEOUT.
             result = {"ok": False, "message": ""}
-            _run_slack_draft(text, body.get("permalink"), body.get("channel"), result)
+            _run_slack_send(text, body.get("permalink"), body.get("channel"), result)
             return self._json(200, result)
         self.send_error(404)
 

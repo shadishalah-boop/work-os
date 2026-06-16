@@ -14,6 +14,36 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.8.5 — 2026-06-16
+
+**Dashboard reply buttons now SEND to Slack directly (no draft step).** Per your ask,
+the Slack card's replies go straight out instead of staging a draft you'd review in
+Slack. Sending is irreversible, so the guard moved to the dashboard itself:
+
+- **Compose box** sends immediately on Enter / the send button — you typed it, so it
+  goes.
+- **One-click "suggested reply" chips** need a quick **confirm click**: the first click
+  arms the chip (it turns into `Send to #channel?`), the second click sends. It
+  auto-disarms after ~4s. This stops a stray click from firing a real message to
+  colleagues, without making you leave the dashboard.
+- `serve.py`'s `/slack-send` now calls **`slack-send-headless.sh`** (renamed from the
+  draft helper) which uses `slack_send_message` — not the `_draft` variant. Status line
+  is `SEND_OK`/`SEND_FAIL`.
+- Inline status updated: `📨 Sending to Slack…` → `✓ Sent to #channel`. If the send
+  can't go through (dashboard not served locally, or the headless Slack connector isn't
+  reachable), it still **falls back to copy-to-clipboard + open Slack** so the reply
+  lands. The card pill now reads `⚡ send to Slack` vs `open-in-Slack`.
+
+The `/dashboard-slack-send` skill (interactive, confirm-first) is unchanged — it stays
+the path that shows you the exact recipient + text before sending. The permission
+allowlist still auto-approves only read-only Slack tools.
+
+Verified before release: 16 `serve.py` checks (send-not-draft prompt, verbatim text,
+success/fail/timeout, HTTP routing) and 15 DOM checks of the buttons (chip arms on first
+click / sends on second, compose sends, fail→fallback, not-served→copy+open).
+
+---
+
 ## v0.8.4 — 2026-06-16
 
 **Send Slack replies from the dashboard — safely.** You asked for Slack message-sending

@@ -12,16 +12,22 @@ function SlackMod({ data }) {
   const [askQ, setAskQ] = useStateB('');
   const [askState, setAskState] = useStateB({ status: 'idle', results: [], error: null, query: '' });
   const [replyText, setReplyText] = useStateB({});
-  // Per-channel send feedback: 'drafting' | 'drafted' | 'copied' | undefined.
+  // Per-channel send feedback: 'sending' | 'sent' | 'copied' | undefined.
   const [sendStatus, setSendStatus] = useStateB({});
+  // Which one-click suggested chip is "armed" (clicked once, awaiting a confirm
+  // click) — keyed `${channelId}:${index}`. Sending is irreversible, so a canned
+  // chip needs a second click before it fires. The compose box doesn't (you typed it).
+  const [armedSug, setArmedSug] = useStateB(null);
+  const armTimerRef = React.useRef(null);
+  const disarm = () => { if (armTimerRef.current) clearTimeout(armTimerRef.current); setArmedSug(null); };
 
   const workspace = data.workspace || 'workspace';
   const openInSlack = (url) => { if (url) window.open(url, '_blank', 'noopener'); };
 
   // Are we served by the local dashboard server (serve.py)? Only it answers
   // /refresh-status; a file:// page or a dumb static server won't. When served,
-  // reply buttons can stage a Slack DRAFT via POST /slack-send (draft-only: it
-  // never sends — you review & send in Slack). Otherwise they copy + open Slack.
+  // reply buttons SEND to Slack via POST /slack-send. Otherwise (or if the headless
+  // connector can't be reached) they fall back to copy-to-clipboard + open Slack.
   const [serveOnline, setServeOnline] = useStateB(false);
   useEffectB(() => {
     let alive = true;
@@ -32,9 +38,9 @@ function SlackMod({ data }) {
     return () => { alive = false; };
   }, []);
 
-  // Draft-first: try to stage a Slack DRAFT via the local server (never sends),
-  // and ALWAYS fall back to copy-to-clipboard + open-in-Slack so the reply lands
-  // either way. `chanId` keys the inline status shown on the card.
+  // Send via the local server, and ALWAYS fall back to copy-to-clipboard + open-in-Slack
+  // if it can't (not served, or the headless Slack connector isn't reachable) so the
+  // reply still lands. `chanId` keys the inline status shown on the card.
   const slackSendOrFallback = async (text, permalink, where, chanId) => {
     const trimmed = (text || '').trim();
     if (!trimmed) { if (permalink) window.open(permalink, '_blank', 'noopener'); return; }
@@ -44,7 +50,7 @@ function SlackMod({ data }) {
       if (chanId) setSendStatus(s => ({ ...s, [chanId]: 'copied' }));
     };
     if (!serveOnline) { await copyAndOpen(); return; }
-    if (chanId) setSendStatus(s => ({ ...s, [chanId]: 'drafting' }));
+    if (chanId) setSendStatus(s => ({ ...s, [chanId]: 'sending' }));
     try {
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 120000);
@@ -58,10 +64,9 @@ function SlackMod({ data }) {
       const d = r.ok ? await r.json().catch(() => ({})) : {};
       if (d.ok) {
         if (chanId) {
-          setSendStatus(s => ({ ...s, [chanId]: 'drafted' }));
+          setSendStatus(s => ({ ...s, [chanId]: 'sent' }));
           setReplyText(rt => ({ ...rt, [chanId]: '' }));
         }
-        if (permalink) window.open(permalink, '_blank', 'noopener');
         return;
       }
     } catch {}
@@ -111,10 +116,10 @@ function SlackMod({ data }) {
           <span
             className={'helper-status ' + (serveOnline ? 'on' : 'off')}
             title={serveOnline
-              ? 'Served locally · reply buttons stage a Slack DRAFT for you to review & send (never auto-sends)'
-              : 'Open via the dashboard server to stage drafts · otherwise replies copy to clipboard + open Slack'}
+              ? 'Served locally · reply buttons send to Slack (one-click chips need a confirm click; the compose box sends what you type)'
+              : 'Open via the dashboard server to send · otherwise replies copy to clipboard + open Slack'}
           >
-            {serveOnline ? '✎ draft to Slack' : 'open-in-Slack'}
+            {serveOnline ? '⚡ send to Slack' : 'open-in-Slack'}
           </span>
           <button className="icon-btn" aria-label="Open Slack" onClick={()=>openInSlack(`https://${workspace}.slack.com`)}><Icon name="external-link" size={16}/></button>
         </div>
@@ -250,24 +255,39 @@ function SlackMod({ data }) {
                     ))}
                   </div>
                   <div className="slack-suggested">
-                    {c.suggested.map((s, i) => (
+                    {c.suggested.map((s, i) => {
+                      const key = c.id + ':' + i;
+                      const armed = armedSug === key;
+                      return (
                       <button
                         key={i}
-                        className={'sug' + (s.primary ? ' primary' : '')}
-                        title={serveOnline ? `Stage a draft to ${c.channel} (review & send in Slack)` : 'Copies to clipboard and opens in Slack'}
-                        onClick={()=>slackSendOrFallback(s.label, c.permalink, c.channel, c.id)}>
-                        {s.primary && <Icon name="sparkle" size={12} style={{filter: s.primary ? 'invert(1)' : 'none'}}/>}
-                        {s.label}
+                        className={'sug' + (s.primary ? ' primary' : '') + (armed ? ' armed' : '')}
+                        title={serveOnline
+                          ? (armed ? `Click again to send to ${c.channel}` : `Send to ${c.channel} (click, then confirm)`)
+                          : 'Copies to clipboard and opens in Slack'}
+                        onClick={()=>{
+                          // Not served → harmless copy+open, no confirm needed.
+                          if (!serveOnline) { slackSendOrFallback(s.label, c.permalink, c.channel, c.id); return; }
+                          if (armed) { disarm(); slackSendOrFallback(s.label, c.permalink, c.channel, c.id); return; }
+                          // Arm this chip; auto-disarm after a few seconds.
+                          if (armTimerRef.current) clearTimeout(armTimerRef.current);
+                          setArmedSug(key);
+                          armTimerRef.current = setTimeout(() => setArmedSug(k => k === key ? null : k), 4000);
+                        }}>
+                        {armed
+                          ? <><Icon name="send" size={12}/>Send to {c.channel}?</>
+                          : <>{s.primary && <Icon name="sparkle" size={12} style={{filter: s.primary ? 'invert(1)' : 'none'}}/>}{s.label}</>}
                       </button>
-                    ))}
+                      );
+                    })}
                   </div>
                   <div className="slack-compose">
                     <Icon name="reply" size={14}/>
                     <input
-                      placeholder={serveOnline ? `Type & press Enter — stages a draft to ${c.channel}` : `Draft reply — opens in Slack to send`}
+                      placeholder={serveOnline ? `Type & press Enter — sends to ${c.channel}` : `Draft reply — opens in Slack to send`}
                       value={replyText[c.id] || ''}
                       onChange={e=>setReplyText({...replyText, [c.id]: e.target.value})}
-                      disabled={sendStatus[c.id] === 'drafting'}
+                      disabled={sendStatus[c.id] === 'sending'}
                       onKeyDown={async e => {
                         if (e.key !== 'Enter') return;
                         const t = replyText[c.id] || '';
@@ -277,9 +297,9 @@ function SlackMod({ data }) {
                     />
                     <button
                       className="icon-btn"
-                      aria-label={serveOnline ? 'Stage draft in Slack' : 'Open in Slack'}
-                      title={serveOnline ? `Stage a draft to ${c.channel} (review & send in Slack)` : 'Copies draft to clipboard and opens the thread in Slack'}
-                      disabled={sendStatus[c.id] === 'drafting'}
+                      aria-label={serveOnline ? 'Send to Slack' : 'Open in Slack'}
+                      title={serveOnline ? `Send to ${c.channel}` : 'Copies draft to clipboard and opens the thread in Slack'}
+                      disabled={sendStatus[c.id] === 'sending'}
                       onClick={async ()=>{
                         const t = replyText[c.id] || '';
                         if (!t.trim()) return;
@@ -290,13 +310,11 @@ function SlackMod({ data }) {
                   {sendStatus[c.id] && (
                     <div className={'slack-send-status ' + sendStatus[c.id]} style={{
                       fontSize: 11, marginTop: 4, paddingLeft: 22,
-                      color: sendStatus[c.id] === 'drafted' ? 'var(--green-600, #1a7f4b)'
-                           : sendStatus[c.id] === 'drafting' ? 'var(--fg-2)'
-                           : 'var(--fg-2)',
+                      color: sendStatus[c.id] === 'sent' ? 'var(--green-600, #1a7f4b)' : 'var(--fg-2)',
                     }}>
-                      {sendStatus[c.id] === 'drafting' && '✎ Staging a draft in Slack…'}
-                      {sendStatus[c.id] === 'drafted' && '✓ Draft staged in Slack — review & send it there'}
-                      {sendStatus[c.id] === 'copied' && '📋 Copied & opened Slack — paste and send there'}
+                      {sendStatus[c.id] === 'sending' && '📨 Sending to Slack…'}
+                      {sendStatus[c.id] === 'sent' && `✓ Sent to ${c.channel}`}
+                      {sendStatus[c.id] === 'copied' && '📋 Couldn’t send from here — copied & opened Slack so you can paste & send'}
                     </div>
                   )}
                 </div>

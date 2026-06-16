@@ -79,7 +79,7 @@ work-os/
 |---|---|---|
 | Calendar | `Google_Calendar` | Today's events + suggest-time |
 | Gmail    | `Gmail`           | Thread search + read |
-| Slack    | `Slack`           | Message search (mentions, shipped, incidents) + send/draft replies |
+| Slack    | `Slack`           | Message search (mentions, shipped, incidents) + send replies |
 | Drive    | `Google_Drive`    | Recent files for the Find palette |
 | Granola  | `Granola`         | Meeting notes → tasks/decisions/blockers |
 
@@ -159,23 +159,26 @@ This fetches Slack (interactively, for consent), fans out to 5 more agents in pa
 
 ## Replying on Slack
 
-Work OS can send Slack messages, but because sending is irreversible it never sends on
-a single click — it either confirms with you or leaves you a draft to review.
+Work OS sends Slack messages for real. Because sending is irreversible, the guards are
+about preventing *accidental* sends, not about adding friction to intentional ones.
 
 - **From a Claude Code session (reliable):** say *"reply to Pablo on Slack that …"*,
   *"send a Slack message to #team …"*, or run `/dashboard-slack-send`. Claude resolves
   the real recipient, **shows you the exact message + target, and sends only after you
   confirm** (or drafts/schedules if you ask). This is the dependable path — the Slack
   connector is fully available in an interactive session.
-- **From the dashboard's reply buttons:** the Slack card's suggested replies and compose
-  box **stage a draft** in the thread (via the local server's `/slack-send`), which you
-  then review and send in Slack — never an automatic send. If the dashboard isn't served
-  over localhost, or the headless Slack connector isn't reachable, the button **falls back
-  to copying your text and opening the thread** so you can paste and send. The little pill
-  on the Slack card (`✎ draft to Slack` vs `open-in-Slack`) tells you which mode is active.
+- **From the dashboard's reply buttons:** the Slack card's compose box and suggested
+  replies **send directly** to the thread (via the local server's `/slack-send`). The
+  compose box sends on Enter — you typed it. The one-click **suggested chips need a quick
+  confirm click** (first click arms the chip → `Send to #channel?`, second click sends),
+  so a stray click can't fire a message to colleagues. If the dashboard isn't served over
+  localhost, or the headless Slack connector isn't reachable, the button **falls back to
+  copying your text and opening the thread** so you can paste and send. The pill on the
+  Slack card (`⚡ send to Slack` vs `open-in-Slack`) tells you which mode is active.
 
 The permission allowlist only auto-approves read-only Slack tools — never a send tool —
-so every send is gated by a confirmation or a reviewable draft.
+so an unattended/headless send still runs under the explicit `bypassPermissions` the
+local server uses, and interactive sends always confirm first.
 
 ---
 
