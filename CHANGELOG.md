@@ -14,6 +14,25 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.8.2 — 2026-06-16
+
+**Fix: the refresh banner now always resolves and shows the result.** A button refresh
+could run with a "Refreshing…" banner that never cleared and gave no outcome. Fixed at
+two levels (without removing Slack — the hang cause wasn't assumed):
+
+- `serve.py` now hard-caps the refresh at **5 minutes** (`REFRESH_TIMEOUT`), so a stuck
+  run always ends and reports `ok:false` with a clear message. `/refresh-status` also
+  returns `elapsed`/`started_at`.
+- The dashboard banner is rewritten to **always resolve**: it shows elapsed seconds, a
+  "taking longer than usual" note after ~2.5 min, and on completion the **actual result
+  line** (e.g. `✓ Refreshed — Dashboard refreshed · 6/6 sources …` or the timeout/error
+  message) — and it's **dismissible** (✕). So you can always tell whether it worked.
+- Slack stays in the headless refresh (STEP 1b) but is now explicitly **time-boxed**:
+  if its call stalls it's skipped and the last good `slack.json` is kept, so it can't
+  hang the run. `app.jsx?v=49`.
+
+---
+
 ## v0.8.1 — 2026-06-16
 
 **Slack now included in the headless/button refresh + a "refresh in progress" banner.**

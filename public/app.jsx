@@ -2009,85 +2009,78 @@ function PinnedPeopleStrip() {
   );
 }
 
-// One-press data refresh. POSTs /refresh to the local server (serve.py), which runs
-// a headless refresh in the background — so this works without an interactive Claude
-// Code session. Falls back to a hint if the server doesn't expose /refresh (e.g. it
-// was started as a plain file server). The page auto-reloads when fresh data lands.
+// One-press data refresh. POSTs /refresh to the local server (serve.py), which runs a
+// headless refresh in the background — works without an interactive Claude Code session.
+// The RefreshBanner (below) shows all progress/result; this button just triggers it.
 function RefreshButton() {
-  const [status, setStatus] = React.useState('idle'); // idle|running|done|error|unavailable
-  const pollRef = React.useRef(null);
-  React.useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
-
+  const [glyph, setGlyph] = React.useState('↻');
   const start = async () => {
-    if (status === 'running') return;
-    setStatus('running');
-    window.dispatchEvent(new Event('dash:refresh-started'));   // light up the banner immediately
+    if (glyph === '⏳') return;
+    setGlyph('⏳');
+    window.dispatchEvent(new Event('dash:refresh-started'));
     try {
       const r = await fetch('/refresh', { method: 'POST' });
-      if (r.status !== 202 && !r.ok) { setStatus('unavailable'); setTimeout(() => setStatus('idle'), 6000); return; }
-      pollRef.current = setInterval(async () => {
-        try {
-          const s = await (await fetch('/refresh-status', { cache: 'no-store' })).json();
-          if (!s.running) {
-            clearInterval(pollRef.current);
-            setStatus(s.ok === false ? 'error' : 'done');
-            setTimeout(() => setStatus('idle'), 5000);
-          }
-        } catch { clearInterval(pollRef.current); setStatus('idle'); }
-      }, 3000);
+      if (r.status !== 202 && !r.ok) throw new Error('bad status');
+      setTimeout(() => setGlyph('↻'), 3000);
     } catch {
-      setStatus('unavailable'); setTimeout(() => setStatus('idle'), 6000);
+      setGlyph('⚠');
+      window.dispatchEvent(new Event('dash:refresh-unavailable'));
+      setTimeout(() => setGlyph('↻'), 5000);
     }
   };
-
-  const title =
-    status === 'running'     ? 'Refreshing data… (running a headless refresh in the background)' :
-    status === 'done'        ? 'Refreshed — reloading' :
-    status === 'error'       ? 'Refresh hit an error — try /dashboard in Claude Code' :
-    status === 'unavailable' ? 'Refresh needs the dashboard server (run: schedule.sh serve)' :
-                               'Refresh dashboard data now';
-  const glyph = status === 'running' ? '⏳' : status === 'done' ? '✓' : status === 'error' || status === 'unavailable' ? '⚠' : '↻';
   return (
-    <button className="d-topbar-icon" title={title} onClick={start} disabled={status === 'running'}
+    <button className="d-topbar-icon" title="Refresh dashboard data now" onClick={start}
             style={{ fontSize: 15, lineHeight: 1 }} aria-label="Refresh dashboard data">
-      <span style={status === 'running' ? { display: 'inline-block', animation: 'dash-spin 1s linear infinite' } : null}>{glyph}</span>
+      <span style={glyph === '⏳' ? { display: 'inline-block', animation: 'dash-spin 1s linear infinite' } : null}>{glyph}</span>
     </button>
   );
 }
 
-// Prominent "refresh in progress" bar across the top of the dashboard. Driven by the
-// server's /refresh-status, so it appears for any button-triggered refresh (this tab
-// or another), and immediately on click via the dash:refresh-started event. Silent if
-// the server doesn't expose /refresh-status (e.g. opened as a file).
+// Prominent banner that ALWAYS resolves. Polls the server's /refresh-status, so it
+// shows progress (with elapsed seconds), a "taking longer" note, and the final result
+// line (success or the timeout/error message) — and it's dismissible. This is what
+// guarantees you can tell whether a refresh worked, instead of a banner that hangs.
 function RefreshBanner() {
-  const [phase, setPhase] = React.useState('idle'); // idle | running | done
+  const [st, setSt] = React.useState(null);   // null=hidden | {phase:'running'|'done', ...}
+  const [dismissed, setDismissed] = React.useState(false);
   React.useEffect(() => {
     let wasRunning = false;
     const poll = async () => {
       try {
         const s = await (await fetch('/refresh-status', { cache: 'no-store' })).json();
-        if (s.running) { wasRunning = true; setPhase('running'); }
-        else if (wasRunning) { wasRunning = false; setPhase('done'); setTimeout(() => setPhase('idle'), 4000); }
-      } catch { /* no /refresh-status — stay idle */ }
+        if (s.running) { wasRunning = true; setDismissed(false); setSt({ phase: 'running', elapsed: s.elapsed || 0 }); }
+        else if (wasRunning) { wasRunning = false; setSt({ phase: 'done', ok: s.ok !== false, last: s.last }); }
+      } catch { /* server has no /refresh-status (file:// or plain server) — ignore */ }
     };
     poll();
-    const id = setInterval(poll, 4000);
-    const onStart = () => setPhase('running');
+    const id = setInterval(poll, 3000);
+    const onStart = () => { setDismissed(false); setSt({ phase: 'running', elapsed: 0 }); };
+    const onUnavail = () => { setDismissed(false); setSt({ phase: 'done', ok: false, last: 'Refresh needs the dashboard server — open the dashboard via http://localhost (run schedule.sh serve), not as a file.' }); };
     window.addEventListener('dash:refresh-started', onStart);
-    return () => { clearInterval(id); window.removeEventListener('dash:refresh-started', onStart); };
+    window.addEventListener('dash:refresh-unavailable', onUnavail);
+    return () => { clearInterval(id); window.removeEventListener('dash:refresh-started', onStart); window.removeEventListener('dash:refresh-unavailable', onUnavail); };
   }, []);
-  if (phase === 'idle') return null;
-  const running = phase === 'running';
+
+  if (!st || dismissed) return null;
+  const running = st.phase === 'running';
+  const ok = st.ok;
+  const slow = running && st.elapsed > 150;
+  const bg = running ? 'var(--blue-600, #2f6df6)' : ok ? 'var(--teal-600, #0b9b77)' : 'var(--red-600, #d23f3f)';
+  const icon = running ? '🔄' : ok ? '✓' : '⚠';
+  const msg = running
+    ? `Refreshing your dashboard data…${st.elapsed ? ` (${st.elapsed}s)` : ''}${slow ? ' — taking longer than usual; you can keep working' : ''}`
+    : (ok ? `Refreshed — ${st.last || 'done'}` : `${st.last || 'Refresh failed'}`);
   return (
     <div style={{
-      position: 'fixed', top: 0, left: 0, right: 0, zIndex: 10000,
-      background: running ? 'var(--blue-600, #2f6df6)' : 'var(--teal-600, #0b9b77)',
-      color: '#fff', font: '600 13px/1 system-ui, -apple-system, sans-serif',
-      padding: '9px 14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-      boxShadow: '0 2px 10px rgba(0,0,0,.18)',
+      position: 'fixed', top: 0, left: 0, right: 0, zIndex: 10000, background: bg,
+      color: '#fff', font: '600 13px/1.3 system-ui, -apple-system, sans-serif',
+      padding: '9px 38px 9px 14px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      gap: 10, boxShadow: '0 2px 10px rgba(0,0,0,.18)',
     }}>
-      <span style={running ? { display: 'inline-block', animation: 'dash-spin 1s linear infinite' } : null}>{running ? '🔄' : '✓'}</span>
-      {running ? 'Refreshing your dashboard data… (this can take up to a minute)' : 'Dashboard refreshed — updating…'}
+      <span style={running ? { display: 'inline-block', animation: 'dash-spin 1s linear infinite' } : null}>{icon}</span>
+      <span style={{ maxWidth: '88%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{msg}</span>
+      <button onClick={() => setDismissed(true)} aria-label="Dismiss"
+              style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 15, opacity: 0.85, lineHeight: 1 }}>✕</button>
     </div>
   );
 }
