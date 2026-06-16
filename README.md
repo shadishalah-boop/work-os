@@ -4,9 +4,9 @@ A personal work dashboard plugin for [Claude Code](https://claude.com/claude-cod
 
 ## Quickstart (for colleagues — install entirely inside Claude Code, no terminal)
 
-> You need: **Claude Code**, your standard company MCP connectors (Slack, Gmail,
-> Google Calendar, Google Drive, Granola — check with `/mcp`), and **read access to
-> this repo** (ask the maintainer to add you as a collaborator while it's private).
+> You need: **Claude Code** and your standard company MCP connectors (Slack, Gmail,
+> Google Calendar, Google Drive, Granola — check with `/mcp`). The repo is **public**,
+> so there's nothing to request access to — just add the marketplace and install.
 
 Type these **in the Claude Code chat** (not a terminal) — or run `/plugin` to use the
 plugin-manager menu:
@@ -27,10 +27,9 @@ identity + timezone) and uses sensible defaults for everything else — pins and
 location are set automatically, verifies your connectors, opens the dashboard, and
 offers to run your first refresh. After that, `/dashboard` anytime for fresh data.
 
-> **Sharing tip:** the two `/plugin …` lines above are the whole install — forward
-> them to a colleague (after adding them as a repo collaborator). Once this repo moves
-> to the company GitHub org with internal visibility, anyone with org access can add
-> the marketplace and install with no collaborator step.
+> **Sharing tip:** the two `/plugin …` lines above are the whole install — the repo is
+> public, so just forward them to any colleague and they're set. No collaborator
+> access, no GitHub sign-in gate.
 
 Everything below is reference detail.
 
