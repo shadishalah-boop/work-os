@@ -729,30 +729,169 @@ function Sparkline({ dir }) {
   );
 }
 
+// Build editable definitions from the rendered metrics (so the editor isn't empty
+// for demo users who have no saved definitions yet).
+function metricsDefsFromData(data) {
+  return (data || []).map((k, i) => ({
+    id: k.id || ('m' + (i + 1)),
+    label: k.label || '',
+    source: k.source || 'looker',
+    refType: k.field ? 'field' : k.look ? 'look' : k.query ? 'query' : 'field',
+    ref: k.field || k.look || k.query || k.sql || '',
+    target: k.target || '',
+    format: k.format || 'plain',
+  }));
+}
+
 function KpiMod({ data }) {
+  const [editing, setEditing] = useStateB(false);
+  const [defs, setDefs] = useStateB(null);     // null = not loaded yet
+  const [saveMsg, setSaveMsg] = useStateB(null);
+  const [served, setServed] = useStateB(false);
+
+  // On first edit, load saved definitions from the local server; fall back to
+  // deriving them from whatever the card is currently showing.
+  const ensureDefs = async () => {
+    if (defs) return;
+    try {
+      const r = await fetch('/metrics-config', { cache: 'no-store' });
+      if (r.ok) {
+        setServed(true);
+        const d = await r.json().catch(() => ({}));
+        if (Array.isArray(d.items) && d.items.length) { setDefs(d.items); return; }
+      }
+    } catch {}
+    // Fallback: localStorage, then derive from the rendered metrics.
+    try {
+      const ls = JSON.parse(localStorage.getItem('dashboard.metricDefs.v1') || 'null');
+      if (Array.isArray(ls) && ls.length) { setDefs(ls); return; }
+    } catch {}
+    setDefs(metricsDefsFromData(data));
+  };
+  const openEditor = async () => { await ensureDefs(); setSaveMsg(null); setEditing(true); };
+
+  const setDef = (i, patch) => setDefs(ds => ds.map((d, j) => j === i ? { ...d, ...patch } : d));
+  const addDef = () => setDefs(ds => [...(ds || []), { id: 'm' + Date.now(), label: '', source: 'looker', refType: 'field', ref: '', target: '', format: 'plain' }]);
+  const removeDef = (i) => setDefs(ds => ds.filter((_, j) => j !== i));
+  const moveDef = (i, dir) => setDefs(ds => {
+    const j = i + dir; if (j < 0 || j >= ds.length) return ds;
+    const c = ds.slice(); [c[i], c[j]] = [c[j], c[i]]; return c;
+  });
+
+  // Persist: each def becomes {id,label,source,target,format, <ref by type>}.
+  const toItems = () => (defs || []).filter(d => (d.label || '').trim()).map(d => {
+    const item = { id: d.id, label: d.label.trim(), source: d.source, target: d.target || '', format: d.format || 'plain' };
+    const ref = (d.ref || '').trim();
+    if (d.source === 'snowflake') item.sql = ref;
+    else item[d.refType || 'field'] = ref;   // looker: field | look | query
+    return item;
+  });
+  const save = async () => {
+    const items = toItems();
+    setSaveMsg('saving');
+    try { localStorage.setItem('dashboard.metricDefs.v1', JSON.stringify(defs)); } catch {}
+    try {
+      const r = await fetch('/metrics-config', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items }),
+      });
+      if (r.ok) { setSaveMsg('saved'); return; }
+    } catch {}
+    setSaveMsg(served ? 'error' : 'local');
+  };
+
   return (
     <Module title="Metrics" sub="Numbers, trend, vs target"
             icon={<span style={{width:28, height:28, borderRadius:8, background:'var(--grey-100)', display:'grid', placeItems:'center'}}><Icon name="insights" size={16}/></span>}
-            action="Dashboards"
+            action={editing ? 'Done' : 'Edit'}
+            onAction={() => editing ? setEditing(false) : openEditor()}
             className="kpi-mod">
       <div className="kpi-grid">
-        {data.map((k, i) => {
-          const good = k.trend.good !== undefined ? k.trend.good : k.trend.dir === 'up';
+        {(data || []).map((k, i) => {
+          const t = k.trend || { dir: 'flat', pct: 0 };
+          const good = t.good !== undefined ? t.good : t.dir === 'up';
           return (
-            <div key={i} className="kpi">
+            <div key={k.id || i} className="kpi">
               <div className="kpi-label">{k.label}</div>
               <div className="kpi-value">{k.value}</div>
-              <Sparkline dir={good ? 'up' : k.trend.dir === 'flat' ? 'flat' : 'down'}/>
+              <Sparkline dir={good ? 'up' : t.dir === 'flat' ? 'flat' : 'down'}/>
               <div className="kpi-foot">
-                <span className="kpi-trend" data-dir={good ? 'up' : k.trend.dir === 'flat' ? 'flat' : 'down'}>
-                  {k.trend.dir === 'up' ? '▲' : k.trend.dir === 'down' ? '▼' : '—'} {k.trend.pct}%
+                <span className="kpi-trend" data-dir={good ? 'up' : t.dir === 'flat' ? 'flat' : 'down'}>
+                  {t.dir === 'up' ? '▲' : t.dir === 'down' ? '▼' : '—'} {t.pct}%
                 </span>
                 <span className="kpi-target">{k.target}</span>
               </div>
             </div>
           );
         })}
+        {(data || []).length === 0 && (
+          <div className="empty-ok" style={{gridColumn:'1 / -1'}}>
+            <span className="big">No metrics yet</span>Click <b>Edit</b> to add one from Looker or Snowflake.
+          </div>
+        )}
       </div>
+
+      {editing && (
+        <div className="metric-editor">
+          <div className="metric-editor-head">
+            <Icon name="insights" size={12}/>Edit metrics
+            <span className="metric-editor-hint">pulled live from Looker / Snowflake</span>
+          </div>
+          {(defs || []).map((d, i) => (
+            <div key={d.id} className="metric-row">
+              <div className="metric-row-top">
+                <input className="metric-in metric-in--label" placeholder="Label (e.g. Activation)"
+                       value={d.label} onChange={e => setDef(i, { label: e.target.value })}/>
+                <select className="metric-in" value={d.source} onChange={e => setDef(i, { source: e.target.value })}>
+                  <option value="looker">Looker</option>
+                  <option value="snowflake">Snowflake</option>
+                </select>
+                <div className="metric-row-tools">
+                  <button className="icon-btn" title="Move up" onClick={() => moveDef(i, -1)}>↑</button>
+                  <button className="icon-btn" title="Move down" onClick={() => moveDef(i, 1)}>↓</button>
+                  <button className="icon-btn" title="Remove" onClick={() => removeDef(i)}>×</button>
+                </div>
+              </div>
+              <div className="metric-row-ref">
+                {d.source === 'looker' && (
+                  <select className="metric-in" value={d.refType || 'field'} onChange={e => setDef(i, { refType: e.target.value })}>
+                    <option value="field">LookML field</option>
+                    <option value="look">Look ID/URL</option>
+                    <option value="query">Plain English</option>
+                  </select>
+                )}
+                <input className="metric-in metric-in--ref"
+                       placeholder={d.source === 'snowflake' ? 'SELECT … AS value, … AS prev FROM …'
+                         : d.refType === 'look' ? 'Look URL or ID'
+                         : d.refType === 'query' ? 'e.g. avg NPS this quarter vs last'
+                         : 'view.field — e.g. fact_payment.payment_fees_over_gmv_proceeds'}
+                       value={d.ref} onChange={e => setDef(i, { ref: e.target.value })}/>
+              </div>
+              <div className="metric-row-ref">
+                <input className="metric-in" placeholder="Target (e.g. target 450k)" value={d.target}
+                       onChange={e => setDef(i, { target: e.target.value })}/>
+                <select className="metric-in" value={d.format} onChange={e => setDef(i, { format: e.target.value })}>
+                  <option value="plain">123</option>
+                  <option value="%">%</option>
+                  <option value="k">k</option>
+                  <option value="M">M</option>
+                  <option value="h">h</option>
+                </select>
+              </div>
+            </div>
+          ))}
+          <div className="metric-editor-foot">
+            <button className="btn btn--ghost btn--sm" onClick={addDef}><Icon name="plus" size={12}/> Add metric</button>
+            <div style={{flex:1}}/>
+            {saveMsg === 'saved' && <span className="metric-save-msg ok">✓ Saved — numbers fill on the next /dashboard refresh</span>}
+            {saveMsg === 'local' && <span className="metric-save-msg">Saved in this browser — add them to your config to fetch values</span>}
+            {saveMsg === 'error' && <span className="metric-save-msg err">Couldn’t save — is the dashboard server running?</span>}
+            <button className="btn btn--primary btn--sm" onClick={save} disabled={saveMsg === 'saving'}>
+              {saveMsg === 'saving' ? 'Saving…' : 'Save metrics'}
+            </button>
+          </div>
+        </div>
+      )}
     </Module>
   );
 }

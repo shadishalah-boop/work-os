@@ -182,6 +182,30 @@ local server uses, and interactive sends always confirm first.
 
 ---
 
+## Custom metrics (Looker / Snowflake)
+
+The **Metrics** card can track your own KPIs, pulled live from your data warehouse on
+each refresh. It's **source-agnostic** — each metric says where it comes from, so whether
+you have Looker, Snowflake, or both, it works (and if you have neither, the card just
+shows demo numbers).
+
+**Add metrics right on the dashboard:** click **Edit** on the Metrics card to add / remove
+/ reorder metrics, set targets and number format, and choose the source + reference. Ways
+to point at a metric:
+
+- **Looker** — a LookML field (`fact_payment.payment_fees_over_gmv_proceeds`), a Look
+  URL/ID, plain English ("avg NPS this quarter vs last"), or a dashboard tile.
+- **Snowflake** — a SQL query returning a `value` column (and an optional `prev` column
+  for the ▲/▼ delta), e.g. `SELECT wal_current AS value, wal_prior AS prev FROM …`.
+
+Edits save to `~/.claude/dashboard-metrics.local.json` (or define them in the `metrics`
+block of `dashboard-config.local`). The **numbers fill on the next `/dashboard`** — the
+browser can't query a warehouse, so the refresh agent fetches the values. Set the
+connector names in the config `mcp.looker` / `mcp.snowflake` (a custom name like
+`Preply Looker MCP` is auto-detected via the same search fallback the other agents use).
+
+---
+
 ## Manual install
 
 If you don't want to use `/dashboard-setup`, just ask Claude Code in any session:

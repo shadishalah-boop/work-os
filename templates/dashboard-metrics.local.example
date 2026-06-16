@@ -1,0 +1,27 @@
+{
+  "_README": [
+    "Custom Metrics-card definitions, pulled live from Looker and/or Snowflake on each /dashboard refresh.",
+    "This file is the SINGLE source of truth for the Metrics card when present — it's what the dashboard's ✎ Edit button reads and writes (via the local server), and it takes precedence over the 'metrics' block in dashboard-config.local.",
+    "COPY to ~/.claude/dashboard-metrics.local.json (note the .json) to hand-edit, or just use the on-dashboard editor.",
+    "Each item: a label, a source ('looker' | 'snowflake'), exactly ONE reference for that source, and optional target/format.",
+    "Values + the trend arrow fill on the next refresh — the browser can't query your warehouse; the refresh agent does."
+  ],
+  "items": [
+    {
+      "id": "m1",
+      "label": "Payment fees / GMV",
+      "source": "looker",
+      "field": "fact_payment.payment_fees_over_gmv_proceeds",
+      "format": "%",
+      "target": "target < 2%"
+    },
+    {
+      "id": "m2",
+      "label": "Weekly active learners",
+      "source": "snowflake",
+      "sql": "SELECT wal_current AS value, wal_prior AS prev FROM analytics.kpis.weekly_active_learners",
+      "format": "k",
+      "target": "target 450k"
+    }
+  ]
+}

@@ -113,10 +113,10 @@ window.SEED = {
 
   // Role: senior PM — product-ish KPIs
   kpis: [
-    { label: 'Activation', value: '31.4%', target: '+15% by EOQ', trend: { dir: 'up',   pct: 2.1, period: 'vs last week' } },
-    { label: 'Weekly active learners', value: '412k', target: 'target 450k', trend: { dir: 'up',   pct: 4.8, period: 'vs last week' } },
-    { label: 'Time to first lesson', value: '63h', target: 'target <48h', trend: { dir: 'down', pct: 6,   period: 'improving', good: true } },
-    { label: 'NPS', value: '57', target: 'target 60+', trend: { dir: 'flat', pct: 0, period: 'no change' } },
+    { id: 'm1', label: 'Activation', source: 'looker', field: 'fact_activation.activation_rate', format: '%', value: '31.4%', target: '+15% by EOQ', trend: { dir: 'up',   pct: 2.1, period: 'vs last week' } },
+    { id: 'm2', label: 'Weekly active learners', source: 'snowflake', sql: 'SELECT wal_current AS value, wal_prior AS prev FROM analytics.kpis.weekly_active_learners', format: 'k', value: '412k', target: 'target 450k', trend: { dir: 'up',   pct: 4.8, period: 'vs last week' } },
+    { id: 'm3', label: 'Time to first lesson', source: 'snowflake', sql: 'SELECT ttfl_hours AS value, ttfl_prior AS prev FROM analytics.kpis.time_to_first_lesson', format: 'h', value: '63h', target: 'target <48h', trend: { dir: 'down', pct: 6,   period: 'improving', good: true } },
+    { id: 'm4', label: 'NPS', source: 'looker', field: 'fact_nps.nps_score', format: 'plain', value: '57', target: 'target 60+', trend: { dir: 'flat', pct: 0, period: 'no change' } },
   ],
 
   // Slack — FULL depth: threads, priority, summaries, suggested replies

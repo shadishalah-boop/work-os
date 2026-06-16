@@ -79,6 +79,20 @@ MCP_GMAIL="$(_cfg mcp.gmail 'Gmail')"
 MCP_SLACK="$(_cfg mcp.slack 'Slack')"
 MCP_DRIVE="$(_cfg mcp.drive 'Google_Drive')"
 MCP_GRANOLA="$(_cfg mcp.granola 'Granola')"
+MCP_LOOKER="$(_cfg mcp.looker 'Looker')"
+MCP_SNOWFLAKE="$(_cfg mcp.snowflake 'Snowflake')"
+
+# --- Custom metrics: are there any definitions to fetch? ----------------------
+# Definitions live in dashboard-metrics.local.json (the editor writes it) or the
+# config's metrics.items. HAS_METRICS tells the orchestrator whether to run the
+# metrics agent at all.
+METRICS_DEFS="$HOME/.claude/dashboard-metrics.local.json"
+HAS_METRICS=no
+if [ -f "$METRICS_DEFS" ] && python3 -c "import json,sys; sys.exit(0 if (json.load(open(sys.argv[1])).get('items')) else 1)" "$METRICS_DEFS" 2>/dev/null; then
+  HAS_METRICS=yes
+elif [ -f "$CONFIG_FILE" ] && python3 -c "import json,sys; sys.exit(0 if ((json.load(open(sys.argv[1])).get('metrics') or {}).get('items')) else 1)" "$CONFIG_FILE" 2>/dev/null; then
+  HAS_METRICS=yes
+fi
 
 # --- WINDOW_DAYS = ceil(hours since last successful refresh / 24), clamped [1,7] ---
 # Uses mtime of data-override.jsx — only written on a complete refresh. The
@@ -166,3 +180,7 @@ echo "MCP_GMAIL=$MCP_GMAIL"
 echo "MCP_SLACK=$MCP_SLACK"
 echo "MCP_DRIVE=$MCP_DRIVE"
 echo "MCP_GRANOLA=$MCP_GRANOLA"
+echo "MCP_LOOKER=$MCP_LOOKER"
+echo "MCP_SNOWFLAKE=$MCP_SNOWFLAKE"
+echo "METRICS_DEFS=$METRICS_DEFS"
+echo "HAS_METRICS=$HAS_METRICS"

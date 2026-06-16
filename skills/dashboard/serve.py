@@ -43,6 +43,9 @@ DASH_DIR = sys.argv[2] if len(sys.argv) > 2 else os.getcwd()
 SKILL_DIR = os.path.dirname(os.path.abspath(__file__))
 REFRESH = os.path.join(SKILL_DIR, "refresh-headless.sh")
 SLACK_SEND = os.path.join(SKILL_DIR, "slack-send-headless.sh")
+# Custom Metrics-card definitions — the on-dashboard editor reads/writes this; the
+# refresh agent reads it to know what to fetch from Looker/Snowflake.
+METRICS_FILE = os.path.expanduser("~/.claude/dashboard-metrics.local.json")
 LOGIN_SHELL = "/bin/zsh" if os.path.exists("/bin/zsh") else "/bin/bash"
 
 _state = {"running": False, "last": None, "ok": None, "started_at": None}
@@ -204,6 +207,20 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             result = {"ok": False, "message": ""}
             _run_slack_send(text, body.get("permalink"), body.get("channel"), result)
             return self._json(200, result)
+        if path == "/metrics-config":
+            # Save the metric definitions the editor produced. We only persist the
+            # definition fields (label/source/refs/target/format) — not fetched values.
+            body = self._read_json_body()
+            items = body.get("items")
+            if not isinstance(items, list):
+                return self._json(400, {"ok": False, "message": "expected {items: [...]}"})
+            try:
+                os.makedirs(os.path.dirname(METRICS_FILE), exist_ok=True)
+                with open(METRICS_FILE, "w") as f:
+                    json.dump({"items": items}, f, indent=2)
+                return self._json(200, {"ok": True, "count": len(items)})
+            except Exception as e:
+                return self._json(500, {"ok": False, "message": f"write error: {e}"})
         self.send_error(404)
 
     def do_GET(self):
@@ -212,6 +229,16 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 s = dict(_state)
             s["elapsed"] = int(time.time() - s["started_at"]) if s.get("started_at") else 0
             return self._json(200, s)
+        if self.path.rstrip("/") == "/metrics-config":
+            try:
+                if os.path.exists(METRICS_FILE):
+                    with open(METRICS_FILE) as f:
+                        data = json.load(f)
+                    items = data.get("items") if isinstance(data, dict) else None
+                    return self._json(200, {"items": items if isinstance(items, list) else []})
+                return self._json(200, {"items": []})
+            except Exception as e:
+                return self._json(200, {"items": [], "error": str(e)})
         return super().do_GET()
 
 

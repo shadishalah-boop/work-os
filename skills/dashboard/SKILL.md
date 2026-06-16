@@ -1,6 +1,6 @@
 ---
 name: dashboard
-description: Refresh the Work Dashboard with live data. Fetches 6 sources (calendar, granola, gmail, slack, drive, wellness) in THIS interactive session — because claude.ai-managed MCP connectors aren't available to a headless subprocess — then merges into data-override.jsx + drive-index.jsx. Invoke when the user says "/dashboard", "refresh dashboard", "update dashboard", or "pull fresh data".
+description: Refresh the Work Dashboard with live data. Fetches calendar, granola, gmail, slack, drive, wellness (and, when configured, custom Looker/Snowflake metrics) in THIS interactive session — because claude.ai-managed MCP connectors aren't available to a headless subprocess — then merges into data-override.jsx + drive-index.jsx. Invoke when the user says "/dashboard", "refresh dashboard", "update dashboard", or "pull fresh data".
 ---
 
 # Work Dashboard — refresh skill
@@ -51,9 +51,11 @@ Bash(command: "bash ${CLAUDE_PLUGIN_ROOT}/skills/dashboard/prep.sh", description
 ```
 
 Capture `TODAY`, `TOMORROW`, `NOW`, `WINDOW_DAYS`, `SINCE_*`, `START_TS`, `TZNAME`,
-`DATA_DIR`, `DASH_DIR`, `RUN_AGENTS`, and the per-source server names `MCP_CALENDAR`
+`DATA_DIR`, `DASH_DIR`, `RUN_AGENTS`, the per-source server names `MCP_CALENDAR`
 / `MCP_GMAIL` / `MCP_DRIVE` / `MCP_GRANOLA` (these come from config and are typically
-the `claude_ai_`-prefixed names). prep.sh is plain bash (no MCP) and allowlistable.
+the `claude_ai_`-prefixed names), plus `MCP_LOOKER` / `MCP_SNOWFLAKE` / `HAS_METRICS`
+/ `METRICS_DEFS` for the custom Metrics card. prep.sh is plain bash (no MCP) and
+allowlistable.
 
 ### Step 2 — refresh Slack YOURSELF, in this session (do NOT spawn a sub-agent)
 
@@ -105,6 +107,11 @@ each its server name and absolute output path. Kickoffs (substitute captured val
 - `dashboard-granola`: `Refresh granola (7-day lookback). Today=<TODAY>; timezone=<TZNAME>. Your granola MCP server is named <MCP_GRANOLA>. Write <DATA_DIR>/granola.json.`
 - `dashboard-drive`: `Refresh drive (files modified last 14 days). Today=<TODAY>. Your drive MCP server is named <MCP_DRIVE>. Write the raw response to <DATA_DIR>/drive-raw.json.`
 - `dashboard-wellness`: `Refresh wellness for this week. Today=<TODAY>; NOW=<NOW>; timezone=<TZNAME>. Your calendar MCP server is named <MCP_CALENDAR>. Write <DATA_DIR>/wellness.json.`
+
+**Custom Metrics card (only if `HAS_METRICS=yes`):** also spawn `dashboard-metrics`.
+It reads the user's metric definitions and fetches each from Looker and/or Snowflake:
+- `dashboard-metrics`: `Fetch the custom Metrics-card numbers. Read definitions from <METRICS_DEFS> (or config metrics.items). Looker server=<MCP_LOOKER>; Snowflake server=<MCP_SNOWFLAKE>. timezone=<TZNAME>. For each metric, fetch the current value + prior-period value per agents/dashboard-metrics.md, then Write <DATA_DIR>/metrics.json.`
+  (Snowflake is a normal MCP a sub-agent can usually reach; Looker may be a desktop/local connector — if the sub-agent can't reach it, do this metric inline in the main session, same as the Slack/connector fallback below.)
 
 **Fallback (important):** if a spawned agent reports it can't reach its connector
 (some environments don't expose claude.ai connectors to sub-agents), perform that

@@ -14,6 +14,38 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.9.0 — 2026-06-16
+
+**Customizable Metrics card, powered by Looker and/or Snowflake.** You can now track
+your own KPIs on the dashboard, pulled live from your data warehouse — and edit them
+right on the card.
+
+- **Source-agnostic by design.** Each metric declares its own `source` (`looker` or
+  `snowflake`), so a colleague with only Snowflake, only Looker, or both all get a
+  working card. The agent resolves whichever connector that person has (by name, with a
+  ToolSearch fallback), so a custom connector name like `Preply Looker MCP` is found
+  automatically. If someone has neither, the card keeps its demo numbers — no breakage.
+- **All the ways to point at a metric.** Looker: a LookML `view.field` measure (e.g.
+  `fact_payment.payment_fees_over_gmv_proceeds`), a Look URL/ID, plain-English, or a
+  dashboard tile. Snowflake: a SQL query returning a `value` (and optional `prev`) column.
+- **Edit on the dashboard.** The Metrics card has an **Edit** button (like the OKR
+  editor): add / remove / reorder metrics, set targets and number formatting, choose the
+  source + reference. Saved via the local server to `~/.claude/dashboard-metrics.local.json`;
+  the numbers fill on the next `/dashboard` (the browser can't query a warehouse — the
+  refresh agent does). You can also define metrics in `dashboard-config.local`'s `metrics`
+  block.
+- New `dashboard-metrics` agent, `metrics.json` → `SEED.kpis` wiring in `build-overrides.py`,
+  `serve.py` GET/POST `/metrics-config`, and the `metrics` config block + a
+  `dashboard-metrics.local.example` template.
+
+Verified: live Snowflake fetch through the connector from a real session (confirmed the
+value/prev response shape), 9 server checks (`/metrics-config` round-trip + validation,
+metrics→kpis fallback) and 12 DOM checks of the editor (derives rows, add/reorder, and
+Save POSTs the right ref mapping — Looker→`field`, Snowflake→`sql`). Bumps `modules-b.jsx`
+v=32, `dashboard.css` v=16, `data.jsx` v=4.
+
+---
+
 ## v0.8.8 — 2026-06-16
 
 **Slack card grows a DM lane and a "needs your reply" queue.** The card was too thin —

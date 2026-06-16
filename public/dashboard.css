@@ -1040,6 +1040,30 @@
 .kpi-target { color: var(--fg-3); }
 .kpi-spark { height: 28px; width: 100%; margin-top: 8px; }
 
+/* ---------- Metrics editor (Looker / Snowflake) ---------- */
+.metric-editor { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border-subtle); }
+.metric-editor-head {
+  display: flex; align-items: center; gap: 6px; margin-bottom: 8px;
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-2);
+}
+.metric-editor-head img { width: 12px; height: 12px; }
+.metric-editor-hint { font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--fg-3); margin-left: auto; }
+.metric-row { padding: 8px; border: 1px solid var(--border-subtle); border-radius: 8px; margin-bottom: 8px; background: var(--grey-50); display: grid; gap: 6px; }
+.metric-row-top { display: flex; gap: 6px; align-items: center; }
+.metric-row-ref { display: flex; gap: 6px; }
+.metric-row-tools { display: flex; gap: 2px; margin-left: auto; }
+.metric-in {
+  padding: 6px 8px; border: 1px solid var(--border-default); border-radius: 6px;
+  font-size: 12px; font-family: inherit; background: white; color: var(--fg-1); min-width: 0;
+}
+.metric-in--label { flex: 1; }
+.metric-in--ref { flex: 1; font-family: var(--font-mono, ui-monospace, monospace); }
+.metric-row-ref > .metric-in:first-child:not(.metric-in--ref) { flex: 0 0 auto; }
+.metric-editor-foot { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+.metric-save-msg { font-size: 11px; color: var(--fg-2); }
+.metric-save-msg.ok { color: var(--green-600, #1a7f4b); }
+.metric-save-msg.err { color: var(--red-600); }
+
 /* ---------- Quick access (pinned) ---------- */
 .pins-grid {
   display: grid;

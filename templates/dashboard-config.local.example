@@ -47,7 +47,35 @@
     "gmail": "Gmail",
     "slack": "Slack",
     "drive": "Google_Drive",
-    "granola": "Granola"
+    "granola": "Granola",
+    "looker": "Looker",
+    "snowflake": "Snowflake"
+  },
+
+  "metrics": {
+    "_README": [
+      "OPTIONAL custom metrics for the Metrics card, pulled live from Looker and/or Snowflake.",
+      "You can also add/edit/reorder these right on the dashboard (the ✎ Edit button on the Metrics card) — that writes ~/.claude/dashboard-metrics.local.json, which takes precedence over this block.",
+      "Each metric needs a label, a source ('looker' or 'snowflake'), and ONE reference for that source. target/format are optional.",
+      "format: '%' | 'k' | 'M' | 'h' | 'plain' (how to render the number). target: free text shown under the value (e.g. 'target 450k').",
+      "Values + the trend arrow fill on the next /dashboard refresh — the browser can't call your data warehouse, the refresh agent does."
+    ],
+    "items": [
+      {
+        "id": "m1", "label": "Payment fees / GMV", "source": "looker", "format": "%", "target": "target < 2%",
+        "field": "fact_payment.payment_fees_over_gmv_proceeds",
+        "_field_note": "A LookML view.field measure — the agent runs it on its explore for the current vs prior period."
+      },
+      {
+        "id": "m2", "label": "Weekly active learners", "source": "snowflake", "format": "k", "target": "target 450k",
+        "sql": "SELECT wal_current AS value, wal_prior AS prev FROM analytics.kpis.weekly_active_learners",
+        "_sql_note": "Return one row: a 'value' column (current) and an optional 'prev' column (prior period, for the ▲/▼ delta)."
+      }
+    ],
+    "_ref_types_README": [
+      "looker references (use ONE): 'field' = LookML view.field measure | 'look' = a Look URL or ID | 'query' = plain-English ('avg NPS this quarter vs last') | 'dashboard'+'tile' = a Looker dashboard tile.",
+      "snowflake reference: 'sql' = a query returning a 'value' column (and optional 'prev' column)."
+    ]
   },
 
   "dashboard": {

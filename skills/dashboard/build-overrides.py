@@ -178,6 +178,7 @@ gmail = load("gmail")
 slack = load("slack")
 drive = load("drive")
 wellness = load("wellness")
+metrics = load("metrics")
 
 
 # ---------------------------------------------------------------------------
@@ -268,6 +269,10 @@ slack_seed = {
     "activeThreads": safe(slack, "activeThreads"),
 }
 
+# Custom metrics → Metrics card. Only override SEED.kpis when the agent produced
+# real metrics; otherwise leave the bundled demo numbers from data.jsx in place.
+kpis_seed = safe(metrics, "kpis")
+
 ps_drop = {"generatedAt", "sourceOk", "error"}
 ps = {k: v for k, v in wellness.items() if k not in ps_drop} if wellness.get("sourceOk", False) else {}
 
@@ -357,6 +362,10 @@ jsx = f"""/* global React, window */
 
   // --- Slack (from slack.json) ------------------------------------------
   window.SEED.slack = {js_dump(slack_seed)};
+
+  // --- Metrics card (from metrics.json; Looker/Snowflake) --------------
+  // Only override when we actually fetched metrics — else keep the demo kpis.
+  {("window.SEED.kpis = " + js_dump(kpis_seed) + ";") if kpis_seed else "// (no custom metrics — Metrics card keeps its bundled demo numbers)"}
 
   // --- Weather (from config) -------------------------------------------
   window.SEED.weather = {js_dump(STATIC_WEATHER)};
