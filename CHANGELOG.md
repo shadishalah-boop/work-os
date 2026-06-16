@@ -14,6 +14,24 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.7.3 — 2026-06-16
+
+**A no-expiry "refresh while Claude Code is open" option.** Automated refresh needs an
+open Claude Code session (that's where claude.ai connectors live), so it runs while the
+app is open. Docs + setup now present two in-session methods clearly:
+
+- **Exact times** — a Claude Code scheduled task running `/work-os:dashboard` (e.g.
+  9/14/17). Caveat: session scheduled tasks can auto-expire (~7 days) and need
+  re-arming.
+- **Never expires** — `/loop 3h /work-os:dashboard`: refreshes every few hours for as
+  long as the session is open, no re-arming. (The per-agent TTL cache keeps frequent
+  loops cheap.)
+
+Setup's cadence step and the README now explain both (plus OS reminders as the
+closed-app fallback). No behavior change to the refresh itself.
+
+---
+
 ## v0.7.2 — 2026-06-16
 
 **Prominent OKR input + stop fabricating people's roles.** From a live install.

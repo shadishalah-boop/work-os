@@ -293,23 +293,25 @@ To remove everything later: /dashboard-uninstall
 ```
 
 5. **Ask the refresh cadence, then set it up.** Ask which times they want (default
-   weekdays **09:00 / 14:00 / 17:00**). Then explain the two ways to automate and help
-   with whichever they pick:
-   - **Best — a Claude Code scheduled task** running `/work-os:dashboard` at those
-     times. It runs inside Claude Code's authenticated context, so the connectors work
-     and it truly auto-refreshes (no click). If the user already uses Claude Code
-     scheduled tasks, point them to add one for `/work-os:dashboard`; if a scheduling
-     tool/skill is available in this session, offer to create it. Make sure
-     `allowlist.sh` (Step 1b) has run so the scheduled run never stops on a prompt.
-   - **Fallback — reminders** (a notification nudging them to run /dashboard):
+   weekdays **09:00 / 14:00 / 17:00**). All automated refresh needs a Claude Code
+   session (that's where the claude.ai connectors live), so these all run *while
+   Claude Code is open*. Explain the options and help with whichever they pick:
+   - **Exact times (e.g. 9/14/17) — a Claude Code scheduled task** running
+     `/work-os:dashboard`. Fires at those times while Claude Code is open. Caveat:
+     session-scoped scheduled tasks may auto-expire (~7 days) and need re-arming.
+   - **Never-expires, while open — a `/loop`**: `/loop 3h /work-os:dashboard` refreshes
+     every few hours for as long as the session stays open, with no expiry and no
+     re-arming. Best if they keep Claude Code open through the day and don't care about
+     exact clock times. (The per-agent TTL cache makes frequent loops cheap.)
+   - **Fallback — OS reminders** (a notification nudging them to run /dashboard; works
+     even when Claude Code is closed, but it's a nudge, not an auto-fetch):
      ```bash
      bash "${CLAUDE_PLUGIN_ROOT}/skills/dashboard/schedule.sh" remind --times "09:00 14:00 17:00"
      ```
-     (substitute their times; omit `--times` for the 9/14/17 default).
-
-   Do NOT claim auto-refresh is impossible — it works via a scheduled task. The raw
-   `schedule.sh install` (launchd/cron `claude -p`) is a different mechanism that may
-   not carry claude.ai connectors; prefer the scheduled task.
+   Run `allowlist.sh` (Step 1b) first so any automated refresh never stops on a prompt.
+   Do NOT claim auto-refresh is impossible — it works in-session. The raw
+   `schedule.sh install` (launchd/cron `claude -p`) may not carry claude.ai connectors;
+   prefer the scheduled task or `/loop`.
 
 ## Rules
 

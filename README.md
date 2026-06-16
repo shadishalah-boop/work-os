@@ -224,14 +224,19 @@ session because that's where your claude.ai-managed connectors live. So:
   alternative: add rules like `mcp__claude_ai_Google_Calendar__list_events`,
   `mcp__claude_ai_Gmail__search_threads`,
   `mcp__claude_ai_Slack__slack_search_public_and_private` to `permissions.allow`.)
-- **Automatic refresh on a schedule (recommended):** set up a **Claude Code scheduled
-  task** that runs `/work-os:dashboard` at your times (e.g. weekdays 9:00 / 14:00 /
-  17:00). A scheduled task runs inside Claude Code's authenticated context, so your
-  connectors are available — this is the way to truly auto-refresh. Run
-  `allowlist.sh` first so the scheduled run never stops on a prompt. (Set this up via
-  your Claude Code scheduled-tasks UI / the `/loop`-style scheduler you already use.)
-- **Reminders (no-setup fallback):** if you'd rather just be nudged, a notification at
-  set times reminds you to run `/dashboard`:
+- **Automatic refresh while Claude Code is open.** Every automated refresh needs an
+  open Claude Code session (that's where the connectors live), so all of these run
+  while the app is open. Two ways:
+  - **Exact times** — a **Claude Code scheduled task** running `/work-os:dashboard` at
+    e.g. 9:00 / 14:00 / 17:00. Fires at those times while Claude Code is open. (Session
+    scheduled tasks may auto-expire ~7 days and need re-arming.)
+  - **Never expires** — a **`/loop`**: `/loop 3h /work-os:dashboard` refreshes every
+    few hours for as long as the session stays open, no re-arming. Best if you keep
+    Claude Code open during the day and don't need exact clock times.
+
+  Run `allowlist.sh` first so the automated refresh never stops on a prompt.
+- **Reminders (works even when Claude Code is closed):** a notification at set times
+  nudging you to run `/dashboard` (a nudge, not an auto-fetch):
   ```bash
   bash <plugin>/skills/dashboard/schedule.sh remind --times "09:00 14:00 17:00"
   bash <plugin>/skills/dashboard/schedule.sh unremind
