@@ -287,18 +287,24 @@ To remove everything later: /dashboard-uninstall
 — welcome to your Work Dashboard, <firstName>.
 ```
 
-5. **Ask the refresh cadence, then set it up.** Ask: *"How often should I remind you
-   to refresh? (e.g. weekdays at 9:00, 14:00, 17:00 — the default). A true timed
-   auto-fetch isn't possible with claude.ai connectors (a background job can't reach
-   them), so this is a notification at those times nudging you to run /dashboard,
-   which takes one click."* Take whatever times they give (default `09:00 14:00 17:00`)
-   and install reminders:
-   ```bash
-   bash "${CLAUDE_PLUGIN_ROOT}/skills/dashboard/schedule.sh" remind --times "09:00 14:00 17:00"
-   ```
-   (substitute their times; omit `--times` to accept the 9/14/17 default). If the user
-   says they don't want reminders, skip. Only use `schedule.sh install` (true headless
-   refresh) if they explicitly have headless-capable MCP servers.
+5. **Ask the refresh cadence, then set it up.** Ask which times they want (default
+   weekdays **09:00 / 14:00 / 17:00**). Then explain the two ways to automate and help
+   with whichever they pick:
+   - **Best — a Claude Code scheduled task** running `/work-os:dashboard` at those
+     times. It runs inside Claude Code's authenticated context, so the connectors work
+     and it truly auto-refreshes (no click). If the user already uses Claude Code
+     scheduled tasks, point them to add one for `/work-os:dashboard`; if a scheduling
+     tool/skill is available in this session, offer to create it. Make sure
+     `allowlist.sh` (Step 1b) has run so the scheduled run never stops on a prompt.
+   - **Fallback — reminders** (a notification nudging them to run /dashboard):
+     ```bash
+     bash "${CLAUDE_PLUGIN_ROOT}/skills/dashboard/schedule.sh" remind --times "09:00 14:00 17:00"
+     ```
+     (substitute their times; omit `--times` for the 9/14/17 default).
+
+   Do NOT claim auto-refresh is impossible — it works via a scheduled task. The raw
+   `schedule.sh install` (launchd/cron `claude -p`) is a different mechanism that may
+   not carry claude.ai connectors; prefer the scheduled task.
 
 ## Rules
 
