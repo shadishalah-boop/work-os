@@ -14,6 +14,24 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.6.2 — 2026-06-16
+
+**One-step pre-approval — refreshes stop prompting.** New
+`skills/dashboard/allowlist.sh` writes read-only permission allow-rules into
+`~/.claude/settings.json` for exactly what the refresh uses: the calendar / gmail /
+drive / granola / slack **search & list** tools (both bare and `claude_ai_`-prefixed
+names) and this plugin's own scripts (version-globbed so updates don't re-prompt).
+Run it once and `/dashboard` refreshes are silent from the next session on — instead
+of clicking "don't ask again" ~8 times. Idempotent; preserves existing settings.
+
+- `/dashboard-setup` now offers to run it during onboarding.
+- README + the refresh skill document it, plus a manual `permissions.allow` snippet
+  for anyone who prefers to paste the rules themselves.
+- It grants only read-only search/list tools — never write/send tools — and prints
+  every rule it adds for review.
+
+---
+
 ## v0.6.1 — 2026-06-15
 
 **Closes the remaining install-report bugs.** A detailed v0.5.5 install report
