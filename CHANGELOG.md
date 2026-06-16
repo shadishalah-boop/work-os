@@ -14,6 +14,25 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.7.1 — 2026-06-16
+
+**Correction: scheduled auto-refresh DOES work — via a Claude Code scheduled task.**
+v0.6.0–v0.7.0 claimed timed auto-refresh was impossible with claude.ai connectors.
+That was wrong. It was based on a failed *launchd `claude -p`* run whose real problem
+was tool-name resolution (a `claude_ai_` prefix bug fixed in v0.6.1), misread as "no
+connectors." A **Claude Code scheduled task** runs `/dashboard` inside an
+authenticated session, so the connectors are present and it refreshes for real.
+
+- Docs now recommend a **Claude Code scheduled task running `/work-os:dashboard`** (at
+  e.g. 9:00 / 14:00 / 17:00) as the way to auto-refresh — pair it with `allowlist.sh`
+  so the scheduled run never stops on a permission prompt.
+- The reminder notifications from v0.7.0 remain as a no-setup fallback.
+- Removed the incorrect "auto-fetch is impossible" language from the README, the
+  refresh skill, and setup. The raw launchd/cron `claude -p` path stays flagged as
+  the *less reliable* one (may not carry claude.ai connectors), not "impossible."
+
+---
+
 ## v0.7.0 — 2026-06-16
 
 **Refresh reminders + a local task list.**

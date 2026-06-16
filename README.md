@@ -209,36 +209,38 @@ bash <plugin>/skills/dashboard/schedule.sh status       # show server URL + sche
 
 Then open `http://localhost:8787/Work%20Dashboard.html`.
 
-## How refreshing works (interactive only, with claude.ai connectors)
+## How refreshing works
 
-The refresh runs **in your interactive Claude Code session** — `/dashboard` fetches
-all six sources there and merges them. This is required because **claude.ai-managed
-connectors only exist in the interactive session**; a background/headless process
-can't see them. So:
+`/dashboard` fetches all six sources and merges them. It runs in a Claude Code
+session because that's where your claude.ai-managed connectors live. So:
 
-- **To refresh:** run `/dashboard`, then reload the tab (or it auto-reloads). The
+- **Manual refresh:** run `/dashboard`, then reload the tab (or it auto-reloads). The
   first refresh asks you to approve each connector once — choose **"don't ask again"**
-  and future refreshes are silent.
+  (or run the allowlist below) and future refreshes are silent.
 - **Skip the approval click-through:** run
   `bash <plugin>/skills/dashboard/allowlist.sh` once (setup offers this). It writes
   read-only allow-rules for the connector search/list tools + the plugin's own
-  scripts to `~/.claude/settings.json`, so refreshes never prompt from the next
-  session on. To pre-approve manually instead, add rules like
-  `mcp__claude_ai_Google_Calendar__list_events`, `mcp__claude_ai_Gmail__search_threads`,
-  `mcp__claude_ai_Slack__slack_search_public_and_private` (and the bare-name variants)
-  to `permissions.allow` in your settings.
-- **Refresh reminders at set times.** A true timed auto-fetch isn't possible with
-  claude.ai connectors (a background job can't reach them), so instead you can get a
-  notification at chosen times nudging you to run `/dashboard` (one click). Setup asks
-  your cadence; default is weekdays 9:00 / 14:00 / 17:00. Manage it with:
+  scripts to `~/.claude/settings.json`, so refreshes never prompt afterward. (Manual
+  alternative: add rules like `mcp__claude_ai_Google_Calendar__list_events`,
+  `mcp__claude_ai_Gmail__search_threads`,
+  `mcp__claude_ai_Slack__slack_search_public_and_private` to `permissions.allow`.)
+- **Automatic refresh on a schedule (recommended):** set up a **Claude Code scheduled
+  task** that runs `/work-os:dashboard` at your times (e.g. weekdays 9:00 / 14:00 /
+  17:00). A scheduled task runs inside Claude Code's authenticated context, so your
+  connectors are available — this is the way to truly auto-refresh. Run
+  `allowlist.sh` first so the scheduled run never stops on a prompt. (Set this up via
+  your Claude Code scheduled-tasks UI / the `/loop`-style scheduler you already use.)
+- **Reminders (no-setup fallback):** if you'd rather just be nudged, a notification at
+  set times reminds you to run `/dashboard`:
   ```bash
   bash <plugin>/skills/dashboard/schedule.sh remind --times "09:00 14:00 17:00"
   bash <plugin>/skills/dashboard/schedule.sh unremind
   ```
 
-> `schedule.sh install` (a *true* timed launchd/cron refresh) exists only for the rare
-> case of MCP servers that load headlessly. Don't use it with claude.ai connectors — it
-> would fetch nothing.
+> A launchd/cron job that spawns a fresh `claude -p` is a *different* thing from a
+> Claude Code scheduled task — the raw subprocess may not carry your claude.ai
+> connectors, so prefer the scheduled task. (`schedule.sh install` is the launchd/cron
+> path, useful only if your connectors load headlessly.)
 
 ## Uninstalling
 
