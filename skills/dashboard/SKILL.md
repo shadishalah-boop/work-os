@@ -37,7 +37,10 @@ React-in-browser dashboard. All per-user identity and paths come from
 > prompts; that's incompatible with claude.ai connectors and has been removed.)
 >
 > **First-run prompts:** the first refresh asks you to approve each connector tool
-> once — choose **"don't ask again"** and subsequent refreshes are prompt-free.
+> once — choose **"don't ask again"** and subsequent refreshes are prompt-free. To
+> skip the click-through entirely, run
+> `bash ${CLAUDE_PLUGIN_ROOT}/skills/dashboard/allowlist.sh` once (it writes the
+> read-only allow-rules to `~/.claude/settings.json`; effective next session).
 
 ### Step 1 — prep (one bash call)
 

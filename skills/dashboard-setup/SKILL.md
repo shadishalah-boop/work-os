@@ -251,6 +251,16 @@ open the `localhost` URL. Do NOT just `open` the HTML file.
    ```
    Capture the `http://localhost:PORT/Work%20Dashboard.html` URL it prints.
 
+1b. **Offer to pre-approve refreshes (recommended).** Ask: *"Want me to pre-approve
+   the dashboard's connector tools so future refreshes never prompt? It writes
+   read-only allow-rules to ~/.claude/settings.json — only the calendar/gmail/drive/
+   granola/slack search+list tools and this plugin's scripts."* If yes:
+   ```bash
+   bash "${CLAUDE_PLUGIN_ROOT}/skills/dashboard/allowlist.sh"
+   ```
+   Note for the user: this takes effect in their **next** Claude Code session, so the
+   first refresh below may still prompt — they can pick "don't ask again" there too.
+
 2. **Run the first refresh** — do it exactly as the `dashboard` skill's "How to
    refresh" section describes: it runs **entirely in this interactive session**
    (prep → in-session agents + inline Slack → merge), because claude.ai connectors

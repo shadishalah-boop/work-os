@@ -219,6 +219,14 @@ can't see them. So:
 - **To refresh:** run `/dashboard`, then reload the tab (or it auto-reloads). The
   first refresh asks you to approve each connector once — choose **"don't ask again"**
   and future refreshes are silent.
+- **Skip the approval click-through:** run
+  `bash <plugin>/skills/dashboard/allowlist.sh` once (setup offers this). It writes
+  read-only allow-rules for the connector search/list tools + the plugin's own
+  scripts to `~/.claude/settings.json`, so refreshes never prompt from the next
+  session on. To pre-approve manually instead, add rules like
+  `mcp__claude_ai_Google_Calendar__list_events`, `mcp__claude_ai_Gmail__search_threads`,
+  `mcp__claude_ai_Slack__slack_search_public_and_private` (and the bare-name variants)
+  to `permissions.allow` in your settings.
 - **Timed auto-refresh isn't possible** with claude.ai-managed connectors, because a
   scheduled (launchd/cron) job runs headless and can't access them. The permanent
   *server* still runs in the background; only the data fetch must be interactive.
