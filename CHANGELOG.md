@@ -14,6 +14,26 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.8.6 — 2026-06-16
+
+**Source-app shortcuts moved to the topbar; the "Quick access" card is gone.** The
+pinned-apps card at the bottom of the dashboard is replaced by four compact app
+buttons in the top bar, right next to the refresh button:
+
+- **Calendar, Gmail, Slack, Drive** (no Granola) — each opens the app in a new tab.
+  Slack uses your configured workspace slug; the rest are the standard Google URLs.
+- The **`pins` module is removed** from every layout (D default, C, and the A/B column
+  layouts), and any previously-saved layout that still placed it is filtered out on
+  load, so it won't reappear for existing users.
+- New `AppLinks` component in the topbar + `.d-app-link*` styles in `dashboard-d.css`
+  (hidden on very narrow widths). Bumps `app.jsx` to v=50 and `dashboard-d.css` to v=19.
+
+Verified: 9 DOM checks of the new buttons (exactly four links, correct hrefs, Slack
+workspace substitution + `app.slack.com` fallback, all open in a new tab, no Granola)
+and static checks that `pins` is gone from all layouts/switches and AppLinks is wired in.
+
+---
+
 ## v0.8.5 — 2026-06-16
 
 **Dashboard reply buttons now SEND to Slack directly (no draft step).** Per your ask,

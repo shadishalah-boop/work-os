@@ -1509,13 +1509,12 @@ function LayoutCommandCenter({ tod }) {
           <SlackMod data={SEED.slack}/>
         </div>
 
-        {/* Right — projects, KPIs, blockers, team, pins */}
+        {/* Right — projects, KPIs, blockers, team */}
         <div className="c-span-3" style={{display:'flex', flexDirection:'column', gap:16}}>
           <ProjectsMod data={SEED.projects} okrs={SEED.okrs} decisions={SEED.decisions} okrApi={state.okrApi}/>
           <KpiMod data={SEED.kpis}/>
           <BlockersMod data={SEED.blockers}/>
           <TeamMod data={SEED.team}/>
-          <PinsMod data={SEED.pins}/>
         </div>
       </div>
     </>
@@ -1545,7 +1544,6 @@ function LayoutFocusFlow({ tod }) {
           <InboxMod data={SEED.inbox}/>
           <TeamMod data={SEED.team}/>
           <WellnessMod data={SEED.personalSignals}/>
-          <PinsMod data={SEED.pins}/>
         </div>
       </div>
     </>
@@ -2085,6 +2083,27 @@ function RefreshBanner() {
   );
 }
 
+// Quick links to the source apps, in the topbar (replaced the old "Quick access"
+// pinned card). Slack uses the configured workspace slug; the rest are standard URLs.
+function AppLinks() {
+  const ws = (window.SEED && window.SEED.slack && window.SEED.slack.workspace) || 'app';
+  const links = [
+    { id: 'calendar', label: 'Google Calendar', letter: 'C', bg: 'var(--blue-100)',   href: 'https://calendar.google.com/calendar/u/0/r/week' },
+    { id: 'gmail',    label: 'Gmail',           letter: 'M', bg: 'var(--red-100)',    href: 'https://mail.google.com/mail/u/0/#inbox' },
+    { id: 'slack',    label: 'Slack',           letter: '#', bg: 'var(--yellow-100)', href: `https://${ws}.slack.com` },
+    { id: 'drive',    label: 'Google Drive',    letter: 'D', bg: 'var(--grey-100)',   href: 'https://drive.google.com/drive/u/0/my-drive' },
+  ];
+  return (
+    <div className="d-app-links" role="group" aria-label="Open apps">
+      {links.map(l => (
+        <a key={l.id} className="d-app-link" href={l.href} target="_blank" rel="noreferrer" title={`Open ${l.label}`}>
+          <span className="d-app-link-badge" style={{ background: l.bg }}>{l.letter}</span>
+        </a>
+      ))}
+    </div>
+  );
+}
+
 function ModernTopbar() {
   const openFind = () => window.dispatchEvent(new Event('dash:open-find'));
   return (
@@ -2097,6 +2116,7 @@ function ModernTopbar() {
       </div>
       <PinnedPeopleStrip/>
       <div style={{flex: 1}}/>
+      <AppLinks/>
       <RefreshButton/>
       <VoiceButton/>
       <button className="d-topbar-icon hide-when-readonly" title="Share snapshot"
@@ -2114,15 +2134,14 @@ function ModernTopbar() {
   );
 }
 
-// Default layout D — two-column balanced (left: priority work, right: live feed)
-// + a full-width pins strip as a quick-reference footer.
+// Default layout D — two-column balanced (left: priority work, right: live feed).
+// Source-app quick links live in the topbar (see AppLinks), not as a module.
 //
 // Layout principles:
 //  · Above-fold: top3 + calendar + inbox visible without scrolling
 //  · Text-heavy modules → LEFT (720px gives them room to breathe)
 //  · List-style modules → RIGHT (400px is plenty for compact rows)
 //  · Both columns end at ~y=2320 so the canvas feels symmetric
-//  · pins as full-width footer — visual punctuation, lots of horizontal slots
 //
 // To apply this layout to an existing custom layout, click "Reset layout" in
 // the toolbar. Otherwise loadLayoutD() merges saved positions with these
@@ -2142,9 +2161,6 @@ const DEFAULT_D_BOXES = [
   { id: 'blockers',    left: 736, top: 1408, width: 400, height: 260 },
   { id: 'team',        left: 736, top: 1684, width: 400, height: 320 },
   { id: 'wellness',    left: 736, top: 2020, width: 400, height: 300 },
-
-  // ── BOTTOM full-width strip · quick reference ────────────────────
-  { id: 'pins',        left: 0,   top: 2340, width: 1136, height: 180 },
 ];
 const LAYOUT_D_KEY = 'wdash-layout-d-freeform';
 
@@ -2154,7 +2170,7 @@ function loadLayoutD() {
     if (!raw) return DEFAULT_D_BOXES;
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return DEFAULT_D_BOXES;
-    const valid = parsed.filter(x => x && typeof x.id === 'string'
+    const valid = parsed.filter(x => x && typeof x.id === 'string' && x.id !== 'pins'
       && typeof x.left === 'number' && typeof x.top === 'number'
       && typeof x.width === 'number' && typeof x.height === 'number');
     const byId = new Map(valid.map(x => [x.id, x]));
@@ -2235,7 +2251,6 @@ function LayoutModernSaaS({ tod }) {
       case 'team':     return <TeamMod data={SEED.team}/>;
       case 'wellness': return <WellnessMod data={SEED.personalSignals}/>;
       case 'commitments': return <CommitmentsMod state={state}/>;
-      case 'pins':     return <PinsMod data={SEED.pins}/>;
       default: return null;
     }
   };
@@ -2404,7 +2419,6 @@ const DEFAULT_C_BOXES = [
   { id: 'inbox',    left: 796, top: 656,  width: 520, height: 420 },
   { id: 'team',     left: 796, top: 1092, width: 520, height: 380 },
   { id: 'wellness', left: 796, top: 1488, width: 520, height: 360 },
-  { id: 'pins',     left: 796, top: 1864, width: 520, height: 400 },
 ];
 const LAYOUT_C_KEY = 'wdash-layout-c-freeform';
 
@@ -2414,7 +2428,7 @@ function loadLayoutC() {
     if (!raw) return DEFAULT_C_BOXES;
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return DEFAULT_C_BOXES;
-    const valid = parsed.filter(x => x && typeof x.id === 'string'
+    const valid = parsed.filter(x => x && typeof x.id === 'string' && x.id !== 'pins'
       && typeof x.left === 'number' && typeof x.top === 'number'
       && typeof x.width === 'number' && typeof x.height === 'number');
     const byId = new Map(valid.map(x => [x.id, x]));
@@ -2465,7 +2479,6 @@ function LayoutSplitBrain({ tod }) {
       case 'team':     return <TeamMod data={SEED.team}/>;
       case 'wellness': return <WellnessMod data={SEED.personalSignals}/>;
       case 'commitments': return <CommitmentsMod state={state}/>;
-      case 'pins':     return <PinsMod data={SEED.pins}/>;
       default: return null;
     }
   };
