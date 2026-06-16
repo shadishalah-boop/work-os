@@ -28,9 +28,10 @@ sub-steps yourself.
 
 ## STEP 1b — refresh Slack YOURSELF (inline; not a sub-agent)
 
-You run with `--permission-mode bypassPermissions`, so Slack's consent gate is
-**bypassed** here — you CAN search Slack in this subprocess. Do it yourself (the main
-context can reach the managed connector; a spawned sub-agent may not):
+You run with `--permission-mode bypassPermissions`. Fetch Slack yourself (the main
+context can reach the managed connector; a spawned sub-agent may not). **Time-box it:
+if a Slack tool call doesn't return promptly, or no Slack tool resolves, STOP and move
+on** — do NOT wait indefinitely; the overall run is also capped by the caller.
 
 1. Resolve the Slack search tool, in order: `mcp__<MCP_SLACK>__slack_search_public_and_private`
    (MCP_SLACK from STEP 1, often `claude_ai_Slack`) → `mcp__claude_ai_Slack__slack_search_public_and_private`
@@ -43,9 +44,8 @@ context can reach the managed connector; a spawned sub-agent may not):
 3. Build `slack.json` per the schema + scope rules in
    `{{SKILL_DIR}}/../../agents/dashboard-slack.md`. **On success**, Write it to
    `<DATA_DIR>/slack.json` (Read it first if it already exists, then Write).
-   **On ANY failure** (no Slack tool resolves, or the connector isn't reachable
-   headlessly): do NOT write — leave the existing `slack.json` untouched so the last
-   good Slack data is preserved. Do not block the rest of the refresh on Slack.
+   **On ANY failure or stall**, do NOT write — leave the existing `slack.json` untouched
+   so the last good Slack data is preserved. Do not block the rest of the refresh.
 
 ## STEP 2 — fan out in ONE tool block (agents in parallel + the merge waiter)
 

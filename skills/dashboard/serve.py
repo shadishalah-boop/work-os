@@ -26,6 +26,7 @@ import shlex
 import subprocess
 import sys
 import threading
+import time
 
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8787
 DASH_DIR = sys.argv[2] if len(sys.argv) > 2 else os.getcwd()
@@ -33,8 +34,10 @@ SKILL_DIR = os.path.dirname(os.path.abspath(__file__))
 REFRESH = os.path.join(SKILL_DIR, "refresh-headless.sh")
 LOGIN_SHELL = "/bin/zsh" if os.path.exists("/bin/zsh") else "/bin/bash"
 
-_state = {"running": False, "last": None, "ok": None}
+_state = {"running": False, "last": None, "ok": None, "started_at": None}
 _lock = threading.Lock()
+
+REFRESH_TIMEOUT = 300  # seconds — hard cap so a stuck refresh always resolves (~5 min)
 
 
 def _run_refresh():
@@ -42,7 +45,7 @@ def _run_refresh():
         # Login shell (-lc) so the user's PATH (and `claude`) is available even under launchd.
         proc = subprocess.run(
             [LOGIN_SHELL, "-lc", f"bash {shlex.quote(REFRESH)}"],
-            capture_output=True, text=True, timeout=600,
+            capture_output=True, text=True, timeout=REFRESH_TIMEOUT,
         )
         out = (proc.stdout or "").strip().splitlines()
         err = (proc.stderr or "").strip().splitlines()
@@ -50,6 +53,12 @@ def _run_refresh():
         with _lock:
             _state["last"] = last or "(no output)"
             _state["ok"] = proc.returncode == 0
+    except subprocess.TimeoutExpired:
+        with _lock:
+            _state["last"] = (f"Refresh timed out after {REFRESH_TIMEOUT // 60} min. "
+                              "A headless refresh may stall on connector consent — run /dashboard "
+                              "in Claude Code, or check ~/.claude/dashboard-serve.log.")
+            _state["ok"] = False
     except Exception as e:
         with _lock:
             _state["last"] = f"refresh error: {e}"
@@ -82,6 +91,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     return self._json(202, {"status": "already-running"})
                 _state["running"] = True
                 _state["ok"] = None
+                _state["last"] = None
+                _state["started_at"] = time.time()
             threading.Thread(target=_run_refresh, daemon=True).start()
             return self._json(202, {"status": "started"})
         self.send_error(404)
@@ -89,7 +100,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path.rstrip("/") == "/refresh-status":
             with _lock:
-                return self._json(200, dict(_state))
+                s = dict(_state)
+            s["elapsed"] = int(time.time() - s["started_at"]) if s.get("started_at") else 0
+            return self._json(200, s)
         return super().do_GET()
 
 
