@@ -74,6 +74,28 @@
 
 <script>
 // =============================================================================
+// Tab favicon = the user's Slack profile photo (v0.9.2). build-overrides.py puts
+// the avatar URL on SEED.user.avatar (fetched by the slack agent). We swap the tab
+// icon to it once SEED loads; until then the bundled W mark shows. Falls back to W
+// if there's no avatar (no Slack / fresh install).
+// =============================================================================
+(function setFaviconFromSlack() {
+  let tries = 0;
+  const t = setInterval(() => {
+    tries += 1;
+    if (!window.SEED && tries < 100) return;   // wait for the async babel scripts
+    clearInterval(t);
+    var url = window.SEED && window.SEED.user && window.SEED.user.avatar;
+    if (!url) return;                           // keep the bundled W favicon
+    var link = document.querySelector("link[rel~='icon']") || document.createElement('link');
+    link.setAttribute('rel', 'icon');
+    link.removeAttribute('type');               // let the browser sniff (Slack serves jpg/png)
+    link.setAttribute('href', url);
+    if (!link.parentNode) document.head.appendChild(link);
+  }, 200);
+})();
+
+// =============================================================================
 // Sample-data banner (v0.5.0): until the first /dashboard refresh rewrites
 // data-override.jsx, the dashboard renders the bundled demo dataset ("Alex").
 // Make that unmistakable so a fresh install never looks broken or like someone

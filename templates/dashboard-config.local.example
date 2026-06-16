@@ -12,6 +12,8 @@
     "fullName": "Alex Rivera",
     "role": "Senior PM",
     "email": "alex@example.com",
+    "avatar": "",
+    "_avatar_note": "Optional. The browser-tab favicon uses your Slack profile photo automatically (fetched on each refresh). Set a direct image URL here only to override that.",
     "timezone": "auto",
     "workingHours": { "start": "09:00", "end": "18:30", "days": ["Mon", "Tue", "Wed", "Thu", "Fri"] }
   },
@@ -48,6 +50,7 @@
     "slack": "Slack",
     "drive": "Google_Drive",
     "granola": "Granola",
+    "zoom": "Zoom_for_Claude",
     "looker": "Looker",
     "snowflake": "Snowflake"
   },

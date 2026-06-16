@@ -1,7 +1,7 @@
 ---
 name: dashboard-slack
 description: Fetches recent Slack activity via the Slack MCP server, scoped to channels where the user is actually active (DMs + channels they've posted in within the last 30 days, plus high-signal incident channels for blocker detection). Lookback window is dynamic per the orchestrator's prompt. Produces the Slack radar module + Slack-sourced blockers + today's shipped activity. (Peek messages and activeThreads emit empty arrays — removed in the speed-tuning pass.)
-tools: mcp__claude_ai_Slack__slack_search_public_and_private, mcp__claude_ai_Slack__slack_search_public, mcp__Slack__slack_search_public_and_private, mcp__Slack__slack_search_public, ToolSearch, Read, Write
+tools: mcp__claude_ai_Slack__slack_search_public_and_private, mcp__claude_ai_Slack__slack_search_public, mcp__claude_ai_Slack__slack_read_user_profile, mcp__claude_ai_Slack__slack_search_users, mcp__Slack__slack_search_public_and_private, mcp__Slack__slack_search_public, mcp__Slack__slack_read_user_profile, mcp__Slack__slack_search_users, ToolSearch, Read, Write
 ---
 
 # Dashboard — Slack agent
@@ -89,6 +89,15 @@ These two are the dashboard's primary Slack surface, so build them first:
   `suggested` replies. It's fine for an item to also appear in `dms` — the two serve
   different purposes (browse-all vs. act-now).
 
+### 0.5. The user's avatar (`userAvatar`) — one small call
+
+Fetch the **authed user's own Slack profile photo** so the dashboard can use it as the
+browser-tab favicon. Resolve a profile tool — `mcp__<server>__slack_read_user_profile`
+(self) or `mcp__<server>__slack_search_users` for the user's own name/email from config —
+and take a small square image URL (prefer `image_192`, else `image_72`/`image_512`). Put
+it in `userAvatar`. One call, best-effort: if it fails, set `userAvatar: ""` and move on —
+never block the refresh on it.
+
 ### 1. The channels list
 
 The user's most important **non-DM** channels today, 5–7 items (DMs now live in `dms`, not
@@ -119,6 +128,7 @@ Write the result to `<dataCacheDir>/slack.json` using the **Write tool**. A sing
 ```json
 {
   "workspace": "your-workspace",
+  "userAvatar": "https://avatars.slack-edge.com/.../user_192.jpg",
   "tabs": [
     { "id": "missed",   "label": "You missed this",         "count": 3, "active": true  },
     { "id": "mentions", "label": "Mentions",                "count": 1, "active": false },
@@ -190,6 +200,7 @@ Write the result to `<dataCacheDir>/slack.json` using the **Write tool**. A sing
 
 ### Field reference
 - `workspace` — from the config (`slack.workspace`) if provided; else derive from a result permalink hostname; else `"slack"`.
+- `userAvatar` — the authed user's Slack profile image URL (square, ~192px); used as the browser-tab favicon. `""` if unavailable.
 - `dms[]` — up to 8 recent DM conversations; `person` is the other participant (never invented); `suggested` = 2–3 reply options. The dashboard renders these as a "Direct messages" lane with an inline reply box that sends directly.
 - `needsReply[]` — up to 6 ranked items awaiting the user's reply; `kind` ∈ `dm|mention|owed`; `who` is the DM person or `#channel`; `ask` is a 2–4 word reason. Rendered as the top "Needs your reply" action queue.
 - `tabs.count` — running total across all channels that belong to that tab.

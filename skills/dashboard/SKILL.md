@@ -53,9 +53,9 @@ Bash(command: "bash ${CLAUDE_PLUGIN_ROOT}/skills/dashboard/prep.sh", description
 Capture `TODAY`, `TOMORROW`, `NOW`, `WINDOW_DAYS`, `SINCE_*`, `START_TS`, `TZNAME`,
 `DATA_DIR`, `DASH_DIR`, `RUN_AGENTS`, the per-source server names `MCP_CALENDAR`
 / `MCP_GMAIL` / `MCP_DRIVE` / `MCP_GRANOLA` (these come from config and are typically
-the `claude_ai_`-prefixed names), plus `MCP_LOOKER` / `MCP_SNOWFLAKE` / `HAS_METRICS`
-/ `METRICS_DEFS` for the custom Metrics card. prep.sh is plain bash (no MCP) and
-allowlistable.
+the `claude_ai_`-prefixed names), `MCP_ZOOM` (optional Zoom notes source merged into the
+granola agent), plus `MCP_LOOKER` / `MCP_SNOWFLAKE` / `HAS_METRICS` / `METRICS_DEFS` for
+the custom Metrics card. prep.sh is plain bash (no MCP) and allowlistable.
 
 ### Step 2 — refresh Slack YOURSELF, in this session (do NOT spawn a sub-agent)
 
@@ -104,7 +104,7 @@ each its server name and absolute output path. Kickoffs (substitute captured val
 
 - `dashboard-calendar`: `Refresh calendar data. TODAY=<TODAY>; TOMORROW=<TOMORROW>; NOW=<NOW>; timezone=<TZNAME>. Your calendar MCP server is named <MCP_CALENDAR> — resolve mcp__<MCP_CALENDAR>__list_events (else ToolSearch "calendar list events"). Write <DATA_DIR>/calendar.json.`
 - `dashboard-gmail`: `Refresh gmail for the last <WINDOW_DAYS> days. Today=<TODAY>; timezone=<TZNAME>. Your gmail MCP server is named <MCP_GMAIL>. Write <DATA_DIR>/gmail.json.`
-- `dashboard-granola`: `Refresh granola (7-day lookback). Today=<TODAY>; timezone=<TZNAME>. Your granola MCP server is named <MCP_GRANOLA>. Write <DATA_DIR>/granola.json.`
+- `dashboard-granola`: `Refresh meeting notes (7-day lookback) from Granola AND Zoom, merged/deduped. Today=<TODAY>; timezone=<TZNAME>. Your granola MCP server is named <MCP_GRANOLA>; your zoom MCP server is named <MCP_ZOOM> (optional — skip Zoom silently if it doesn't resolve). Write <DATA_DIR>/granola.json.`
 - `dashboard-drive`: `Refresh drive (files modified last 14 days). Today=<TODAY>. Your drive MCP server is named <MCP_DRIVE>. Write the raw response to <DATA_DIR>/drive-raw.json.`
 - `dashboard-wellness`: `Refresh wellness for this week. Today=<TODAY>; NOW=<NOW>; timezone=<TZNAME>. Your calendar MCP server is named <MCP_CALENDAR>. Write <DATA_DIR>/wellness.json.`
 

@@ -180,6 +180,11 @@ drive = load("drive")
 wellness = load("wellness")
 metrics = load("metrics")
 
+# Favicon / identity: the user's Slack profile photo (fetched by the slack agent),
+# falling back to a config override. The HTML swaps the tab icon to this if set.
+_slack_avatar = slack.get("userAvatar") if slack.get("sourceOk", True) else None
+STATIC_USER["avatar"] = _slack_avatar or cfg_get("user.avatar", "")
+
 
 # ---------------------------------------------------------------------------
 # Merge

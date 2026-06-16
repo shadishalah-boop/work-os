@@ -14,6 +14,28 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.9.2 — 2026-06-16
+
+**Two additions: your Slack photo as the tab favicon, and Zoom notes in the meetings feed.**
+
+- **Tab favicon = your Slack profile photo.** The browser tab now shows your Slack avatar
+  instead of the generic "W" mark. The Slack agent grabs your profile image on each
+  refresh (`userAvatar` in `slack.json`), `build-overrides.py` puts it on `SEED.user.avatar`,
+  and the page swaps the favicon to it once data loads — falling back to the W if there's
+  no Slack/avatar. Optional `user.avatar` config override.
+- **The meetings agent now reads Granola AND Zoom.** `dashboard-granola` also pulls recent
+  Zoom meeting notes/transcripts (when a Zoom MCP is connected), then **merges and dedupes**
+  meetings that exist in both apps (same title + start within ~30 min → combined and tagged
+  `Granola+Zoom`; otherwise tagged with its single source). Zoom is optional — if no Zoom
+  connector resolves it's skipped silently, and Granola-only still works. New `mcp.zoom`
+  config (default `Zoom_for_Claude`) + `MCP_ZOOM` plumbing.
+
+Verified: 3 DOM checks of the favicon swap (swaps to the avatar, drops the type attr,
+keeps the W when no avatar) and prep.sh emits `MCP_ZOOM`. Bumps plugin 0.9.2 (re-syncs
+the HTML with the new favicon script).
+
+---
+
 ## v0.9.1 — 2026-06-16
 
 **Metrics card defaults to Snowflake; Looker is now an optional extra.** A desktop-app
