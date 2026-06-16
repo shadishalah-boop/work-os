@@ -149,9 +149,9 @@ serve() {
   <key>ProgramArguments</key>
   <array>
     <string>$(pybin)</string>
-    <string>-m</string><string>http.server</string><string>$port</string>
-    <string>--bind</string><string>127.0.0.1</string>
-    <string>--directory</string><string>$DASH_DIR</string>
+    <string>$SCRIPT_DIR/serve.py</string>
+    <string>$port</string>
+    <string>$DASH_DIR</string>
   </array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
@@ -162,11 +162,11 @@ serve() {
 EOF
     launchctl unload "$SERVE_PLIST" 2>/dev/null || true
     launchctl load "$SERVE_PLIST"
-    echo "Permanent server running (launchd, survives reboot)."
+    echo "Permanent server running (launchd, survives reboot) — with one-press /refresh."
   else
-    pkill -f "http.server $port .*$DASH_DIR" 2>/dev/null || true
-    nohup "$(pybin)" -m http.server "$port" --bind 127.0.0.1 --directory "$DASH_DIR" >"$SERVE_LOG" 2>&1 &
-    echo "Server started (nohup). For reboot-persistence on Linux add a systemd user service or @reboot cron."
+    pkill -f "serve.py $port" 2>/dev/null || true
+    nohup "$(pybin)" "$SCRIPT_DIR/serve.py" "$port" "$DASH_DIR" >"$SERVE_LOG" 2>&1 &
+    echo "Server started (nohup) — with one-press /refresh."
   fi
   echo "Open your dashboard at:"
   echo "  $(dash_url "$port")"

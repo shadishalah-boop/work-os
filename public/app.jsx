@@ -2009,6 +2009,51 @@ function PinnedPeopleStrip() {
   );
 }
 
+// One-press data refresh. POSTs /refresh to the local server (serve.py), which runs
+// a headless refresh in the background — so this works without an interactive Claude
+// Code session. Falls back to a hint if the server doesn't expose /refresh (e.g. it
+// was started as a plain file server). The page auto-reloads when fresh data lands.
+function RefreshButton() {
+  const [status, setStatus] = React.useState('idle'); // idle|running|done|error|unavailable
+  const pollRef = React.useRef(null);
+  React.useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
+
+  const start = async () => {
+    if (status === 'running') return;
+    setStatus('running');
+    try {
+      const r = await fetch('/refresh', { method: 'POST' });
+      if (r.status !== 202 && !r.ok) { setStatus('unavailable'); setTimeout(() => setStatus('idle'), 6000); return; }
+      pollRef.current = setInterval(async () => {
+        try {
+          const s = await (await fetch('/refresh-status', { cache: 'no-store' })).json();
+          if (!s.running) {
+            clearInterval(pollRef.current);
+            setStatus(s.ok === false ? 'error' : 'done');
+            setTimeout(() => setStatus('idle'), 5000);
+          }
+        } catch { clearInterval(pollRef.current); setStatus('idle'); }
+      }, 3000);
+    } catch {
+      setStatus('unavailable'); setTimeout(() => setStatus('idle'), 6000);
+    }
+  };
+
+  const title =
+    status === 'running'     ? 'Refreshing data… (running a headless refresh in the background)' :
+    status === 'done'        ? 'Refreshed — reloading' :
+    status === 'error'       ? 'Refresh hit an error — try /dashboard in Claude Code' :
+    status === 'unavailable' ? 'Refresh needs the dashboard server (run: schedule.sh serve)' :
+                               'Refresh dashboard data now';
+  const glyph = status === 'running' ? '⏳' : status === 'done' ? '✓' : status === 'error' || status === 'unavailable' ? '⚠' : '↻';
+  return (
+    <button className="d-topbar-icon" title={title} onClick={start} disabled={status === 'running'}
+            style={{ fontSize: 15, lineHeight: 1 }} aria-label="Refresh dashboard data">
+      <span style={status === 'running' ? { display: 'inline-block', animation: 'dash-spin 1s linear infinite' } : null}>{glyph}</span>
+    </button>
+  );
+}
+
 function ModernTopbar() {
   const openFind = () => window.dispatchEvent(new Event('dash:open-find'));
   return (
@@ -2020,6 +2065,7 @@ function ModernTopbar() {
       </div>
       <PinnedPeopleStrip/>
       <div style={{flex: 1}}/>
+      <RefreshButton/>
       <VoiceButton/>
       <button className="d-topbar-icon hide-when-readonly" title="Share snapshot"
               onClick={() => window.dispatchEvent(new Event('dash:open-share'))}>

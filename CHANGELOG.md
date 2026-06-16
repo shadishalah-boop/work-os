@@ -14,6 +14,25 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.8.0 — 2026-06-16
+
+**One-press Refresh button on the dashboard — no Claude Code session needed.**
+
+- New `skills/dashboard/serve.py` replaces the plain `http.server`: it serves the
+  bundle AND exposes `POST /refresh` (kicks off a background headless refresh via
+  `refresh-headless.sh`, launched through a login shell so `claude` is on PATH under
+  launchd) and `GET /refresh-status`. `schedule.sh serve` now runs it.
+- The dashboard's top bar gained a **↻ Refresh** button (`app.jsx?v=47`): it POSTs
+  `/refresh`, shows a spinner while running, and the existing auto-reload swaps in the
+  fresh data. Because the server runs in the background (launchd), this works **even
+  when the Claude Code app is closed**.
+- Honest limits: needs the `claude` CLI + allowlist; a headless refresh updates the
+  non-Slack sources (Slack keeps its last value — it needs interactive consent); and
+  headless connector availability can vary by machine. The button gracefully shows a
+  hint if the server doesn't expose `/refresh` (e.g. opened as a file).
+
+---
+
 ## v0.7.3 — 2026-06-16
 
 **A no-expiry "refresh while Claude Code is open" option.** Automated refresh needs an
