@@ -2,24 +2,35 @@
 
 A personal work dashboard plugin for [Claude Code](https://claude.com/claude-code) that merges your **Google Calendar, Gmail, Slack, Google Drive, and Granola meeting notes** into a local React-in-browser view.
 
-## Quickstart (for colleagues — 3 steps, ~5 minutes)
+## Quickstart (for colleagues — install entirely inside Claude Code, no terminal)
 
-> You need: the **Claude Code CLI** installed, your standard company MCP connectors
-> (Slack, Gmail, Google Calendar, Google Drive, Granola — check with `/mcp`), and
-> **read access to this repo** (ask the maintainer to add you as a collaborator
-> while the repo is private).
+> You need: **Claude Code**, your standard company MCP connectors (Slack, Gmail,
+> Google Calendar, Google Drive, Granola — check with `/mcp`), and **read access to
+> this repo** (ask the maintainer to add you as a collaborator while it's private).
 
-In Claude Code:
+Type these **in the Claude Code chat** (not a terminal) — or run `/plugin` to use the
+plugin-manager menu:
 
 ```
 /plugin marketplace add shadishalah-boop/work-os
 /plugin install work-os@work-os
+```
+
+Then **restart Claude Code** and run:
+
+```
 /dashboard-setup
 ```
 
-The setup wizard is near-zero-questions: it confirms what it auto-detected (your identity + timezone) and uses sensible defaults for everything else — pins and file location are set automatically, no prompts,
-verifies your connectors, opens the dashboard in your browser, and offers to run
-your first refresh. After that, `/dashboard` anytime for fresh data. That's it.
+The setup wizard is near-zero-questions: it confirms what it auto-detected (your
+identity + timezone) and uses sensible defaults for everything else — pins and file
+location are set automatically, verifies your connectors, opens the dashboard, and
+offers to run your first refresh. After that, `/dashboard` anytime for fresh data.
+
+> **Sharing tip:** the two `/plugin …` lines above are the whole install — forward
+> them to a colleague (after adding them as a repo collaborator). Once this repo moves
+> to the company GitHub org with internal visibility, anyone with org access can add
+> the marketplace and install with no collaborator step.
 
 Everything below is reference detail.
 
