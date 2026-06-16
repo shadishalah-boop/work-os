@@ -14,6 +14,37 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.8.8 — 2026-06-16
+
+**Slack card grows a DM lane and a "needs your reply" queue.** The card was too thin —
+DMs were buried among channels and capped. Two new sections now sit at the top, both
+with the inline reply box that sends directly (the chip-confirm / compose from v0.8.5):
+
+- **Needs your reply** — a ranked action queue of the most important things awaiting
+  *your* response: unanswered DMs + @-mentions + questions owed, each tagged with why
+  it's there (`awaiting yes/no`, `@you — pause or keep?`, `reply owed`) and a one-click
+  reply. Up to 6 items.
+- **Direct messages** — reply to *any* recent DM, not just ones awaiting you. Up to 8,
+  each with a snippet and reply box. DMs are no longer mixed into the channel radar
+  (which is now relabeled "Channels").
+
+Both lists are derived from the **same 4 Slack searches** the agent already runs — no
+extra MCP calls, so the refresh stays just as fast. (Inline message previews and a wider
+net were considered and deliberately skipped to keep refresh time flat.)
+
+Plumbing: the `dashboard-slack` agent emits `dms` + `needsReply`; `build-overrides.py`
+passes them through; the reply UI was refactored into one shared `renderReply` used by
+channels, DMs, and the queue. Bundled demo data (`data.jsx`) gains samples so the
+sections show before the first refresh. Bumps `modules-b.jsx` v=31, `dashboard.css` v=15,
+`data.jsx` v=3.
+
+Verified: 18 DOM checks (both sections render with counts, DM expand-and-send targets the
+right person/permalink, needs-reply chip arms-then-sends to the right `#channel`, and
+backward-compat when `dms`/`needsReply` are absent — no crash) plus the existing 15
+channel-reply checks still pass after the refactor.
+
+---
+
 ## v0.8.7 — 2026-06-16
 
 **Topbar app shortcuts now use the official brand logos.** The plain letter badges

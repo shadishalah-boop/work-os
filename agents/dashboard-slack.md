@@ -65,9 +65,34 @@ If the active-channel set has **fewer than 3 channels** (e.g. the user was on va
 
 ## What you build
 
+All four lists below are derived from the **same 4 searches** — do not make extra MCP
+calls for them.
+
+### 0. Direct messages (`dms`) and the "needs your reply" queue (`needsReply`)
+
+These two are the dashboard's primary Slack surface, so build them first:
+
+- **`dms`** — up to **8** of the user's most recent DM conversations (1:1 and small group
+  DMs), newest/most-important first, taken from the DM-channel results in queries #1–#2.
+  Include a DM even if no reply is strictly owed (the user wants to reply to any DM). Each
+  entry: `person` (the other participant's display name, or "Group · A, B, C" for a group
+  DM; resolve names from the result — never invent), `permalink`, `unread`, `priority`,
+  `updated`, a 1-sentence `summary`, and 2–3 `suggested` replies (`primary:true` on the
+  best). Use the DM permalink so a reply lands in the right conversation.
+
+- **`needsReply`** — up to **6** items, ranked, that are **awaiting the user's response**:
+  unanswered DMs (a DM whose last message is from the other person), @-mentions of the user,
+  and questions/asks owed in active channels. Rank senior-stakeholder + time-sensitive items
+  first. Each entry: `kind` (`"dm"` | `"mention"` | `"owed"`), `who` (the DM person or the
+  `#channel`), `permalink`, `priority`, `updated`, a short `ask` (why it's here, e.g.
+  "awaiting yes/no", "@you — pause or keep?", "reply owed"), a 1-sentence `summary`, and 2–3
+  `suggested` replies. It's fine for an item to also appear in `dms` — the two serve
+  different purposes (browse-all vs. act-now).
+
 ### 1. The channels list
 
-The user's most important Slack destinations today, 5–7 items, **only from DMs + active channels**. For each, classify the tabs it belongs to:
+The user's most important **non-DM** channels today, 5–7 items (DMs now live in `dms`, not
+here). For each, classify the tabs it belongs to:
 - `missed` — unread messages the user hasn't seen (heuristic: most recent message in channel is not from the user and is younger than the lookback window)
 - `mentions` — the user was @-mentioned or directly addressed (a `to:me` match in a non-DM channel)
 - `owed` — the user owes a reply (last message is from the counterparty, was a question or explicit ask, and the user hasn't replied since)
@@ -100,12 +125,43 @@ Write the result to `<dataCacheDir>/slack.json` using the **Write tool**. A sing
     { "id": "owed",     "label": "Replies owed",            "count": 2, "active": false },
     { "id": "watching", "label": "Threads you're active in","count": 4, "active": false }
   ],
+  "dms": [
+    {
+      "id": "dm1",
+      "person": "Sam Rivera",
+      "permalink": "https://your-workspace.slack.com/archives/D0A99KKUS7K",
+      "unread": 2,
+      "priority": "high",
+      "updated": "18m ago",
+      "summary": "1-sentence synthesis of the DM + what's unresolved",
+      "suggested": [
+        { "label": "One-click reply option", "primary": true },
+        { "label": "Alternative action",      "primary": false }
+      ]
+    }
+  ],
+  "needsReply": [
+    {
+      "id": "nr1",
+      "kind": "dm",
+      "who": "Sam Rivera",
+      "permalink": "https://your-workspace.slack.com/archives/D0A99KKUS7K",
+      "priority": "high",
+      "updated": "18m ago",
+      "ask": "awaiting yes/no",
+      "summary": "1-sentence synthesis of what they're waiting on",
+      "suggested": [
+        { "label": "One-click reply option", "primary": true },
+        { "label": "Alternative action",      "primary": false }
+      ]
+    }
+  ],
   "channels": [
     {
       "id": "ch1",
       "tabs": ["missed", "owed", "watching"],
-      "channel": "DM · Sam",
-      "permalink": "https://your-workspace.slack.com/archives/D0A99KKUS7K",
+      "channel": "#growth-pricing",
+      "permalink": "https://your-workspace.slack.com/archives/C0A99KKUS7K",
       "unread": 10,
       "priority": "high",
       "updated": "2h ago",
@@ -134,6 +190,8 @@ Write the result to `<dataCacheDir>/slack.json` using the **Write tool**. A sing
 
 ### Field reference
 - `workspace` — from the config (`slack.workspace`) if provided; else derive from a result permalink hostname; else `"slack"`.
+- `dms[]` — up to 8 recent DM conversations; `person` is the other participant (never invented); `suggested` = 2–3 reply options. The dashboard renders these as a "Direct messages" lane with an inline reply box that sends directly.
+- `needsReply[]` — up to 6 ranked items awaiting the user's reply; `kind` ∈ `dm|mention|owed`; `who` is the DM person or `#channel`; `ask` is a 2–4 word reason. Rendered as the top "Needs your reply" action queue.
 - `tabs.count` — running total across all channels that belong to that tab.
 - `tabs.active` — set `true` only on `missed` (default open tab). All others `false`.
 - `priority` (channels) — `high` (senior stakeholder + action owed) / `med` (action owed but lower stakes) / `low` (informational).
@@ -145,7 +203,7 @@ Write the result to `<dataCacheDir>/slack.json` using the **Write tool**. A sing
 - `shipped.meta` — `Slack · today · <theme>` where theme is one of: `brand | product | infra | ops | strategy`.
 
 ## Rules
-- **Cap**: search calls 4 (plus at most 1 retry each) · channels 5–7 · blockers ≤5 · shipped ≤5. (`activeThreads` is always `[]`.)
+- **Cap**: search calls 4 (plus at most 1 retry each) · dms ≤8 · needsReply ≤6 · channels 5–7 · blockers ≤5 · shipped ≤5. (`activeThreads` is always `[]`.) All lists come from the same 4 searches — no extra MCP calls.
 - **Always include Slack permalinks** — the user needs to jump to the source.
 - **No channel-history or thread reads.** Use only what message search returns. Summary must be YOUR synthesis from the snippets, not invented.
 - **Timezone**: convert message timestamps → human-relative form in the user's timezone from the kickoff prompt (e.g. "2h ago", "yesterday", "4d ago").

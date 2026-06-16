@@ -107,10 +107,128 @@ function SlackMod({ data }) {
   // Filter by active tab (channel must list the tab in c.tabs)
   const channels = data.channels.filter(c => (c.tabs || []).includes(activeTab));
 
+  const dms = data.dms || [];
+  const needsReply = data.needsReply || [];
+
+  // Reusable reply UI (suggested chips + compose box + status), shared by the
+  // channel radar, the DM lane, and the "needs your reply" queue. `where` is the
+  // human destination label shown to the user; `item` needs id/permalink/suggested.
+  const renderReply = (item, where) => (
+    <div onClick={e=>e.stopPropagation()}>
+      {(item.peek || []).length > 0 && (
+        <div className="slack-thread-peek">
+          {item.peek.map((m, i) => (
+            <div key={i} className="slack-msg">
+              <span className="pds-avatar size-24"><img src="ds/assets/avatar-default.svg" alt={m.who}/></span>
+              <div className="body"><strong>{m.who}</strong>{m.body}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="slack-suggested">
+        {(item.suggested || []).map((s, i) => {
+          const key = item.id + ':' + i;
+          const armed = armedSug === key;
+          return (
+            <button
+              key={i}
+              className={'sug' + (s.primary ? ' primary' : '') + (armed ? ' armed' : '')}
+              title={serveOnline
+                ? (armed ? `Click again to send to ${where}` : `Send to ${where} (click, then confirm)`)
+                : 'Copies to clipboard and opens in Slack'}
+              onClick={()=>{
+                // Not served → harmless copy+open, no confirm needed.
+                if (!serveOnline) { slackSendOrFallback(s.label, item.permalink, where, item.id); return; }
+                if (armed) { disarm(); slackSendOrFallback(s.label, item.permalink, where, item.id); return; }
+                // Arm this chip; auto-disarm after a few seconds.
+                if (armTimerRef.current) clearTimeout(armTimerRef.current);
+                setArmedSug(key);
+                armTimerRef.current = setTimeout(() => setArmedSug(k => k === key ? null : k), 4000);
+              }}>
+              {armed
+                ? <><Icon name="send" size={12}/>Send to {where}?</>
+                : <>{s.primary && <Icon name="sparkle" size={12} style={{filter: s.primary ? 'invert(1)' : 'none'}}/>}{s.label}</>}
+            </button>
+          );
+        })}
+      </div>
+      <div className="slack-compose">
+        <Icon name="reply" size={14}/>
+        <input
+          placeholder={serveOnline ? `Type & press Enter — sends to ${where}` : `Draft reply — opens in Slack to send`}
+          value={replyText[item.id] || ''}
+          onChange={e=>setReplyText({...replyText, [item.id]: e.target.value})}
+          disabled={sendStatus[item.id] === 'sending'}
+          onKeyDown={async e => {
+            if (e.key !== 'Enter') return;
+            const t = replyText[item.id] || '';
+            if (!t.trim()) return;
+            await slackSendOrFallback(t, item.permalink, where, item.id);
+          }}
+        />
+        <button
+          className="icon-btn"
+          aria-label={serveOnline ? 'Send to Slack' : 'Open in Slack'}
+          title={serveOnline ? `Send to ${where}` : 'Copies draft to clipboard and opens the thread in Slack'}
+          disabled={sendStatus[item.id] === 'sending'}
+          onClick={async ()=>{
+            const t = replyText[item.id] || '';
+            if (!t.trim()) return;
+            await slackSendOrFallback(t, item.permalink, where, item.id);
+          }}
+        ><Icon name="send" size={14}/></button>
+      </div>
+      {sendStatus[item.id] && (
+        <div className={'slack-send-status ' + sendStatus[item.id]} style={{
+          fontSize: 11, marginTop: 4, paddingLeft: 22,
+          color: sendStatus[item.id] === 'sent' ? 'var(--green-600, #1a7f4b)' : 'var(--fg-2)',
+        }}>
+          {sendStatus[item.id] === 'sending' && '📨 Sending to Slack…'}
+          {sendStatus[item.id] === 'sent' && `✓ Sent to ${where}`}
+          {sendStatus[item.id] === 'copied' && '📋 Couldn’t send from here — copied & opened Slack so you can paste & send'}
+        </div>
+      )}
+    </div>
+  );
+
+  // A compact, expandable row used by the DM lane + needs-reply queue. `glyph` is
+  // the little kind badge ("✉" DM, "@" mention, "↩" reply owed).
+  const renderReplyRow = (item, where, glyph, chip) => (
+    <div key={item.id} className="slack-row slack-row--compact" style={{display:'block', cursor:'pointer'}}
+         onClick={()=>setExpanded(expanded===item.id ? null : item.id)}>
+      <div style={{display:'grid', gridTemplateColumns:'auto 1fr auto', gap:10, alignItems:'start'}}>
+        <span className="slack-kind-badge" data-pri={item.priority}>{glyph}</span>
+        <div style={{minWidth:0}}>
+          <div className="slack-channel">
+            <span>{where}</span>
+            {chip && <span className="mention-chip" data-pri={item.priority} style={{marginLeft:'auto'}}>{chip}</span>}
+          </div>
+          <div className="slack-row-meta">
+            {item.unread > 0 ? `${item.unread} unread · ` : ''}updated {item.updated}
+          </div>
+          {item.summary && (
+            <div className="slack-ai">
+              <div className="label"><Icon name="sparkle" size={12}/>Claude summary</div>
+              {item.summary}
+            </div>
+          )}
+          {expanded === item.id && renderReply(item, where)}
+        </div>
+        <Icon name={expanded === item.id ? "chevron-down" : "chevron-right"} size={14} style={{opacity: 0.5, marginTop: 6}}/>
+      </div>
+    </div>
+  );
+
+  const kindGlyph = (k) => k === 'mention' ? '@' : k === 'owed' ? '↩' : '✉';
+
   return (
     <Module
-      title={<span style={{display:'inline-flex', alignItems:'center', gap:8}}><span className="slack-brand"/>Slack · what you missed</span>}
-      sub={`${data.channels.length} tracked · ${(data.activeThreads||[]).length} active threads across your workspace`}
+      title={<span style={{display:'inline-flex', alignItems:'center', gap:8}}><span className="slack-brand"/>Slack · what needs you</span>}
+      sub={[
+        needsReply.length ? `${needsReply.length} need a reply` : null,
+        dms.length ? `${dms.length} DMs` : null,
+        `${data.channels.length} channels`,
+      ].filter(Boolean).join(' · ')}
       right={
         <div style={{display:'flex', alignItems:'center', gap:8}}>
           <span
@@ -206,6 +324,32 @@ function SlackMod({ data }) {
         </div>
       )}
 
+      {/* Needs your reply — the ranked action queue (DMs + mentions + owed) */}
+      {needsReply.length > 0 && (
+        <div className="slack-section slack-section--reply">
+          <div className="slack-section-head">
+            <Icon name="reply" size={12}/>Needs your reply<span className="bubble">{needsReply.length}</span>
+          </div>
+          {needsReply.map(nr => renderReplyRow(nr, nr.who, kindGlyph(nr.kind), nr.ask))}
+        </div>
+      )}
+
+      {/* Direct messages — reply to any DM, not just ones awaiting you */}
+      {dms.length > 0 && (
+        <div className="slack-section slack-section--dms">
+          <div className="slack-section-head">
+            <span className="slack-brand"/>Direct messages<span className="bubble">{dms.length}</span>
+          </div>
+          {dms.map(dm => renderReplyRow(dm, dm.person, '✉', dm.priority === 'high' ? 'Needs you' : null))}
+        </div>
+      )}
+
+      {channels.length > 0 && (
+        <div className="slack-section-head" style={{marginTop: dms.length || needsReply.length ? 14 : 0}}>
+          <Icon name="hash" size={12}/>Channels
+        </div>
+      )}
+
       <div className="slack-tabs">
         {data.tabs.map(t => (
           <button key={t.id} className="slack-tab" data-active={activeTab===t.id} onClick={()=>setActiveTab(t.id)}>
@@ -244,81 +388,7 @@ function SlackMod({ data }) {
                   <span key={i} className="mention-chip" data-pri={m.pri}>{m.label}</span>
                 ))}
               </div>
-              {expanded === c.id && (
-                <div onClick={e=>e.stopPropagation()}>
-                  <div className="slack-thread-peek">
-                    {c.peek.map((m, i) => (
-                      <div key={i} className="slack-msg">
-                        <span className="pds-avatar size-24"><img src="ds/assets/avatar-default.svg" alt={m.who}/></span>
-                        <div className="body"><strong>{m.who}</strong>{m.body}</div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="slack-suggested">
-                    {c.suggested.map((s, i) => {
-                      const key = c.id + ':' + i;
-                      const armed = armedSug === key;
-                      return (
-                      <button
-                        key={i}
-                        className={'sug' + (s.primary ? ' primary' : '') + (armed ? ' armed' : '')}
-                        title={serveOnline
-                          ? (armed ? `Click again to send to ${c.channel}` : `Send to ${c.channel} (click, then confirm)`)
-                          : 'Copies to clipboard and opens in Slack'}
-                        onClick={()=>{
-                          // Not served → harmless copy+open, no confirm needed.
-                          if (!serveOnline) { slackSendOrFallback(s.label, c.permalink, c.channel, c.id); return; }
-                          if (armed) { disarm(); slackSendOrFallback(s.label, c.permalink, c.channel, c.id); return; }
-                          // Arm this chip; auto-disarm after a few seconds.
-                          if (armTimerRef.current) clearTimeout(armTimerRef.current);
-                          setArmedSug(key);
-                          armTimerRef.current = setTimeout(() => setArmedSug(k => k === key ? null : k), 4000);
-                        }}>
-                        {armed
-                          ? <><Icon name="send" size={12}/>Send to {c.channel}?</>
-                          : <>{s.primary && <Icon name="sparkle" size={12} style={{filter: s.primary ? 'invert(1)' : 'none'}}/>}{s.label}</>}
-                      </button>
-                      );
-                    })}
-                  </div>
-                  <div className="slack-compose">
-                    <Icon name="reply" size={14}/>
-                    <input
-                      placeholder={serveOnline ? `Type & press Enter — sends to ${c.channel}` : `Draft reply — opens in Slack to send`}
-                      value={replyText[c.id] || ''}
-                      onChange={e=>setReplyText({...replyText, [c.id]: e.target.value})}
-                      disabled={sendStatus[c.id] === 'sending'}
-                      onKeyDown={async e => {
-                        if (e.key !== 'Enter') return;
-                        const t = replyText[c.id] || '';
-                        if (!t.trim()) return;
-                        await slackSendOrFallback(t, c.permalink, c.channel, c.id);
-                      }}
-                    />
-                    <button
-                      className="icon-btn"
-                      aria-label={serveOnline ? 'Send to Slack' : 'Open in Slack'}
-                      title={serveOnline ? `Send to ${c.channel}` : 'Copies draft to clipboard and opens the thread in Slack'}
-                      disabled={sendStatus[c.id] === 'sending'}
-                      onClick={async ()=>{
-                        const t = replyText[c.id] || '';
-                        if (!t.trim()) return;
-                        await slackSendOrFallback(t, c.permalink, c.channel, c.id);
-                      }}
-                    ><Icon name="send" size={14}/></button>
-                  </div>
-                  {sendStatus[c.id] && (
-                    <div className={'slack-send-status ' + sendStatus[c.id]} style={{
-                      fontSize: 11, marginTop: 4, paddingLeft: 22,
-                      color: sendStatus[c.id] === 'sent' ? 'var(--green-600, #1a7f4b)' : 'var(--fg-2)',
-                    }}>
-                      {sendStatus[c.id] === 'sending' && '📨 Sending to Slack…'}
-                      {sendStatus[c.id] === 'sent' && `✓ Sent to ${c.channel}`}
-                      {sendStatus[c.id] === 'copied' && '📋 Couldn’t send from here — copied & opened Slack so you can paste & send'}
-                    </div>
-                  )}
-                </div>
-              )}
+              {expanded === c.id && renderReply(c, c.channel)}
             </div>
             <Icon name={expanded === c.id ? "chevron-down" : "chevron-right"} size={14} style={{opacity: 0.5, marginTop: 6}}/>
           </div>

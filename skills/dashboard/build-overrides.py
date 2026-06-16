@@ -262,6 +262,8 @@ inbox = safe(gmail, "inbox")[:6]
 slack_seed = {
     "workspace":     slack.get("workspace", _slack_workspace) if slack.get("sourceOk", True) else _slack_workspace,
     "tabs":          safe(slack, "tabs"),
+    "dms":           safe(slack, "dms")[:8],
+    "needsReply":    safe(slack, "needsReply")[:6],
     "channels":      safe(slack, "channels"),
     "activeThreads": safe(slack, "activeThreads"),
 }

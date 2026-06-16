@@ -209,6 +209,82 @@ window.SEED = {
         ],
       },
     ],
+    dms: [
+      {
+        id: 'dm1', person: 'Sam O. (manager)', permalink: 'https://acme.slack.com/archives/D01',
+        unread: 2, priority: 'high', updated: '18m ago',
+        summary: 'Asked if you can own the board pricing section by Friday — waiting on your yes/no.',
+        suggested: [
+          { label: 'Yes, I\'ll own it by Fri', primary: true },
+          { label: 'Can we sync 10m first?', primary: false },
+        ],
+      },
+      {
+        id: 'dm2', person: 'Recruiting · Priya offer', permalink: 'https://acme.slack.com/archives/D02',
+        unread: 3, priority: 'high', updated: '2h ago',
+        summary: 'Needs your sign-off on the +12% comp band before Priya\'s Friday deadline.',
+        suggested: [
+          { label: 'Approve +12%', primary: true },
+          { label: 'Counter at +8%', primary: false },
+        ],
+      },
+      {
+        id: 'dm3', person: 'Mia K.', permalink: 'https://acme.slack.com/archives/D03',
+        unread: 1, priority: 'med', updated: '1h ago',
+        summary: 'Sent the tier-2 dip numbers and wants your call on pausing the test.',
+        suggested: [
+          { label: 'Pause — re-randomize Mon', primary: true },
+          { label: 'Let it run 48h', primary: false },
+        ],
+      },
+      {
+        id: 'dm4', person: 'Theo R.', permalink: 'https://acme.slack.com/archives/D04',
+        unread: 0, priority: 'low', updated: '4h ago',
+        summary: 'Shared 6 brand directions, wants your top two for Friday. Async is fine.',
+        suggested: [
+          { label: 'Pick #2 and #5', primary: true },
+          { label: 'Need more time', primary: false },
+        ],
+      },
+    ],
+    needsReply: [
+      {
+        id: 'nr1', kind: 'dm', who: 'Sam O. (manager)', permalink: 'https://acme.slack.com/archives/D01',
+        priority: 'high', updated: '18m ago', ask: 'awaiting yes/no',
+        summary: 'Board pricing section — can you own it by Friday?',
+        suggested: [
+          { label: 'Yes, I\'ll own it by Fri', primary: true },
+          { label: 'Can we sync 10m first?', primary: false },
+        ],
+      },
+      {
+        id: 'nr2', kind: 'dm', who: 'Recruiting · Priya offer', permalink: 'https://acme.slack.com/archives/D02',
+        priority: 'high', updated: '2h ago', ask: 'deadline Fri',
+        summary: 'Sign-off needed on the +12% comp band before the offer window closes.',
+        suggested: [
+          { label: 'Approve +12%', primary: true },
+          { label: 'Counter at +8%', primary: false },
+        ],
+      },
+      {
+        id: 'nr3', kind: 'mention', who: '#growth-pricing', permalink: 'https://acme.slack.com/archives/C01',
+        priority: 'high', updated: '12m ago', ask: '@you — pause or keep?',
+        summary: 'Mia flagged a 9% conversion dip and tagged you for the pause/keep call.',
+        suggested: [
+          { label: 'Pause, re-randomize Monday', primary: true },
+          { label: 'Keep running · 48h', primary: false },
+        ],
+      },
+      {
+        id: 'nr4', kind: 'owed', who: '#design-crit', permalink: 'https://acme.slack.com/archives/C04',
+        priority: 'low', updated: '3h ago', ask: 'reply owed',
+        summary: 'Theo is waiting on your top two brand directions for Friday.',
+        suggested: [
+          { label: 'Pick #2 and #5', primary: true },
+          { label: 'Need more time', primary: false },
+        ],
+      },
+    ],
   },
 
   pins: [
