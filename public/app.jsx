@@ -2021,6 +2021,7 @@ function RefreshButton() {
   const start = async () => {
     if (status === 'running') return;
     setStatus('running');
+    window.dispatchEvent(new Event('dash:refresh-started'));   // light up the banner immediately
     try {
       const r = await fetch('/refresh', { method: 'POST' });
       if (r.status !== 202 && !r.ok) { setStatus('unavailable'); setTimeout(() => setStatus('idle'), 6000); return; }
@@ -2054,10 +2055,48 @@ function RefreshButton() {
   );
 }
 
+// Prominent "refresh in progress" bar across the top of the dashboard. Driven by the
+// server's /refresh-status, so it appears for any button-triggered refresh (this tab
+// or another), and immediately on click via the dash:refresh-started event. Silent if
+// the server doesn't expose /refresh-status (e.g. opened as a file).
+function RefreshBanner() {
+  const [phase, setPhase] = React.useState('idle'); // idle | running | done
+  React.useEffect(() => {
+    let wasRunning = false;
+    const poll = async () => {
+      try {
+        const s = await (await fetch('/refresh-status', { cache: 'no-store' })).json();
+        if (s.running) { wasRunning = true; setPhase('running'); }
+        else if (wasRunning) { wasRunning = false; setPhase('done'); setTimeout(() => setPhase('idle'), 4000); }
+      } catch { /* no /refresh-status — stay idle */ }
+    };
+    poll();
+    const id = setInterval(poll, 4000);
+    const onStart = () => setPhase('running');
+    window.addEventListener('dash:refresh-started', onStart);
+    return () => { clearInterval(id); window.removeEventListener('dash:refresh-started', onStart); };
+  }, []);
+  if (phase === 'idle') return null;
+  const running = phase === 'running';
+  return (
+    <div style={{
+      position: 'fixed', top: 0, left: 0, right: 0, zIndex: 10000,
+      background: running ? 'var(--blue-600, #2f6df6)' : 'var(--teal-600, #0b9b77)',
+      color: '#fff', font: '600 13px/1 system-ui, -apple-system, sans-serif',
+      padding: '9px 14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+      boxShadow: '0 2px 10px rgba(0,0,0,.18)',
+    }}>
+      <span style={running ? { display: 'inline-block', animation: 'dash-spin 1s linear infinite' } : null}>{running ? '🔄' : '✓'}</span>
+      {running ? 'Refreshing your dashboard data… (this can take up to a minute)' : 'Dashboard refreshed — updating…'}
+    </div>
+  );
+}
+
 function ModernTopbar() {
   const openFind = () => window.dispatchEvent(new Event('dash:open-find'));
   return (
     <div className="d-topbar">
+      <RefreshBanner/>
       <div className="d-search" onClick={openFind} role="button" tabIndex={0}>
         <Icon name="search" size={14}/>
         <span className="d-search-placeholder">Search tasks, people, files, meetings…</span>
