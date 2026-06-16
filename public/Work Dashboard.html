@@ -25,6 +25,26 @@
   * { box-sizing: border-box; }
   @keyframes dash-spin { to { transform: rotate(360deg); } }
 </style>
+<script>
+// file:// guard (plain JS so it runs even when the app code can't): this dashboard
+// must be served over http://localhost — a file:// page renders blank because the
+// browser blocks Babel from loading the .jsx files. Show a clear pointer instead.
+(function () {
+  if (location.protocol !== 'file:') return;
+  var url = 'http://localhost:8787/Work%20Dashboard.html';
+  var render = function () {
+    document.body.innerHTML =
+      '<div style="max-width:580px;margin:16vh auto;padding:28px;font:15px/1.6 system-ui,-apple-system,sans-serif;color:#1a1a1a;text-align:center">'
+      + '<div style="font-size:42px;margin-bottom:10px">📊</div>'
+      + '<h2 style="margin:0 0 8px">Open the dashboard over localhost</h2>'
+      + '<p style="color:#555">You\'ve opened this as a <b>file</b>, which the browser can\'t render (it blocks loading the app code). Open it through the local server instead:</p>'
+      + '<p><a href="' + url + '" style="display:inline-block;margin:8px 0;padding:11px 18px;background:#2f6df6;color:#fff;text-decoration:none;border-radius:8px;font-weight:600">Open ' + url + '</a></p>'
+      + '<p style="color:#888;font-size:13px">If that page doesn\'t load, start the server first — ask Claude Code to <b>"open the dashboard"</b> (or run <code>schedule.sh serve</code>). Using a custom port? Use <code>http://localhost:&lt;your-port&gt;/Work%20Dashboard.html</code>.</p>'
+      + '</div>';
+  };
+  if (document.body) render(); else document.addEventListener('DOMContentLoaded', render);
+})();
+</script>
 </head>
 <body>
 <div id="root"></div>

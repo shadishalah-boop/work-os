@@ -273,9 +273,12 @@ open the `localhost` URL. Do NOT just `open` the HTML file.
    connector tool — tell the user to choose **"don't ask again"** so future refreshes
    are prompt-free. Relay the final confirmation line.
 
-3. **Open the dashboard at the localhost URL** (not the file path):
-   `open "http://localhost:PORT/Work%20Dashboard.html"` (macOS) /
-   `xdg-open ...` (Linux). If `open` fails, just print the URL.
+3. **Open the dashboard** — use the helper (it opens the localhost URL, never the
+   file path, and starts the server if needed):
+   ```bash
+   bash "${CLAUDE_PLUGIN_ROOT}/skills/dashboard/open.sh"
+   ```
+   Never run `open "<dashboardDir>/Work Dashboard.html"` — a `file://` page is blank.
 
 4. Print:
 
