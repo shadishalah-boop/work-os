@@ -164,11 +164,9 @@
   text-decoration: none; transition: background-color 140ms;
 }
 .layout-d .d-app-link:hover { background: var(--d-bg-muted); }
-.layout-d .d-app-link-badge {
-  width: 24px; height: 24px; border-radius: 6px;
-  display: grid; place-items: center;
-  font: 700 12px/1 var(--font-mono, ui-monospace, monospace);
-  color: var(--fg-1);
+.layout-d .d-app-link-icon {
+  width: 22px; height: 22px; display: block;
+  -webkit-user-drag: none; user-select: none;
 }
 @media (max-width: 720px) {
   .layout-d .d-app-links { display: none; }

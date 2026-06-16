@@ -2084,20 +2084,22 @@ function RefreshBanner() {
 }
 
 // Quick links to the source apps, in the topbar (replaced the old "Quick access"
-// pinned card). Slack uses the configured workspace slug; the rest are standard URLs.
+// pinned card). Official brand icons live in ds/assets/. Slack uses the configured
+// workspace slug; the rest are standard URLs.
 function AppLinks() {
   const ws = (window.SEED && window.SEED.slack && window.SEED.slack.workspace) || 'app';
   const links = [
-    { id: 'calendar', label: 'Google Calendar', letter: 'C', bg: 'var(--blue-100)',   href: 'https://calendar.google.com/calendar/u/0/r/week' },
-    { id: 'gmail',    label: 'Gmail',           letter: 'M', bg: 'var(--red-100)',    href: 'https://mail.google.com/mail/u/0/#inbox' },
-    { id: 'slack',    label: 'Slack',           letter: '#', bg: 'var(--yellow-100)', href: `https://${ws}.slack.com` },
-    { id: 'drive',    label: 'Google Drive',    letter: 'D', bg: 'var(--grey-100)',   href: 'https://drive.google.com/drive/u/0/my-drive' },
+    { id: 'calendar', label: 'Google Calendar', icon: 'ds/assets/app-google-calendar.svg', href: 'https://calendar.google.com/calendar/u/0/r/week' },
+    { id: 'gmail',    label: 'Gmail',           icon: 'ds/assets/app-gmail.svg',           href: 'https://mail.google.com/mail/u/0/#inbox' },
+    { id: 'slack',    label: 'Slack',           icon: 'ds/assets/app-slack.svg',           href: `https://${ws}.slack.com` },
+    { id: 'drive',    label: 'Google Drive',    icon: 'ds/assets/app-google-drive.svg',    href: 'https://drive.google.com/drive/u/0/my-drive' },
   ];
   return (
     <div className="d-app-links" role="group" aria-label="Open apps">
       {links.map(l => (
-        <a key={l.id} className="d-app-link" href={l.href} target="_blank" rel="noreferrer" title={`Open ${l.label}`}>
-          <span className="d-app-link-badge" style={{ background: l.bg }}>{l.letter}</span>
+        <a key={l.id} className="d-app-link" href={l.href} target="_blank" rel="noreferrer"
+           title={`Open ${l.label}`} aria-label={`Open ${l.label}`}>
+          <img className="d-app-link-icon" src={l.icon} alt={l.label} width="22" height="22"/>
         </a>
       ))}
     </div>

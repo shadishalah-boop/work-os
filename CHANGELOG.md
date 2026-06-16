@@ -14,6 +14,21 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.8.7 — 2026-06-16
+
+**Topbar app shortcuts now use the official brand logos.** The plain letter badges
+(`C` / `M` / `#` / `D`) were unreadable — no one could tell which app was which. They're
+replaced with the real Google Calendar, Gmail, Slack, and Google Drive icons, shipped as
+self-contained SVG assets in `ds/assets/` (no network/CDN dependency, render offline).
+The colored letter-badge styling is dropped in favor of the 22px icons. Bumps `app.jsx`
+to v=51 and `dashboard-d.css` to v=20.
+
+Verified: 15 DOM checks (each link renders its official `<img>` icon with the right
+`src` + descriptive `alt`, no letter badges remain, correct hrefs + Slack workspace
+substitution, all open in a new tab, no Granola) and SVG well-formedness for all four.
+
+---
+
 ## v0.8.6 — 2026-06-16
 
 **Source-app shortcuts moved to the topbar; the "Quick access" card is gone.** The
