@@ -9,19 +9,19 @@
   "items": [
     {
       "id": "m1",
-      "label": "Payment fees / GMV",
-      "source": "looker",
-      "field": "fact_payment.payment_fees_over_gmv_proceeds",
-      "format": "%",
-      "target": "target < 2%"
-    },
-    {
-      "id": "m2",
       "label": "Weekly active learners",
       "source": "snowflake",
       "sql": "SELECT wal_current AS value, wal_prior AS prev FROM analytics.kpis.weekly_active_learners",
       "format": "k",
       "target": "target 450k"
+    },
+    {
+      "id": "m2",
+      "label": "Payment fees / GMV (Looker — optional, needs Looker MCP in Claude Code)",
+      "source": "looker",
+      "field": "fact_payment.payment_fees_over_gmv_proceeds",
+      "format": "%",
+      "target": "target < 2%"
     }
   ]
 }

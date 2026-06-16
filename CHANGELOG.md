@@ -14,6 +14,25 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.9.1 — 2026-06-16
+
+**Metrics card defaults to Snowflake; Looker is now an optional extra.** A desktop-app
+Looker connector isn't visible to Claude Code, so using it would force every colleague to
+hand-wire a Looker MCP — at odds with "easy to share." Snowflake is a connector you
+authorize once (like Slack/Gmail) and it works in-session, so it's the team default now.
+
+- The on-card editor's **"Add metric" defaults to Snowflake**, and Snowflake is first in
+  the source dropdown.
+- Bundled demo metrics are now Snowflake-sourced (so a fresh install showcases the
+  zero-setup path).
+- Config/template/README reordered to lead with Snowflake and label Looker as
+  power-user-optional (requires `claude mcp add … --scope user` per person).
+
+No functional removal — Looker still works for anyone who has the MCP wired into Claude
+Code. Bumps `modules-b.jsx` v=33, `data.jsx` v=5.
+
+---
+
 ## v0.9.0 — 2026-06-16
 
 **Customizable Metrics card, powered by Looker and/or Snowflake.** You can now track

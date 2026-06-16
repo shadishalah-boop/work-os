@@ -60,21 +60,22 @@
       "format: '%' | 'k' | 'M' | 'h' | 'plain' (how to render the number). target: free text shown under the value (e.g. 'target 450k').",
       "Values + the trend arrow fill on the next /dashboard refresh — the browser can't call your data warehouse, the refresh agent does."
     ],
+    "_recommended": "Snowflake is the zero-setup source: it's a connector you authorize once (like Slack/Gmail) and it works in-session. Looker via MCP is also supported, but it currently requires each person to wire the Looker MCP into Claude Code, so prefer Snowflake for anything you share with the team.",
     "items": [
       {
-        "id": "m1", "label": "Payment fees / GMV", "source": "looker", "format": "%", "target": "target < 2%",
-        "field": "fact_payment.payment_fees_over_gmv_proceeds",
-        "_field_note": "A LookML view.field measure — the agent runs it on its explore for the current vs prior period."
-      },
-      {
-        "id": "m2", "label": "Weekly active learners", "source": "snowflake", "format": "k", "target": "target 450k",
+        "id": "m1", "label": "Weekly active learners", "source": "snowflake", "format": "k", "target": "target 450k",
         "sql": "SELECT wal_current AS value, wal_prior AS prev FROM analytics.kpis.weekly_active_learners",
         "_sql_note": "Return one row: a 'value' column (current) and an optional 'prev' column (prior period, for the ▲/▼ delta)."
+      },
+      {
+        "id": "m2", "label": "Payment fees / GMV", "source": "looker", "format": "%", "target": "target < 2%",
+        "field": "fact_payment.payment_fees_over_gmv_proceeds",
+        "_field_note": "OPTIONAL — only works if you've added a Looker MCP to Claude Code. A LookML view.field measure the agent runs for the current vs prior period."
       }
     ],
     "_ref_types_README": [
-      "looker references (use ONE): 'field' = LookML view.field measure | 'look' = a Look URL or ID | 'query' = plain-English ('avg NPS this quarter vs last') | 'dashboard'+'tile' = a Looker dashboard tile.",
-      "snowflake reference: 'sql' = a query returning a 'value' column (and optional 'prev' column)."
+      "snowflake reference (recommended, zero setup): 'sql' = a query returning a 'value' column (and optional 'prev' column).",
+      "looker references (optional, needs the Looker MCP in Claude Code; use ONE): 'field' = LookML view.field measure | 'look' = a Look URL or ID | 'query' = plain-English | 'dashboard'+'tile' = a Looker dashboard tile."
     ]
   },
 

@@ -771,7 +771,7 @@ function KpiMod({ data }) {
   const openEditor = async () => { await ensureDefs(); setSaveMsg(null); setEditing(true); };
 
   const setDef = (i, patch) => setDefs(ds => ds.map((d, j) => j === i ? { ...d, ...patch } : d));
-  const addDef = () => setDefs(ds => [...(ds || []), { id: 'm' + Date.now(), label: '', source: 'looker', refType: 'field', ref: '', target: '', format: 'plain' }]);
+  const addDef = () => setDefs(ds => [...(ds || []), { id: 'm' + Date.now(), label: '', source: 'snowflake', refType: 'field', ref: '', target: '', format: 'plain' }]);
   const removeDef = (i) => setDefs(ds => ds.filter((_, j) => j !== i));
   const moveDef = (i, dir) => setDefs(ds => {
     const j = i + dir; if (j < 0 || j >= ds.length) return ds;
@@ -843,8 +843,8 @@ function KpiMod({ data }) {
                 <input className="metric-in metric-in--label" placeholder="Label (e.g. Activation)"
                        value={d.label} onChange={e => setDef(i, { label: e.target.value })}/>
                 <select className="metric-in" value={d.source} onChange={e => setDef(i, { source: e.target.value })}>
-                  <option value="looker">Looker</option>
                   <option value="snowflake">Snowflake</option>
+                  <option value="looker">Looker</option>
                 </select>
                 <div className="metric-row-tools">
                   <button className="icon-btn" title="Move up" onClick={() => moveDef(i, -1)}>↑</button>
