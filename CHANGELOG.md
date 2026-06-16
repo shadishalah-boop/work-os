@@ -14,6 +14,36 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.8.4 — 2026-06-16
+
+**Send Slack replies from the dashboard — safely.** You asked for Slack message-sending
+in Work OS. The Slack MCP can send, but sending is irreversible, so this never sends
+on a click — it always confirms (interactive) or drafts (dashboard). Two paths:
+
+- **New `dashboard-slack-send` skill** — the reliable path. Say "reply to <person> on
+  Slack", "send a Slack message to <#channel>", or `/dashboard-slack-send`, and Claude
+  resolves the real recipient (via `slack_search_users`/`slack_search_channels`, never a
+  guessed id), **shows you the exact message + target, and only sends after you confirm**
+  (or drafts/schedules if you ask). Runs in the interactive session, where the Slack
+  connector works.
+- **Reply buttons on the dashboard now stage a Slack DRAFT.** The Slack card's suggested
+  replies and compose box POST to a new **`/slack-send` endpoint in `serve.py`** that runs
+  a headless **`slack-draft-headless.sh`** to create a **draft** in the thread (draft-only
+  — the worst case is an unused draft, never an accidental send). You then review and send
+  it in Slack. If the dashboard isn't served locally, or the headless connector isn't
+  reachable, it **falls back to copy-to-clipboard + open Slack** automatically. A small
+  pill shows which mode you're in (`✎ draft to Slack` vs `open-in-Slack`) and an inline
+  status reports the outcome (`✓ Draft staged…` / `📋 Copied & opened Slack…`).
+
+The permission allowlist still does **not** auto-approve any Slack *send* tool — only
+read-only ones — so a send always goes through a confirmation or a reviewable draft.
+
+Verified before release: 16 `serve.py` checks (prompt is draft-only & verbatim, success/
+fail/timeout handling, HTTP routing incl. empty-body 400 and 404) and 14 DOM checks of
+the wired buttons (draft-success, fail→fallback, and not-served→copy+open paths).
+
+---
+
 ## v0.8.3 — 2026-06-16
 
 **"Open the dashboard" now opens localhost, not a blank file.** Asking Claude to open

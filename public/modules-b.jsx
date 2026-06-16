@@ -12,36 +12,60 @@ function SlackMod({ data }) {
   const [askQ, setAskQ] = useStateB('');
   const [askState, setAskState] = useStateB({ status: 'idle', results: [], error: null, query: '' });
   const [replyText, setReplyText] = useStateB({});
+  // Per-channel send feedback: 'drafting' | 'drafted' | 'copied' | undefined.
+  const [sendStatus, setSendStatus] = useStateB({});
 
   const workspace = data.workspace || 'workspace';
   const openInSlack = (url) => { if (url) window.open(url, '_blank', 'noopener'); };
 
-  // Helper-service awareness: when the local dashboard-helper is up, clicks
-  // become real one-click Slack sends with undo. When it's down, we fall back
-  // to copy-to-clipboard + open-in-Slack (the original Path A behavior).
-  const [helperOnline, setHelperOnline] = useStateB(false);
+  // Are we served by the local dashboard server (serve.py)? Only it answers
+  // /refresh-status; a file:// page or a dumb static server won't. When served,
+  // reply buttons can stage a Slack DRAFT via POST /slack-send (draft-only: it
+  // never sends — you review & send in Slack). Otherwise they copy + open Slack.
+  const [serveOnline, setServeOnline] = useStateB(false);
   useEffectB(() => {
-    if (!window.DashboardHelper) return;
-    return window.DashboardHelper.onStatus(setHelperOnline);
+    let alive = true;
+    fetch('/refresh-status', { cache: 'no-store' })
+      .then(r => r.ok)
+      .then(ok => { if (alive) setServeOnline(!!ok); })
+      .catch(() => {});
+    return () => { alive = false; };
   }, []);
-  const slackSendOrFallback = async (text, permalink, where) => {
-    const helper = window.DashboardHelper;
+
+  // Draft-first: try to stage a Slack DRAFT via the local server (never sends),
+  // and ALWAYS fall back to copy-to-clipboard + open-in-Slack so the reply lands
+  // either way. `chanId` keys the inline status shown on the card.
+  const slackSendOrFallback = async (text, permalink, where, chanId) => {
     const trimmed = (text || '').trim();
-    if (helper && helper.online && permalink && trimmed) {
-      const { channel, thread_ts } = helper.parsePermalink(permalink);
-      if (channel) {
-        try {
-          await helper.sendWithUndo({ channel, text: trimmed, thread_ts, where });
-          return;
-        } catch (e) {
-          helper.toast('Send failed: ' + (e.message || 'unknown error'), { kind: 'error', durationMs: 4000 });
+    if (!trimmed) { if (permalink) window.open(permalink, '_blank', 'noopener'); return; }
+    const copyAndOpen = async () => {
+      if (navigator.clipboard) { try { await navigator.clipboard.writeText(trimmed); } catch {} }
+      if (permalink) window.open(permalink, '_blank', 'noopener');
+      if (chanId) setSendStatus(s => ({ ...s, [chanId]: 'copied' }));
+    };
+    if (!serveOnline) { await copyAndOpen(); return; }
+    if (chanId) setSendStatus(s => ({ ...s, [chanId]: 'drafting' }));
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 120000);
+      const r = await fetch('/slack-send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: trimmed, permalink: permalink || '', channel: where || '' }),
+        signal: ctrl.signal,
+      });
+      clearTimeout(timer);
+      const d = r.ok ? await r.json().catch(() => ({})) : {};
+      if (d.ok) {
+        if (chanId) {
+          setSendStatus(s => ({ ...s, [chanId]: 'drafted' }));
+          setReplyText(rt => ({ ...rt, [chanId]: '' }));
         }
+        if (permalink) window.open(permalink, '_blank', 'noopener');
+        return;
       }
-    }
-    if (trimmed && navigator.clipboard) {
-      try { await navigator.clipboard.writeText(trimmed); } catch {}
-    }
-    if (permalink) window.open(permalink, '_blank', 'noopener');
+    } catch {}
+    await copyAndOpen();
   };
   const searchSlackNative = (q) => {
     const query = encodeURIComponent(q || '');
@@ -85,10 +109,12 @@ function SlackMod({ data }) {
       right={
         <div style={{display:'flex', alignItems:'center', gap:8}}>
           <span
-            className={'helper-status ' + (helperOnline ? 'on' : 'off')}
-            title={helperOnline ? 'dashboard-helper online · clicks send instantly' : 'dashboard-helper offline · clicks copy to clipboard + open Slack'}
+            className={'helper-status ' + (serveOnline ? 'on' : 'off')}
+            title={serveOnline
+              ? 'Served locally · reply buttons stage a Slack DRAFT for you to review & send (never auto-sends)'
+              : 'Open via the dashboard server to stage drafts · otherwise replies copy to clipboard + open Slack'}
           >
-            {helperOnline ? '⚡ live send' : 'open-in-Slack'}
+            {serveOnline ? '✎ draft to Slack' : 'open-in-Slack'}
           </span>
           <button className="icon-btn" aria-label="Open Slack" onClick={()=>openInSlack(`https://${workspace}.slack.com`)}><Icon name="external-link" size={16}/></button>
         </div>
@@ -228,44 +254,51 @@ function SlackMod({ data }) {
                       <button
                         key={i}
                         className={'sug' + (s.primary ? ' primary' : '')}
-                        title={helperOnline ? `Send to ${c.channel}` : 'Copies to clipboard and opens in Slack'}
-                        onClick={()=>slackSendOrFallback(s.label, c.permalink, c.channel)}>
+                        title={serveOnline ? `Stage a draft to ${c.channel} (review & send in Slack)` : 'Copies to clipboard and opens in Slack'}
+                        onClick={()=>slackSendOrFallback(s.label, c.permalink, c.channel, c.id)}>
                         {s.primary && <Icon name="sparkle" size={12} style={{filter: s.primary ? 'invert(1)' : 'none'}}/>}
                         {s.label}
-                        {helperOnline && <span className="sug-bolt" aria-label="instant send" title="instant send">⚡</span>}
                       </button>
                     ))}
                   </div>
                   <div className="slack-compose">
                     <Icon name="reply" size={14}/>
                     <input
-                      placeholder={helperOnline ? `Type and press Enter to send to ${c.channel}` : `Draft reply — opens in Slack to send`}
+                      placeholder={serveOnline ? `Type & press Enter — stages a draft to ${c.channel}` : `Draft reply — opens in Slack to send`}
                       value={replyText[c.id] || ''}
                       onChange={e=>setReplyText({...replyText, [c.id]: e.target.value})}
+                      disabled={sendStatus[c.id] === 'drafting'}
                       onKeyDown={async e => {
                         if (e.key !== 'Enter') return;
                         const t = replyText[c.id] || '';
                         if (!t.trim()) return;
-                        await slackSendOrFallback(t, c.permalink, c.channel);
-                        if (window.DashboardHelper && window.DashboardHelper.online) {
-                          setReplyText({...replyText, [c.id]: ''});
-                        }
+                        await slackSendOrFallback(t, c.permalink, c.channel, c.id);
                       }}
                     />
                     <button
                       className="icon-btn"
-                      aria-label={helperOnline ? 'Send' : 'Open in Slack'}
-                      title={helperOnline ? `Send to ${c.channel}` : 'Copies draft to clipboard and opens the thread in Slack'}
+                      aria-label={serveOnline ? 'Stage draft in Slack' : 'Open in Slack'}
+                      title={serveOnline ? `Stage a draft to ${c.channel} (review & send in Slack)` : 'Copies draft to clipboard and opens the thread in Slack'}
+                      disabled={sendStatus[c.id] === 'drafting'}
                       onClick={async ()=>{
                         const t = replyText[c.id] || '';
                         if (!t.trim()) return;
-                        await slackSendOrFallback(t, c.permalink, c.channel);
-                        if (window.DashboardHelper && window.DashboardHelper.online) {
-                          setReplyText({...replyText, [c.id]: ''});
-                        }
+                        await slackSendOrFallback(t, c.permalink, c.channel, c.id);
                       }}
                     ><Icon name="send" size={14}/></button>
                   </div>
+                  {sendStatus[c.id] && (
+                    <div className={'slack-send-status ' + sendStatus[c.id]} style={{
+                      fontSize: 11, marginTop: 4, paddingLeft: 22,
+                      color: sendStatus[c.id] === 'drafted' ? 'var(--green-600, #1a7f4b)'
+                           : sendStatus[c.id] === 'drafting' ? 'var(--fg-2)'
+                           : 'var(--fg-2)',
+                    }}>
+                      {sendStatus[c.id] === 'drafting' && '✎ Staging a draft in Slack…'}
+                      {sendStatus[c.id] === 'drafted' && '✓ Draft staged in Slack — review & send it there'}
+                      {sendStatus[c.id] === 'copied' && '📋 Copied & opened Slack — paste and send there'}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
