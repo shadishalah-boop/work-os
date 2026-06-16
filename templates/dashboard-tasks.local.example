@@ -1,0 +1,13 @@
+{
+  "_README": [
+    "Your personal Work Dashboard task list. COPY to ~/.claude/dashboard-tasks.local (or let /dashboard-setup create it).",
+    "Admin these by editing this file directly, or just tell Claude Code: 'add a dashboard task ...', 'mark <task> done', 'remove <task>'.",
+    "Merged into the dashboard on every refresh (and on a quick re-merge) — no connectors needed, so it updates instantly.",
+    "Each task: label (required) · bucket (top3 | overdue | dueSoon | blocked) · p (1 hot, 2 warm, 3 cold) · project (free text) · meta (small note) · done (true/false)."
+  ],
+  "tasks": [
+    { "label": "Ship the pricing v3 decision doc", "bucket": "top3",    "p": 1, "project": "pricing", "meta": "Manual · due today",      "done": false },
+    { "label": "Reply to legal on the retention clause", "bucket": "overdue", "p": 1, "project": "contracts", "meta": "Manual · 2d overdue", "done": false },
+    { "label": "Draft Q3 planning outline", "bucket": "dueSoon", "p": 2, "project": "planning", "meta": "Manual · this week", "done": false }
+  ]
+}

@@ -287,13 +287,18 @@ To remove everything later: /dashboard-uninstall
 — welcome to your Work Dashboard, <firstName>.
 ```
 
-5. **Refresh cadence — set expectations, don't install a scheduled job.** With
-   claude.ai-managed connectors, a *scheduled* (headless launchd/cron) refresh can't
-   see the connectors, so it would fetch nothing. Tell the user: "Your data refreshes
-   whenever you run **/dashboard** — the permanent server is already running, so just
-   reload the tab after. (A timed auto-refresh isn't possible with claude.ai
-   connectors, since background jobs can't access them.)" Only set up
-   `schedule.sh install` if the user explicitly has headless-capable MCP servers.
+5. **Ask the refresh cadence, then set it up.** Ask: *"How often should I remind you
+   to refresh? (e.g. weekdays at 9:00, 14:00, 17:00 — the default). A true timed
+   auto-fetch isn't possible with claude.ai connectors (a background job can't reach
+   them), so this is a notification at those times nudging you to run /dashboard,
+   which takes one click."* Take whatever times they give (default `09:00 14:00 17:00`)
+   and install reminders:
+   ```bash
+   bash "${CLAUDE_PLUGIN_ROOT}/skills/dashboard/schedule.sh" remind --times "09:00 14:00 17:00"
+   ```
+   (substitute their times; omit `--times` to accept the 9/14/17 default). If the user
+   says they don't want reminders, skip. Only use `schedule.sh install` (true headless
+   refresh) if they explicitly have headless-capable MCP servers.
 
 ## Rules
 

@@ -14,6 +14,29 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.7.0 — 2026-06-16
+
+**Refresh reminders + a local task list.**
+
+### Refresh reminders at your chosen times
+
+A true timed auto-fetch is impossible with claude.ai connectors (a background job
+can't reach them). Instead, `schedule.sh` gained `remind` / `unremind`: a
+notification at set times (default weekdays **09:00 / 14:00 / 17:00**) nudging you to
+run `/dashboard` (one click). `/dashboard-setup` now **asks your refresh cadence** and
+installs it. macOS = launchd + osascript; Linux = cron + notify-send.
+
+### Local task list you administer
+
+New `~/.claude/dashboard-tasks.local` — your own tasks, merged into the dashboard's
+Top-3 / Overdue / Due-soon / Blocked modules on every refresh (and on a quick
+re-merge — no connectors needed). Admin it via the new **`dashboard-task`** skill
+("add a dashboard task …", "mark … done", "remove …", "list") which edits the file
+and re-renders instantly, or by editing the file directly. Setup creates an empty
+file; `templates/dashboard-tasks.local.example` documents the schema.
+
+---
+
 ## v0.6.2 — 2026-06-16
 
 **One-step pre-approval — refreshes stop prompting.** New
