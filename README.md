@@ -209,6 +209,12 @@ bash <plugin>/skills/dashboard/schedule.sh status       # show server URL + sche
 
 Then open `http://localhost:8787/Work%20Dashboard.html`.
 
+**To open it, just tell Claude Code *"open the dashboard"*** — it opens the localhost
+URL (and starts the server if needed) via `skills/dashboard/open.sh`. Don't open the
+`.html` file directly: a `file://` page renders blank (the browser blocks Babel from
+loading the app code). If you ever do open the file by accident, the page now shows a
+"open over localhost" pointer with a clickable link instead of a blank screen.
+
 ## How refreshing works
 
 `/dashboard` fetches all six sources and merges them. It runs in a Claude Code

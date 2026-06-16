@@ -14,6 +14,21 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.8.3 — 2026-06-16
+
+**"Open the dashboard" now opens localhost, not a blank file.** Asking Claude to open
+the dashboard used to `open` the raw `.html` (a `file://` page → blank, since the
+browser blocks Babel from loading the `.jsx`). Two fixes:
+
+- New `skills/dashboard/open.sh` + a **`dashboard-open` skill** so "open the dashboard"
+  (and similar) opens the `http://localhost:PORT/...` URL — resolving the port and
+  starting the server first if needed. Setup uses it too.
+- **`file://` guard in the HTML**: if the dashboard is ever opened as a file, it now
+  shows a clear "open over localhost" message with a clickable link, instead of a
+  blank page. (Plain JS, so it runs even when the app code can't load.)
+
+---
+
 ## v0.8.2 — 2026-06-16
 
 **Fix: the refresh banner now always resolves and shows the result.** A button refresh
