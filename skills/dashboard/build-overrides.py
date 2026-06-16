@@ -195,19 +195,51 @@ for i, e in enumerate(safe(calendar, "events")):
         "title": e.get("title"), "type": e.get("type", "event"), "who": who,
     })
 
-top3 = safe(granola, "top3")[:3]
+# --- Manual tasks (user-administered, from ~/.claude/dashboard-tasks.local) -----
+# A local task file the user edits directly or via the `dashboard-task` skill.
+# Merged into the live task buckets on every refresh/re-merge — no connector needed.
+def load_manual_tasks():
+    out = {"top3": [], "overdue": [], "dueSoon": [], "blocked": []}
+    try:
+        data = json.loads((HOME / ".claude" / "dashboard-tasks.local").read_text())
+    except Exception:
+        return out
+    items = data.get("tasks") if isinstance(data, dict) else data
+    if not isinstance(items, list):
+        return out
+    for i, t in enumerate(items):
+        if not isinstance(t, dict) or not t.get("label"):
+            continue
+        bucket = t.get("bucket", "dueSoon")
+        if bucket not in out:
+            bucket = "dueSoon"
+        out[bucket].append({
+            "id": f"mt{i+1}",
+            "label": t.get("label"),
+            "meta": t.get("meta", "Manual"),
+            "p": t.get("p", 2),
+            "project": t.get("project", ""),
+            "done": bool(t.get("done", False)),
+            "manual": True,
+        })
+    return out
 
-overdue_raw = safe(granola, "overdue") + safe(gmail, "overdue")
+
+MANUAL = load_manual_tasks()
+
+top3 = (MANUAL["top3"] + safe(granola, "top3"))[:3]
+
+overdue_raw = MANUAL["overdue"] + safe(granola, "overdue") + safe(gmail, "overdue")
 overdue = []
 for i, item in enumerate(overdue_raw[:5]):
     o = dict(item); o["id"] = f"o{i+1}"; overdue.append(o)
 
-duesoon_raw = safe(granola, "dueSoon") + safe(gmail, "dueSoon")
+duesoon_raw = MANUAL["dueSoon"] + safe(granola, "dueSoon") + safe(gmail, "dueSoon")
 duesoon = []
 for i, item in enumerate(duesoon_raw[:10]):
     d = dict(item); d["id"] = f"d{i+1}"; duesoon.append(d)
 
-blocked = safe(granola, "blocked")[:5]
+blocked = (MANUAL["blocked"] + safe(granola, "blocked"))[:5]
 shipped = safe(slack, "shipped")[:5]
 
 blockers_raw = safe(granola, "blockers") + safe(slack, "blockers")

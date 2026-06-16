@@ -1,19 +1,22 @@
 #!/usr/bin/env bash
 # schedule.sh — manage the dashboard's background helpers:
-#   • a PERMANENT localhost server, so the dashboard renders over http:// (not
-#     file://, which makes the browser block Babel from loading the .jsx files →
-#     blank page). This is required for the dashboard to display at all.
-#   • OPTIONAL scheduled auto-refresh (weekday launchd/cron).
+#   • a PERMANENT localhost server (required so the page renders over http://).
+#   • refresh REMINDERS at set times (a notification to run /dashboard) — the
+#     realistic "auto-refresh" with claude.ai connectors, which a background job
+#     can't fetch.
+#   • OPTIONAL true scheduled refresh (only works with headless-capable connectors).
 #
 # Usage:
-#   bash schedule.sh serve [PORT]                     # permanent localhost server (default 8787)
-#   bash schedule.sh unserve                          # stop & remove the server
-#   bash schedule.sh install [--times "08:00 13:00"]  # scheduled auto-refresh
-#   bash schedule.sh uninstall                        # remove scheduled refresh AND server
-#   bash schedule.sh status                           # show what's running + last refresh log
+#   bash schedule.sh serve [PORT]                          # permanent localhost server (default 8787)
+#   bash schedule.sh unserve                               # stop & remove the server
+#   bash schedule.sh remind [--times "09:00 14:00 17:00"]  # notify at times to run /dashboard
+#   bash schedule.sh unremind                              # remove reminders
+#   bash schedule.sh install [--times "08:00 13:00"]       # headless auto-refresh (headless-capable connectors only)
+#   bash schedule.sh uninstall                             # remove server + reminders + scheduled refresh
+#   bash schedule.sh status                                # show what's running + last refresh log
 #
-# macOS uses launchd LaunchAgents (persist across reboots). Linux uses crontab for
-# refresh and a nohup background process for serving.
+# macOS uses launchd LaunchAgents (persist across reboots). Linux uses crontab +
+# notify-send for reminders and a nohup process for serving.
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -25,15 +28,90 @@ LOG="$HOME/.claude/dashboard-refresh.log"
 SERVE_LOG="$HOME/.claude/dashboard-serve.log"
 LABEL="com.work-os.dashboard-refresh"
 SERVE_LABEL="com.work-os.dashboard-serve"
+REMIND_LABEL="com.work-os.dashboard-remind"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 SERVE_PLIST="$HOME/Library/LaunchAgents/$SERVE_LABEL.plist"
+REMIND_PLIST="$HOME/Library/LaunchAgents/$REMIND_LABEL.plist"
 CRON_TAG="# work-os-dashboard"
+REMIND_CRON_TAG="# work-os-dashboard-remind"
 DEFAULT_PORT=8787
+DEFAULT_REMIND_TIMES="09:00 14:00 17:00"
 PORTFILE="$HOME/.claude/dashboard-serve-port"
 
 is_macos() { [ "$(uname -s)" = "Darwin" ]; }
 pybin() { command -v python3 2>/dev/null || echo /usr/bin/python3; }
 dash_url() { echo "http://localhost:${1}/Work%20Dashboard.html"; }
+
+# --------------------------------------------------------------------------
+# remind — notify at set times to run /dashboard.
+# With claude.ai-managed connectors a background job can't fetch data, so we
+# can't auto-refresh on a clock — instead we nudge the user to run /dashboard
+# (which works in-session). macOS: launchd + osascript notification. Linux: cron
+# + notify-send.
+# --------------------------------------------------------------------------
+NOTIFY_MSG="Time to refresh your Work Dashboard — run /dashboard in Claude Code."
+
+remind() {
+  local times="${1:-$DEFAULT_REMIND_TIMES}"
+  for t in $times; do
+    [[ "$t" =~ ^([01][0-9]|2[0-3]):[0-5][0-9]$ ]] || { echo "remind: bad time '$t' (use HH:MM)" >&2; exit 2; }
+  done
+  if is_macos; then
+    mkdir -p "$HOME/Library/LaunchAgents"
+    {
+      cat <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>$REMIND_LABEL</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/osascript</string>
+    <string>-e</string>
+    <string>display notification "$NOTIFY_MSG" with title "Work Dashboard"</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <array>
+EOF
+      for t in $times; do
+        h=${t%%:*}; m=${t##*:}
+        for wd in 1 2 3 4 5; do
+          printf '    <dict><key>Weekday</key><integer>%d</integer><key>Hour</key><integer>%d</integer><key>Minute</key><integer>%d</integer></dict>\n' "$wd" "$((10#$h))" "$((10#$m))"
+        done
+      done
+      cat <<EOF
+  </array>
+</dict>
+</plist>
+EOF
+    } > "$REMIND_PLIST"
+    launchctl unload "$REMIND_PLIST" 2>/dev/null || true
+    launchctl load "$REMIND_PLIST"
+  else
+    command -v crontab >/dev/null 2>&1 || { echo "remind: crontab not found" >&2; exit 1; }
+    local lines=""
+    for t in $times; do
+      h=${t%%:*}; m=${t##*:}
+      lines="$lines$((10#$m)) $((10#$h)) * * 1-5 notify-send 'Work Dashboard' '$NOTIFY_MSG' $REMIND_CRON_TAG
+"
+    done
+    { crontab -l 2>/dev/null | grep -v "$REMIND_CRON_TAG"; printf '%s' "$lines"; } | crontab -
+  fi
+  echo "Reminders set: weekdays at $times → a notification to run /dashboard."
+  echo "(With claude.ai connectors a background job can't fetch data, so this nudges"
+  echo " you to refresh in-session rather than auto-fetching.)"
+}
+
+unremind() {
+  if is_macos && [ -f "$REMIND_PLIST" ]; then
+    launchctl unload "$REMIND_PLIST" 2>/dev/null || true; rm -f "$REMIND_PLIST"; echo "Reminders removed."
+  elif command -v crontab >/dev/null 2>&1 && crontab -l 2>/dev/null | grep -q "$REMIND_CRON_TAG"; then
+    crontab -l 2>/dev/null | grep -v "$REMIND_CRON_TAG" | crontab -; echo "Reminders removed."
+  else
+    echo "No reminders installed."
+  fi
+}
 
 # --------------------------------------------------------------------------
 # serve — permanent localhost server (the dashboard's display requirement)
@@ -181,14 +259,14 @@ install_linux_refresh() {
 
 uninstall_all() {
   if is_macos; then
-    for p in "$PLIST" "$SERVE_PLIST"; do
+    for p in "$PLIST" "$SERVE_PLIST" "$REMIND_PLIST"; do
       [ -f "$p" ] && { launchctl unload "$p" 2>/dev/null || true; rm -f "$p"; echo "Removed $(basename "$p")"; }
     done
   else
     unserve
   fi
-  if command -v crontab >/dev/null 2>&1 && crontab -l 2>/dev/null | grep -q "$CRON_TAG"; then
-    crontab -l 2>/dev/null | grep -v "$CRON_TAG" | crontab -
+  if command -v crontab >/dev/null 2>&1 && crontab -l 2>/dev/null | grep -qE "$CRON_TAG|$REMIND_CRON_TAG"; then
+    crontab -l 2>/dev/null | grep -vE "$CRON_TAG|$REMIND_CRON_TAG" | crontab -
     echo "Removed crontab entries."
   fi
   echo "Background helpers removed."
@@ -200,7 +278,12 @@ status_all() {
     [ -f "$SERVE_PLIST" ] && echo "installed ($SERVE_LABEL)" || echo "not installed"
   fi
   [ -f "$PORTFILE" ] && echo "url: $(dash_url "$(cat "$PORTFILE")")"
-  echo "— scheduled refresh —"
+  echo "— refresh reminders —"
+  if is_macos; then
+    [ -f "$REMIND_PLIST" ] && echo "installed ($REMIND_LABEL)" || echo "not installed"
+  fi
+  command -v crontab >/dev/null 2>&1 && crontab -l 2>/dev/null | grep "$REMIND_CRON_TAG" || true
+  echo "— scheduled refresh (headless; only for headless-capable connectors) —"
   if is_macos; then
     [ -f "$PLIST" ] && echo "installed ($LABEL)" || echo "not installed"
   fi
@@ -213,17 +296,20 @@ status_all() {
 CMD="${1:-status}"
 shift || true
 
-TIMES="08:00 13:00"
+TIMES="08:00 13:00"   # default for `install`
+TIMES_SET=""          # set only if the user passed --times (so `remind` can use its own default)
 while [ $# -gt 0 ]; do
   case "$1" in
-    --times) TIMES="${2:?--times needs a value like \"08:00 13:00\"}"; shift 2 ;;
+    --times) TIMES="${2:?--times needs a value like \"09:00 14:00 17:00\"}"; TIMES_SET="$2"; shift 2 ;;
     *) break ;;
   esac
 done
 
 case "$CMD" in
-  serve)   serve "${1:-}" ;;
-  unserve) unserve ;;
+  serve)    serve "${1:-}" ;;
+  unserve)  unserve ;;
+  remind)   remind "${TIMES_SET:-}" ;;
+  unremind) unremind ;;
   install)
     for t in $TIMES; do
       [[ "$t" =~ ^([01][0-9]|2[0-3]):[0-5][0-9]$ ]] || { echo "schedule: bad time '$t' (use HH:MM)" >&2; exit 2; }
@@ -232,5 +318,5 @@ case "$CMD" in
     echo "Log: $LOG · check with: bash $SCRIPT_DIR/schedule.sh status" ;;
   uninstall) uninstall_all ;;
   status)    status_all ;;
-  *) echo "usage: schedule.sh serve [PORT] | unserve | install [--times \"HH:MM HH:MM\"] | uninstall | status" >&2; exit 2 ;;
+  *) echo "usage: schedule.sh serve [PORT] | unserve | remind [--times \"09:00 14:00 17:00\"] | unremind | install [--times \"...\"] | uninstall | status" >&2; exit 2 ;;
 esac

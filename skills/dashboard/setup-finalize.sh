@@ -40,4 +40,9 @@ if [ ! -f "$FILTERS" ] && [ -f "$PLUGIN_DIR/templates/dashboard-filters.local.ex
   cp "$PLUGIN_DIR/templates/dashboard-filters.local.example" "$FILTERS"
 fi
 
+# Manual task list — start empty (the template carries samples; we don't want those
+# showing as real tasks). The user fills it via the dashboard-task skill or by editing.
+TASKS="$HOME/.claude/dashboard-tasks.local"
+[ -f "$TASKS" ] || printf '{\n  "tasks": []\n}\n' > "$TASKS"
+
 echo "OK · config=$CFG · dashboardDir=$DASH · dataCacheDir=$DATA · version=$VER"

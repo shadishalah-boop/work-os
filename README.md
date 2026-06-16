@@ -227,12 +227,17 @@ can't see them. So:
   `mcp__claude_ai_Google_Calendar__list_events`, `mcp__claude_ai_Gmail__search_threads`,
   `mcp__claude_ai_Slack__slack_search_public_and_private` (and the bare-name variants)
   to `permissions.allow` in your settings.
-- **Timed auto-refresh isn't possible** with claude.ai-managed connectors, because a
-  scheduled (launchd/cron) job runs headless and can't access them. The permanent
-  *server* still runs in the background; only the data fetch must be interactive.
+- **Refresh reminders at set times.** A true timed auto-fetch isn't possible with
+  claude.ai connectors (a background job can't reach them), so instead you can get a
+  notification at chosen times nudging you to run `/dashboard` (one click). Setup asks
+  your cadence; default is weekdays 9:00 / 14:00 / 17:00. Manage it with:
+  ```bash
+  bash <plugin>/skills/dashboard/schedule.sh remind --times "09:00 14:00 17:00"
+  bash <plugin>/skills/dashboard/schedule.sh unremind
+  ```
 
-> `schedule.sh install` (a timed launchd/cron refresh) exists only for the rare case
-> of MCP servers that load headlessly. Don't use it with claude.ai connectors — it
+> `schedule.sh install` (a *true* timed launchd/cron refresh) exists only for the rare
+> case of MCP servers that load headlessly. Don't use it with claude.ai connectors — it
 > would fetch nothing.
 
 ## Uninstalling
@@ -263,6 +268,18 @@ These aren't asked during setup — the dashboard's People and OKR cards show a 
 - **OKRs, right in the dashboard:** click **Paste OKRs** on the OKR card and paste one per line (`name | percent | trend`). Saved in your browser, kept across refreshes — no Claude Code needed.
 - **Ask Claude Code:** *"add my team to the dashboard"* / *"add my OKRs to the dashboard"* — it structures them into your config and refreshes.
 - **Edit the config:** `~/.claude/dashboard-config.local` → `org.team` / `dashboard.okrs`, then rerun `/dashboard`.
+
+### Manage your own tasks (local task file)
+
+Beyond agent-sourced tasks, you keep a personal task list in
+`~/.claude/dashboard-tasks.local` that merges into the dashboard's Top-3 / Overdue /
+Due-soon / Blocked modules. Admin it two ways:
+
+- **Tell Claude Code** — *"add a dashboard task: ship the pricing doc, top 3"*,
+  *"mark the legal reply done"*, *"remove X from my dashboard"*, *"list my dashboard
+  tasks"*. The `dashboard-task` skill edits the file and re-renders instantly (no
+  connectors, no full refresh).
+- **Edit the file directly** — each task is `{ "label", "bucket": top3|overdue|dueSoon|blocked, "p": 1-3, "project", "meta", "done" }`. See `templates/dashboard-tasks.local.example`.
 
 ### Edit static blocks
 
