@@ -217,6 +217,15 @@ session because that's where your claude.ai-managed connectors live. So:
 - **Manual refresh:** run `/dashboard`, then reload the tab (or it auto-reloads). The
   first refresh asks you to approve each connector once — choose **"don't ask again"**
   (or run the allowlist below) and future refreshes are silent.
+- **One-press Refresh button — no Claude Code session needed.** The dashboard's top
+  bar has a **↻ Refresh** button. It asks the local server (which runs in the
+  background via launchd, even when the Claude Code app is closed) to run a headless
+  refresh, and the page auto-reloads when it's done. Requires the `claude` CLI on your
+  PATH and the allowlist to have run. Note: a headless refresh updates the five
+  non-Slack sources (Slack needs an interactive session for consent, so it keeps its
+  last value); if a connector isn't reachable headlessly on your machine, refresh from
+  a Claude Code session for the full set. (The button only works when the dashboard is
+  served by `schedule.sh serve` — which setup does — not when opened as a file.)
 - **Skip the approval click-through:** run
   `bash <plugin>/skills/dashboard/allowlist.sh` once (setup offers this). It writes
   read-only allow-rules for the connector search/list tools + the plugin's own
