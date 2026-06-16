@@ -405,10 +405,11 @@ function ProjectsMod({ data, okrs, decisions, okrApi }) {
       <div className="sub-section-head">
         OKRs<span className="bar"/>
         <button
-          className="okr-generate-btn"
+          className="btn btn--sm"
+          style={{marginLeft:8, padding:'3px 10px'}}
           onClick={openOkrEditor}
-          title="Paste or edit your OKRs right here — saved in this browser, kept across refreshes"
-        >{okrs.length > 0 ? 'Edit OKRs' : 'Paste OKRs'}</button>
+          title="Set or change your OKRs — paste them here. Saved in this browser, kept across refreshes. Update them each quarter."
+        >{okrs.length > 0 ? '✏️ Edit OKRs' : '➕ Set OKRs'}</button>
         {okrApi && okrs.length > 0 && (
           <button
             className="okr-generate-btn"
@@ -421,7 +422,7 @@ function ProjectsMod({ data, okrs, decisions, okrApi }) {
         <div style={{padding:'10px', marginBottom:10, border:'1px solid var(--border-default)', borderRadius:8, background:'var(--bg-1)'}}>
           <div style={{fontSize:12, color:'var(--fg-2)', marginBottom:6, lineHeight:1.5}}>
             One OKR per line — <code style={{fontSize:11}}>name | percent | trend</code> (percent & trend optional;
-            trend = on-pace / behind / ahead). Saved in this browser and kept across refreshes.
+            trend = on-pace / behind / ahead). Saved in this browser, kept across refreshes — edit anytime to update each quarter.
           </div>
           <textarea
             value={okrDraft}
@@ -437,9 +438,10 @@ function ProjectsMod({ data, okrs, decisions, okrApi }) {
         </div>
       )}
       {okrs.length === 0 && !okrEditOpen && (
-        <div style={{fontSize:13, color:'var(--fg-2)', padding:'8px 2px 4px'}}>
-          No OKRs yet. Click <button onClick={openOkrEditor} style={{background:'none', border:'none', padding:0, color:'var(--accent, var(--blue-600))', cursor:'pointer', font:'inherit', textDecoration:'underline'}}>Paste OKRs</button> above to add them here,
-          or tell Claude Code <em>"add my OKRs to the dashboard"</em>.
+        <div style={{border:'1.5px dashed var(--border-default)', borderRadius:10, padding:'16px', textAlign:'center', background:'var(--bg-1)', marginTop:4}}>
+          <div style={{fontWeight:600, fontSize:14, marginBottom:4}}>No OKRs set for this quarter</div>
+          <div style={{fontSize:12, color:'var(--fg-2)', marginBottom:12}}>Paste them here — one per line. Change them anytime, every quarter.</div>
+          <button className="btn btn--primary btn--sm" onClick={openOkrEditor}>➕ Set your OKRs</button>
         </div>
       )}
       {okrs.map(o => {

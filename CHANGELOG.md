@@ -14,6 +14,29 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.7.2 — 2026-06-16
+
+**Prominent OKR input + stop fabricating people's roles.** From a live install.
+
+- **OKR input is now an obvious, always-present control.** The OKR section's button
+  is a real button (`➕ Set OKRs` / `✏️ Edit OKRs`), and when no OKRs are set it shows
+  a prominent dashed call-to-action card ("No OKRs set for this quarter — Set your
+  OKRs") instead of a faint one-line link. It was always *there* (in the Projects
+  card), just buried below the fold and too subtle. Paste/edit anytime to update each
+  quarter. `modules-b.jsx?v=28`.
+- **Setup never invents a person's title/role.** It had fabricated a manager's role
+  ("CEO") from just a name and even claimed the user provided it. New rules: store
+  `org.manager.role` as `""` when only a name is given, never guess titles for the
+  manager or teammates, and never attribute invented values to the user.
+- **Slack search size guard** — the refresh now passes `response_format: "concise"`,
+  `limit: 20`, `include_context: false` so Slack searches don't blow past the token
+  limit (the live install hit 63–80K-char responses).
+- **Fixed broken `agents/…` path** in the refresh skill — now
+  `${CLAUDE_PLUGIN_ROOT}/agents/dashboard-slack.md` so the Slack schema is readable
+  (the install couldn't find the relative path).
+
+---
+
 ## v0.7.1 — 2026-06-16
 
 **Correction: scheduled auto-refresh DOES work — via a Claude Code scheduled task.**

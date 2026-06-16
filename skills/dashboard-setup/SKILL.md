@@ -107,11 +107,16 @@ Example:
 > *• Company: **Preply***
 > *• Role/title: **Senior PM** ← found in Slack*
 > *• Timezone: follows your computer automatically — detected **`DETECTED_TZ`** (reply with an IANA zone only to pin a fixed one)*
-> *• Manager (optional): not detected — name + role, or 'none'?*
+> *• Manager (optional): not detected — give me a name + role, or 'none'?*
 > *"*
 
 Fill any field the user corrects. Don't re-ask for fields they've confirmed.
 `workingHours` defaults to `09:00–18:00 Mon–Fri` unless they mention otherwise.
+
+**Never invent a person's title or role.** If the user gives a manager's *name* but
+no role (e.g. just "Jose Ferreira"), store `org.manager.role` as `""` — do NOT guess
+"CEO"/"VP"/etc. Same for teammates. Use only titles the user states explicitly or a
+connector returns. And never tell the user they "provided" something they didn't.
 
 ### 2d. Fallback — manual entry
 
@@ -311,6 +316,7 @@ To remove everything later: /dashboard-uninstall
 - **One question at a time when there's a branch.** Batch only obvious related fields.
 - **Never paste a raw JSON block at the user and ask them to edit it.** That defeats the point of this skill.
 - **Always back up** an existing config before overwriting. Never silent-destroy user data.
+- **Never fabricate facts about people** (titles, roles, seniority) or attribute invented values to the user. If you don't know a manager's/teammate's role, leave it blank — don't guess.
 - **Timezone is auto by default** — store `"auto"`, which makes every refresh detect the system zone live (handles travel). Only if the user explicitly wants to PIN a fixed zone, store an IANA name; if they give a vague "CET"/"Pacific time", offer the canonical form (e.g. "Europe/Madrid", "America/Los_Angeles") and confirm before storing it.
 - **Don't orchestrate the agents from this skill.** The only refresh this skill may trigger is the one in Step 5 — the `dashboard` skill's in-session flow — with the user's consent.
 - **If the user aborts mid-setup**, discard any partial state — don't write a half-filled config.

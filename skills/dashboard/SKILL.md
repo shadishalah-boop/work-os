@@ -75,12 +75,15 @@ Do this yourself, inline:
    `claude_ai_Slack`) → `mcp__claude_ai_Slack__slack_search_public_and_private` →
    `mcp__Slack__slack_search_public_and_private` → else `ToolSearch` with
    `query: "slack search messages"`. Use whatever resolves.
-3. Run the 4 searches (absolute dates):
+3. Run the 4 searches (absolute dates). **Keep responses small** to avoid the
+   "result exceeds maximum allowed tokens" error: pass `response_format: "concise"`,
+   `limit: 20`, and `include_context: false` on every search.
    `to:me after:<SINCE_WINDOW>` · `from:me after:<SINCE_1D>` (questions = those
    containing `?`) · `from:me after:<SINCE_1D>` (shipped) · `incident after:<SINCE_WINDOW>`.
 4. Build `slack.json` following the schema + scope/classification rules in
-   `agents/dashboard-slack.md` (Read it for the exact schema — apply the scope filter:
-   DMs + channels you posted in + `#incident-*`). **Write** it to `<DATA_DIR>/slack.json`.
+   `${CLAUDE_PLUGIN_ROOT}/agents/dashboard-slack.md` (Read it for the exact schema —
+   apply the scope filter: DMs + channels you posted in + `#incident-*`). **Write** it
+   to `<DATA_DIR>/slack.json`.
 5. If no Slack tool resolves at all, Write `slack.json` with `"sourceOk": false` and
    continue — the rest of the dashboard renders fine. Never block the refresh on Slack.
 
@@ -103,7 +106,7 @@ each its server name and absolute output path. Kickoffs (substitute captured val
 **Fallback (important):** if a spawned agent reports it can't reach its connector
 (some environments don't expose claude.ai connectors to sub-agents), perform that
 agent's spec **yourself inline** in this session — you, the main assistant, can
-always reach the connectors. Read `agents/dashboard-<name>.md`, fetch, and Write the
+always reach the connectors. Read `${CLAUDE_PLUGIN_ROOT}/agents/dashboard-<name>.md`, fetch, and Write the
 JSON. Do the same for any agent that writes `sourceOk:false` with a "tool not found"
 error. Never leave a source failed just because the sub-agent couldn't see the tool.
 
