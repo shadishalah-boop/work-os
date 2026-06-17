@@ -1483,8 +1483,41 @@ function CommitmentsMod({ state }) {
 }
 
 // --- Blockers Module ---
+// Blockers come from the cross-source dedup pass at merge time (see build-
+// overrides.py + dedupe.py). Truly identical-with-synonyms cases get collapsed
+// there. Borderline cases (e.g. two similar-looking proper nouns the heuristic
+// can't tell apart) reach the UI — the dismiss × lets the user hide one for 14
+// days, mirroring the Tasks dismiss UX.
 function BlockersMod({ data }) {
-  const rows = data || [];
+  const BLK_DISMISS_KEY = 'dashboard.blockersDismissed.v1';
+  const BLK_TTL_MS = 14 * 24 * 60 * 60 * 1000;
+  const norm = (s) => (s || '').toString().toLowerCase().replace(/\s+/g, ' ').trim();
+  const [dismissed, setDismissed] = useStateB(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem(BLK_DISMISS_KEY) || '{}');
+      const now = Date.now();
+      const fresh = {};
+      Object.entries(raw).forEach(([k, ts]) => { if (typeof ts === 'number' && now - ts < BLK_TTL_MS) fresh[k] = ts; });
+      if (Object.keys(fresh).length !== Object.keys(raw).length) {
+        try { localStorage.setItem(BLK_DISMISS_KEY, JSON.stringify(fresh)); } catch {}
+      }
+      return fresh;
+    } catch { return {}; }
+  });
+  const dismissBlocker = (title) => {
+    const k = norm(title); if (!k) return;
+    setDismissed(prev => {
+      const next = { ...prev, [k]: Date.now() };
+      try { localStorage.setItem(BLK_DISMISS_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+  const restoreAllBlockers = () => {
+    try { localStorage.removeItem(BLK_DISMISS_KEY); } catch {}
+    setDismissed({});
+  };
+  const rows = (data || []).filter(r => !(norm(r.title) in dismissed));
+  const hiddenCount = Object.keys(dismissed).length;
   return (
     <Module title="Risks & blockers" sub="Stuck, waiting, or trending red"
             icon={<span style={{width:28, height:28, borderRadius:8, background:'var(--red-50)', display:'grid', placeItems:'center'}}><Icon name="error-warning" size={16}/></span>}
@@ -1503,18 +1536,34 @@ function BlockersMod({ data }) {
           ? `https://${ws}.slack.com/search/${encodeURIComponent(r.title || '')}`
           : `https://www.google.com/search?q=${encodeURIComponent(r.title || '')}`;
         const href = r.permalink || r.href || fallback;
+        const mergedFrom = Array.isArray(r._dedupedFrom) ? r._dedupedFrom : null;
         return (
           <div key={i} className="block-row" data-sev={r.sev}>
             <div className="block-icon">{r.icon}</div>
             <div>
-              <div className="block-title">{r.title}</div>
+              <div className="block-title">
+                {r.title}
+                {mergedFrom && mergedFrom.length > 1 && (
+                  <span className="merged-badge" title={`Same blocker also surfaced by: ${mergedFrom.join(', ')}`}>
+                    ↔ {mergedFrom.length} sources
+                  </span>
+                )}
+              </div>
               <div className="block-meta">{r.meta}</div>
             </div>
-            <a className="btn btn--tertiary btn--xs" href={href} target="_blank" rel="noreferrer"
-               title={r.permalink || r.href ? 'Open in source' : 'Search the workspace for this incident'}>Open</a>
+            <div className="block-actions">
+              <a className="btn btn--tertiary btn--xs" href={href} target="_blank" rel="noreferrer"
+                 title={r.permalink || r.href ? 'Open in source' : 'Search the workspace for this incident'}>Open</a>
+              <button className="block-dismiss" aria-label={`Dismiss ${r.title}`}
+                      title="Dismiss for 14 days (e.g. duplicate of another blocker)"
+                      onClick={(e) => { e.stopPropagation(); dismissBlocker(r.title); }}>×</button>
+            </div>
           </div>
         );
       })}
+      {hiddenCount > 0 && (
+        <div className="block-dismissed-strip">{hiddenCount} hidden · <button className="link-btn" onClick={restoreAllBlockers}>restore</button></div>
+      )}
     </Module>
   );
 }

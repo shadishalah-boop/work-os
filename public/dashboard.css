@@ -2699,3 +2699,34 @@ html[data-theme="dark"] .team-remove:hover { background: rgba(239,68,68,0.18); c
 html[data-theme="dark"] .team-removed-strip { background: var(--grey-100); }
 .link-btn { background: none; border: none; color: var(--fg-2); cursor: pointer; padding: 0; font: inherit; text-decoration: underline; }
 .link-btn:hover { color: var(--fg-1); }
+
+/* ==========================================================================
+   v0.12.9 — cross-source dedup badge + Blockers dismiss UX
+   ========================================================================== */
+
+/* "↔ N sources" badge on items that the merge step collapsed across agents. */
+.merged-badge {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 10px; font-weight: 600; line-height: 1;
+  margin-left: 8px; padding: 2px 6px; border-radius: 999px;
+  background: var(--grey-100); color: var(--fg-3);
+  vertical-align: middle;
+  cursor: help;
+}
+html[data-theme="dark"] .merged-badge { background: var(--grey-200); color: var(--fg-2); }
+
+/* Blockers row layout updated for the new dismiss button */
+.block-actions { display: flex; align-items: center; gap: 6px; }
+.block-dismiss {
+  border: none; background: transparent; color: var(--fg-3);
+  font-size: 14px; line-height: 1; padding: 2px 6px; border-radius: 4px;
+  cursor: pointer; opacity: 0; transition: opacity 120ms;
+}
+.block-row:hover .block-dismiss { opacity: 0.7; }
+.block-dismiss:hover { opacity: 1; background: var(--red-50); color: var(--red-600); }
+html[data-theme="dark"] .block-dismiss:hover { background: rgba(239,68,68,0.18); color: #f87171; }
+.block-dismissed-strip {
+  margin-top: 8px; padding: 5px 10px; font-size: 11px; color: var(--fg-3);
+  background: var(--grey-50); border-radius: 6px; text-align: center;
+}
+html[data-theme="dark"] .block-dismissed-strip { background: var(--grey-100); }

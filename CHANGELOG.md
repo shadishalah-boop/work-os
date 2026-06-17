@@ -14,6 +14,32 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.12.9 — 2026-06-17
+
+**Cross-source deduplication at merge time.** Multiple agents (Granola, Slack,
+Gmail) often surface the same business item with different wording. The merge
+step now runs a conservative token-set comparison with a small synonym table
+(`agreement↔contract↔deal`, `meeting↔call↔sync`) over every list (top-3,
+overdue, due-soon, blocked, blockers, decisions, shipped, inbox) and collapses
+items whose normalized titles are equivalent, a strict subset of each other, or
+share ≥70% of significant tokens. Survivors carry a `_dedupedFrom` list of the
+sources they absorbed, surfaced in the UI as a small "↔ N sources" badge.
+
+The bias is intentionally conservative: when two items look different but
+genuinely could be related (e.g. "Pioneer rev-share" vs "Payoneer not closed"),
+the heuristic leaves both visible — context-free auto-merge of distinct proper
+nouns risks false positives. For those edge cases the user knows are dupes:
+
+**Blockers card now has a dismiss ×** (same UX as Tasks), persisted in
+localStorage with a 14-day TTL, plus a "N hidden · restore" strip when any are
+hidden.
+
+`skills/dashboard/dedupe.py` — new module with the comparison rules and a
+self-test you can run with `python3 skills/dashboard/dedupe.py` to validate
+behaviour against examples.
+
+---
+
 ## v0.12.8 — 2026-06-17
 
 **Better DM fallback.** When the permalink is missing/fake and the item is a DM,

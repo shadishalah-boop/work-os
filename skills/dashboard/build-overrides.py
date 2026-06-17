@@ -19,6 +19,13 @@ import re
 import sys
 from pathlib import Path
 
+# Cross-source dedup — collapses items that different agents surfaced from the
+# same underlying business event (e.g. one "Wise contract unsigned" from Slack
+# and one "Wise agreement unsigned" from Granola → keep one). Conservative on
+# purpose; see skills/dashboard/dedupe.py for the rules.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from dedupe import dedupe, dedupe_tagged  # noqa: E402
+
 # Shared timezone resolver (lives next to this script). Falls back to a tiny
 # inline version if the import ever fails, so a refresh never crashes over tz.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -291,28 +298,48 @@ def load_manual_tasks():
 
 MANUAL = load_manual_tasks()
 
-top3 = (MANUAL["top3"] + safe(granola, "top3"))[:3]
+# All lists below run through cross-source dedup BEFORE truncation/id-assignment
+# so the limit (e.g. blockers[:5]) reflects unique items, not five copies of two.
 
-overdue_raw = MANUAL["overdue"] + safe(granola, "overdue") + safe(gmail, "overdue")
+top3 = dedupe_tagged(
+    (MANUAL["top3"], "manual"), (safe(granola, "top3"), "granola")
+)[:3]
+
+overdue_raw = dedupe_tagged(
+    (MANUAL["overdue"], "manual"),
+    (safe(granola, "overdue"), "granola"),
+    (safe(gmail, "overdue"), "gmail"),
+)
 overdue = []
 for i, item in enumerate(overdue_raw[:5]):
     o = dict(item); o["id"] = f"o{i+1}"; overdue.append(o)
 
-duesoon_raw = MANUAL["dueSoon"] + safe(granola, "dueSoon") + safe(gmail, "dueSoon")
+duesoon_raw = dedupe_tagged(
+    (MANUAL["dueSoon"], "manual"),
+    (safe(granola, "dueSoon"), "granola"),
+    (safe(gmail, "dueSoon"), "gmail"),
+)
 duesoon = []
 for i, item in enumerate(duesoon_raw[:10]):
     d = dict(item); d["id"] = f"d{i+1}"; duesoon.append(d)
 
-blocked = (MANUAL["blocked"] + safe(granola, "blocked"))[:5]
-shipped = safe(slack, "shipped")[:5]
+blocked = dedupe_tagged(
+    (MANUAL["blocked"], "manual"), (safe(granola, "blocked"), "granola")
+)[:5]
+shipped = dedupe(safe(slack, "shipped"), ["slack"] * len(safe(slack, "shipped")))[:5]
 
-blockers_raw = safe(granola, "blockers") + safe(slack, "blockers")
+blockers_raw = dedupe_tagged(
+    (safe(granola, "blockers"), "granola"), (safe(slack, "blockers"), "slack")
+)
 sev_rank = {"high": 0, "medium": 1, "low": 2}
 blockers = sorted(blockers_raw, key=lambda b: sev_rank.get(b.get("sev", "low"), 99))[:5]
 
 projects = safe(granola, "projects")[:8]
 
-decisions_raw = list(safe(gmail, "decisions")) + list(safe(granola, "decisions"))
+decisions_raw = dedupe_tagged(
+    (list(safe(gmail, "decisions")), "gmail"),
+    (list(safe(granola, "decisions")), "granola"),
+)
 decisions = []
 for i, item in enumerate(decisions_raw[:5]):
     d = dict(item); d["id"] = f"dec{i+1}"; decisions.append(d)
@@ -321,7 +348,7 @@ meeting_history = sorted(
     safe(granola, "meetingHistory"), key=lambda m: m.get("date", ""), reverse=True
 )[:30]
 
-inbox = safe(gmail, "inbox")[:6]
+inbox = dedupe(safe(gmail, "inbox"), ["gmail"] * len(safe(gmail, "inbox")))[:6]
 
 slack_seed = {
     "workspace":     slack.get("workspace", _slack_workspace) if slack.get("sourceOk", True) else _slack_workspace,
