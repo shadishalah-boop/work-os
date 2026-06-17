@@ -724,6 +724,62 @@ function Sparkline({ dir, data }) {
   );
 }
 
+// Format a raw number for axis labels, honoring the metric's display format.
+function formatMetricNum(n, format) {
+  if (n == null || !isFinite(n)) return '—';
+  if (format === '%') return (Math.round(n * 10) / 10) + '%';
+  if (format === 'k') return (Math.round(n / 100) / 10) + 'k';
+  if (format === 'M') return (Math.round(n / 1e5) / 10) + 'M';
+  if (format === 'h') return Math.round(n) + 'h';
+  return Math.abs(n) >= 1000 ? Math.round(n).toLocaleString() : String(Math.round(n * 10) / 10);
+}
+
+// Full metric chart: real line with Y axis (min/mid/max labels), gridlines, X axis
+// (first/last period labels), area fill, and a marker on the latest point.
+function MetricChart({ series, labels, format, color }) {
+  const data = (series || []).map(Number).filter(v => isFinite(v));
+  if (data.length < 2) {
+    return <div className="metric-chart-empty">No series yet — run <code>/dashboard</code> to fetch this metric's history.</div>;
+  }
+  const W = 580, H = 240, padL = 52, padR = 14, padT = 16, padB = 30;
+  const max = Math.max(...data), min = Math.min(...data), span = (max - min) || 1;
+  const X = i => padL + (i / (data.length - 1)) * (W - padL - padR);
+  const Y = v => padT + (1 - (v - min) / span) * (H - padT - padB);
+  const line = data.map((v, i) => `${i === 0 ? 'M' : 'L'}${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(' ');
+  const area = `${line} L${X(data.length - 1).toFixed(1)},${(H - padB).toFixed(1)} L${X(0).toFixed(1)},${(H - padB).toFixed(1)} Z`;
+  const ticks = [max, (max + min) / 2, min];
+  const c = color || 'var(--teal-500)';
+  const lab = labels || [];
+  const firstLab = lab[0] || `${data.length} pts ago`;
+  const lastLab = lab[lab.length - 1] || 'now';
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="metric-chart" preserveAspectRatio="xMidYMid meet">
+      {ticks.map((t, i) => (
+        <g key={i}>
+          <line className="mc-grid" x1={padL} x2={W - padR} y1={Y(t).toFixed(1)} y2={Y(t).toFixed(1)}/>
+          <text className="mc-ylabel" x={padL - 8} y={(Y(t) + 3).toFixed(1)}>{formatMetricNum(t, format)}</text>
+        </g>
+      ))}
+      <path className="mc-area" d={area} style={{ fill: c }}/>
+      <path className="mc-line" d={line} style={{ stroke: c }}/>
+      <circle className="mc-dot" cx={X(data.length - 1).toFixed(1)} cy={Y(data[data.length - 1]).toFixed(1)} r="3.5" style={{ fill: c }}/>
+      <text className="mc-xlabel" x={padL} y={H - 9}>{firstLab}</text>
+      <text className="mc-xlabel" x={W - padR} y={H - 9} textAnchor="end">{lastLab}</text>
+    </svg>
+  );
+}
+
+// Convert rendered metrics back into persistable definition items (id/label/source/
+// refs/target/format/timeframe) — used when saving a timeframe change with no editor open.
+function dataToItems(data) {
+  return (data || []).map(k => {
+    const it = { id: k.id, label: k.label, source: k.source || 'snowflake', target: k.target || '', format: k.format || 'plain' };
+    if (k.timeframe) it.timeframe = k.timeframe;
+    ['nl', 'sql', 'field', 'look', 'query'].forEach(r => { if (k[r]) it[r] = k[r]; });
+    return it;
+  });
+}
+
 // Build editable definitions from the rendered metrics (so the editor isn't empty
 // for demo users who have no saved definitions yet).
 function metricsDefsFromData(data) {
@@ -743,6 +799,7 @@ function metricsDefsFromData(data) {
       source, refType, ref,
       target: k.target || '',
       format: k.format || 'plain',
+      timeframe: k.timeframe || '12w',
     };
   });
 }
@@ -752,6 +809,37 @@ function KpiMod({ data }) {
   const [defs, setDefs] = useStateB(null);     // null = not loaded yet
   const [saveMsg, setSaveMsg] = useStateB(null);
   const [served, setServed] = useStateB(false);
+  const [chartFor, setChartFor] = useStateB(null);   // kpi shown in the expanded chart
+  const [tfMsg, setTfMsg] = useStateB(null);         // timeframe-change confirmation
+
+  const TIMEFRAMES = [
+    { id: '12w', label: '12 weeks' },
+    { id: '30d', label: '30 days' },
+    { id: '7d',  label: '7 days' },
+    { id: 'qtd', label: 'Quarter' },
+    { id: 'ytd', label: 'Year' },
+  ];
+  const tfLabel = (id) => (TIMEFRAMES.find(t => t.id === id) || { label: id || '12 weeks' }).label;
+
+  // Change a metric's timeframe → persist to the definitions (applies next refresh,
+  // since the browser can't re-query the warehouse).
+  const setTimeframe = async (id, tf) => {
+    setTfMsg('saving');
+    let items = [];
+    try {
+      const r = await fetch('/metrics-config', { cache: 'no-store' });
+      if (r.ok) { const d = await r.json().catch(() => ({})); if (Array.isArray(d.items)) items = d.items; }
+    } catch {}
+    if (!items.length) items = dataToItems(data);   // fall back to current
+    const found = items.find(it => it.id === id);
+    if (found) found.timeframe = tf; else items.push({ id, timeframe: tf });
+    try { localStorage.setItem('dashboard.metricDefs.v1', JSON.stringify(items)); } catch {}
+    try {
+      const r = await fetch('/metrics-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items }) });
+      setTfMsg(r.ok ? 'saved' : 'local');
+    } catch { setTfMsg('local'); }
+    setChartFor(c => c && c.id === id ? { ...c, timeframe: tf } : c);
+  };
 
   // On first edit, load saved definitions from the local server; fall back to
   // deriving them from whatever the card is currently showing.
@@ -775,7 +863,7 @@ function KpiMod({ data }) {
   const openEditor = async () => { await ensureDefs(); setSaveMsg(null); setEditing(true); };
 
   const setDef = (i, patch) => setDefs(ds => ds.map((d, j) => j === i ? { ...d, ...patch } : d));
-  const addDef = () => setDefs(ds => [...(ds || []), { id: 'm' + Date.now(), label: '', source: 'snowflake', refType: 'nl', ref: '', target: '', format: 'plain' }]);
+  const addDef = () => setDefs(ds => [...(ds || []), { id: 'm' + Date.now(), label: '', source: 'snowflake', refType: 'nl', ref: '', target: '', format: 'plain', timeframe: '12w' }]);
   const removeDef = (i) => setDefs(ds => ds.filter((_, j) => j !== i));
   const moveDef = (i, dir) => setDefs(ds => {
     const j = i + dir; if (j < 0 || j >= ds.length) return ds;
@@ -784,7 +872,7 @@ function KpiMod({ data }) {
 
   // Persist: each def becomes {id,label,source,target,format, <ref by type>}.
   const toItems = () => (defs || []).filter(d => (d.label || '').trim()).map(d => {
-    const item = { id: d.id, label: d.label.trim(), source: d.source, target: d.target || '', format: d.format || 'plain' };
+    const item = { id: d.id, label: d.label.trim(), source: d.source, target: d.target || '', format: d.format || 'plain', timeframe: d.timeframe || '12w' };
     const ref = (d.ref || '').trim();
     if (d.source === 'snowflake') item[d.refType === 'sql' ? 'sql' : 'nl'] = ref;  // describe (nl) or raw sql
     else item[d.refType || 'field'] = ref;   // looker: field | look | query
@@ -815,7 +903,8 @@ function KpiMod({ data }) {
           const t = k.trend || { dir: 'flat', pct: 0 };
           const good = t.good !== undefined ? t.good : t.dir === 'up';
           return (
-            <div key={k.id || i} className="kpi">
+            <div key={k.id || i} className="kpi kpi--clickable" onClick={() => setChartFor(k)}
+                 title="Open chart">
               <div className="kpi-label">{k.label}</div>
               <div className="kpi-value">{k.value}</div>
               <Sparkline dir={good ? 'up' : t.dir === 'flat' ? 'flat' : 'down'} data={k.series}/>
@@ -890,6 +979,10 @@ function KpiMod({ data }) {
                   <option value="M">M</option>
                   <option value="h">h</option>
                 </select>
+                <select className="metric-in" value={d.timeframe || '12w'} title="Chart timeframe"
+                        onChange={e => setDef(i, { timeframe: e.target.value })}>
+                  {TIMEFRAMES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+                </select>
               </div>
             </div>
           ))}
@@ -905,6 +998,39 @@ function KpiMod({ data }) {
           </div>
         </div>
       )}
+
+      {chartFor && (() => {
+        const k = chartFor;
+        const tt = k.trend || { dir: 'flat', pct: 0 };
+        const goodC = tt.good !== undefined ? tt.good : tt.dir === 'up';
+        const color = goodC ? 'var(--teal-500)' : tt.dir === 'flat' ? 'var(--grey-400)' : 'var(--red-500)';
+        const tf = k.timeframe || '12w';
+        return (
+          <div className="metric-chart-overlay" onClick={() => { setChartFor(null); setTfMsg(null); }}>
+            <div className="metric-chart-modal" onClick={e => e.stopPropagation()}>
+              <div className="metric-chart-head">
+                <div>
+                  <div className="metric-chart-title">{k.label}</div>
+                  <div className="metric-chart-now">{k.value} <span className="metric-chart-trend" data-dir={goodC ? 'up' : tt.dir}>{tt.dir === 'up' ? '▲' : tt.dir === 'down' ? '▼' : '—'} {tt.pct}%</span> · {k.target}</div>
+                </div>
+                <button className="metric-chart-close" aria-label="Close" onClick={() => { setChartFor(null); setTfMsg(null); }}>×</button>
+              </div>
+              <MetricChart series={k.series} labels={k.seriesLabels} format={k.format} color={color}/>
+              <div className="metric-chart-foot">
+                <span className="metric-tf-label">Timeframe</span>
+                <div className="metric-tf-switch">
+                  {TIMEFRAMES.map(t => (
+                    <button key={t.id} className={'metric-tf-btn' + (tf === t.id ? ' on' : '')}
+                            onClick={() => setTimeframe(k.id, t.id)}>{t.label}</button>
+                  ))}
+                </div>
+                {tfMsg === 'saved' && <span className="metric-save-msg ok">✓ updates next /dashboard</span>}
+                {tfMsg === 'local' && <span className="metric-save-msg">saved locally</span>}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </Module>
   );
 }

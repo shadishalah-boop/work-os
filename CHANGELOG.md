@@ -14,6 +14,26 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.11.0 — 2026-06-16
+
+**Metrics: a real, comprehensive chart.** Click any metric tile to open a full chart with
+**Y-axis labels (min/mid/max, formatted), X-axis period labels, gridlines, a line + area
+fill, and the latest-point marker** — not just a number. Each metric has a **timeframe**
+(default **12 weeks**), shown on the chart with a **switcher** (12w / 30d / 7d / quarter /
+year); changing it updates the metric definition and the new range fills on the next
+`/dashboard`. The editor gains a timeframe selector too. The agent now fetches a real
+`series` + `seriesLabels` over the chosen timeframe (time-bucketed); build-overrides carries
+them; demo metrics ship with 12-week series.
+
+(**Settings panel** — theme / density / accent / show-hide modules — is the next release;
+specs approved.)
+
+Verified: 12 DOM checks (tile click → chart modal, real Y/X axis labels, line drawn,
+timeframe switcher active-state + persistence) + metrics-editor regression. Bumps
+`modules-b.jsx` v=38, `data.jsx` v=7, `dashboard.css` v=21, plugin 0.11.0.
+
+---
+
 ## v0.10.0 — 2026-06-16
 
 **Slack read-state, Tasks "hidden" view, and a working notifications bell.**

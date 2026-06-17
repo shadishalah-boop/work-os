@@ -305,10 +305,13 @@ if _metric_defs:
             "target": d.get("target", ""),
             "format": d.get("format", "plain"),
             "source": d.get("source"),
+            "timeframe": d.get("timeframe") or "12w",
             "trend": f.get("trend") or {"dir": "flat", "pct": 0, "period": ""},
         }
         if isinstance(f.get("series"), list) and f["series"]:
             row["series"] = f["series"]
+        if isinstance(f.get("seriesLabels"), list) and f["seriesLabels"]:
+            row["seriesLabels"] = f["seriesLabels"]
         # carry the reference so the editor can re-derive rows after a refresh
         for k_ in ("nl", "sql", "field", "look", "query"):
             if d.get(k_):

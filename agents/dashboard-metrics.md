@@ -87,15 +87,23 @@ e.g. a custom name like `Preply Looker MCP`) → `mcp__Looker__*` → else `Tool
 Retry a failing fetch once; if it still fails, set that metric's `sourceOk:false` with a
 short `error` and keep its value `"—"`.
 
-### Also fetch a short series (for the sparkline graph)
+### Also fetch a labeled series (for the chart)
 
-The card draws a real line, so give it one. For each metric, also fetch the **last ~12
-periods** of the SAME measure as an array of numbers, oldest→newest, in `series`. This is
-usually one extra query:
-- **Snowflake**: bucket by day/week, e.g. `SELECT <period> AS p, <agg> AS v FROM … GROUP BY p ORDER BY p` (last ~12), then take the `v` column in order. For an `nl` metric, write this time-bucketed query as part of the discovery (and include it in `resolvedSql`). The **last** point should equal `value`.
-- **Looker**: query the measure grouped by a date dimension (last ~12 buckets); take the values in order.
+The card draws a real chart (with axes), so give it one. For each metric, fetch the SAME
+measure over time per the metric's **`timeframe`** (default `12w`):
+- `12w` → ~12 weekly buckets · `30d` → ~30 daily · `7d` → ~7 daily · `qtd` → weeks this
+  quarter · `ytd` → months this year.
+Return:
+- `series` — array of numbers, **oldest→newest**, one per bucket. The **last** point should
+  equal `value`.
+- `seriesLabels` — array the SAME length as `series`, the period label per point (e.g. an
+  ISO date `"2026-03-31"` or `"wk 12"`); the chart shows the first and last. Keep middle
+  labels short or `""`.
+How:
+- **Snowflake**: `SELECT <date_bucket> AS p, <agg> AS v FROM … WHERE <date> >= <window start> GROUP BY p ORDER BY p`. For an `nl` metric, write this time-bucketed query during discovery and include it in `resolvedSql`.
+- **Looker**: query the measure grouped by the date dimension at the timeframe's grain.
 The series must be the **real numbers** for THIS metric — never fabricate or pad. If you
-genuinely can't get a series, omit it (the card falls back to a flat placeholder); never
+can't get a series, omit `series`/`seriesLabels` (the card shows a flat placeholder); never
 invent points.
 
 ## 3. Compute the trend + format
@@ -125,6 +133,7 @@ reports the file exists, Read once then Write again — never `cat`/`echo`/hered
       "source": "looker",
       "trend": { "dir": "down", "pct": 0.3, "period": "vs prior period", "good": true },
       "series": [2.1, 2.0, 2.2, 1.9, 2.0, 1.8, 1.9, 1.7, 1.8],
+      "seriesLabels": ["12 wk ago", "", "", "", "", "", "", "", "now"],
       "sourceOk": true
     }
   ],
@@ -137,8 +146,9 @@ reports the file exists, Read once then Write again — never `cat`/`echo`/hered
 ### Field reference
 - `kpis[]` preserves the **order** of the definitions (the card renders them in order).
 - `value` — the formatted string the card shows big. `"—"` if that metric failed.
-- `series` — array of ~12 raw numbers (oldest→newest) of the same measure; drives the
-  sparkline. The last point should match `value`. Omit if you couldn't fetch it (never fake).
+- `series` — raw numbers (oldest→newest) of the same measure over the metric's `timeframe`;
+  drives the chart. Last point should match `value`. Omit if you couldn't fetch it (never fake).
+- `seriesLabels` — same length as `series`; per-point period labels (dates ok). Omit with `series`.
 - `resolvedSql` — for `nl` Snowflake metrics, the SQL you generated (lets the user verify it
   and lets the next run skip re-discovery). Omit for `sql`/Looker metrics.
 - `trend.good` — drives the green/red color; honor `goodDirection`.
