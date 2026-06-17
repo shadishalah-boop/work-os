@@ -37,10 +37,12 @@ REMIND_CRON_TAG="# work-os-dashboard-remind"
 DEFAULT_PORT=8787
 DEFAULT_REMIND_TIMES="09:00 14:00 17:00"
 PORTFILE="$HOME/.claude/dashboard-serve-port"
+SERVE_VERSION_FILE="$HOME/.claude/dashboard-serve-version"
 
 is_macos() { [ "$(uname -s)" = "Darwin" ]; }
 pybin() { command -v python3 2>/dev/null || echo /usr/bin/python3; }
 dash_url() { echo "http://localhost:${1}/Work%20Dashboard.html"; }
+plugin_version() { python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('version','0'))" "$SCRIPT_DIR/../../.claude-plugin/plugin.json" 2>/dev/null || echo 0; }
 
 # --------------------------------------------------------------------------
 # remind — notify at set times to run /dashboard.
@@ -136,6 +138,7 @@ serve() {
   [[ "$port" =~ ^[0-9]+$ ]] || { echo "serve: bad port '$port' (use a number)" >&2; exit 2; }
   mkdir -p "$DASH_DIR"
   echo "$port" > "$PORTFILE"
+  plugin_version > "$SERVE_VERSION_FILE"   # record which serve.py is now running
   is_macos && tcc_check
 
   if is_macos; then

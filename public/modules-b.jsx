@@ -674,10 +674,13 @@ function ProjectsMod({ data, okrs, decisions, okrApi }) {
 }
 
 // --- KPIs Module ---
-function Sparkline({ dir }) {
-  const pts = dir === 'up'   ? [20,22,19,24,23,28,30,32,35] :
-              dir === 'down' ? [32,30,28,26,24,22,20,18,16] :
-                               [22,24,21,23,22,24,22,23,22];
+function Sparkline({ dir, data }) {
+  // Plot the real series when the metric provides one; else a directional placeholder.
+  const real = Array.isArray(data) ? data.map(Number).filter(v => isFinite(v)) : [];
+  const pts = real.length >= 2 ? real
+    : (dir === 'up'   ? [20,22,19,24,23,28,30,32,35] :
+       dir === 'down' ? [32,30,28,26,24,22,20,18,16] :
+                        [22,24,21,23,22,24,22,23,22]);
   const max = Math.max(...pts), min = Math.min(...pts);
   const W = 100, H = 28;
   const path = pts.map((v, i) => {
@@ -688,7 +691,7 @@ function Sparkline({ dir }) {
   const color = dir === 'up' ? 'var(--teal-500)' : dir === 'down' ? 'var(--red-500)' : 'var(--grey-400)';
   return (
     <svg className="kpi-spark" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
-      <path d={path} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round"/>
+      <path d={path} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
 }
@@ -787,7 +790,7 @@ function KpiMod({ data }) {
             <div key={k.id || i} className="kpi">
               <div className="kpi-label">{k.label}</div>
               <div className="kpi-value">{k.value}</div>
-              <Sparkline dir={good ? 'up' : t.dir === 'flat' ? 'flat' : 'down'}/>
+              <Sparkline dir={good ? 'up' : t.dir === 'flat' ? 'flat' : 'down'} data={k.series}/>
               <div className="kpi-foot">
                 <span className="kpi-trend" data-dir={good ? 'up' : t.dir === 'flat' ? 'flat' : 'down'}>
                   {t.dir === 'up' ? '▲' : t.dir === 'down' ? '▼' : '—'} {t.pct}%

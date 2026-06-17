@@ -17,7 +17,7 @@
 <link rel="stylesheet" href="ds/components/progress-bar.css"/>
 <link rel="stylesheet" href="ds/components/bubble-counter.css"/>
 <link rel="stylesheet" href="ds/components/divider.css"/>
-<link rel="stylesheet" href="dashboard.css?v=18"/>
+<link rel="stylesheet" href="dashboard.css?v=19"/>
 <link rel="stylesheet" href="dashboard-d.css?v=21"/>
 <link rel="stylesheet" href="custom.css"/>
 <style>
@@ -65,12 +65,12 @@
 <script src="helper-client.jsx?v=4"></script>
 
 <!-- App -->
-<script type="text/babel" src="data.jsx?v=5"></script>
+<script type="text/babel" src="data.jsx?v=6"></script>
 <script type="text/babel" src="data-override.jsx?v=29"></script>
 <script type="text/babel" src="drive-index.jsx?v=10"></script>
-<script type="text/babel" src="modules-a.jsx?v=19"></script>
-<script type="text/babel" src="modules-b.jsx?v=35"></script>
-<script type="text/babel" src="app.jsx?v=53"></script>
+<script type="text/babel" src="modules-a.jsx?v=20"></script>
+<script type="text/babel" src="modules-b.jsx?v=36"></script>
+<script type="text/babel" src="app.jsx?v=54"></script>
 
 <script>
 // =============================================================================
@@ -145,13 +145,20 @@
   const loadedVersions = readVersions(document.documentElement.outerHTML);
   let pendingFresh = false;
 
+  // Reload + leave a marker so the refresh banner knows the data actually landed
+  // (so it resolves/clears instead of hanging on "Refreshing…" after an update).
+  function reloadFresh() {
+    try { sessionStorage.setItem('dash:freshReload', String(Date.now())); } catch (e) {}
+    window.location.reload();
+  }
+
   function showFreshBanner() {
     if (document.getElementById('auto-reload-banner')) return;
     const b = document.createElement('div');
     b.id = 'auto-reload-banner';
     b.style.cssText = 'position:fixed;top:12px;right:12px;z-index:9999;background:#0b6;color:#fff;padding:8px 12px;border-radius:6px;font:13px/1.4 system-ui,sans-serif;box-shadow:0 4px 16px rgba(0,0,0,.18);cursor:pointer';
     b.textContent = 'Fresh data available — click to reload';
-    b.onclick = () => window.location.reload();
+    b.onclick = () => reloadFresh();
     document.body.appendChild(b);
   }
 
@@ -162,7 +169,7 @@
       const current = readVersions(html);
       if (current && current !== loadedVersions) {
         if (document.visibilityState === 'hidden') {
-          window.location.reload();
+          reloadFresh();
         } else {
           pendingFresh = true;
           showFreshBanner();
@@ -174,7 +181,7 @@
   // Reload immediately if user switches back to the tab and fresh data was queued
   document.addEventListener('visibilitychange', () => {
     if (pendingFresh && document.visibilityState === 'visible') {
-      window.location.reload();
+      reloadFresh();
     }
   });
 

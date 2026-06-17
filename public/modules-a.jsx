@@ -389,9 +389,51 @@ function TasksMod({ state, onToggle }) {
   const dismiss = state.dismissTask;
   const restore = state.restoreDismissed;
   const dismissedCount = state.dismissedCount || 0;
+  const [listOpen, setListOpen] = useState(false);
+  const groups = [
+    { key: 'overdue',  label: 'Overdue',           items: state.overdue, color: 'var(--red-600)' },
+    { key: 'dueSoon',  label: 'Due soon',          items: state.dueSoon },
+    { key: 'blocked',  label: 'Blocked on others', items: state.blocked },
+    { key: 'shipped',  label: 'Recently shipped',  items: state.shipped, shipped: true },
+  ];
+  const totalTasks = state.overdue.length + state.dueSoon.length + state.blocked.length;
   return (
-    <Module title="Tasks" sub="Only what moves today" action="Open list"
+    <Module title="Tasks" sub="Only what moves today" action="Open list" onAction={() => setListOpen(true)}
             icon={<span className="mod-icon-dot" style={{width:28, height:28, borderRadius:8, background:'var(--grey-100)', display:'grid', placeItems:'center'}}><Icon name="check-circle" size={16}/></span>}>
+      {listOpen && (
+        <div className="task-list-overlay" onClick={() => setListOpen(false)}>
+          <div className="task-list-modal" onClick={e => e.stopPropagation()}>
+            <div className="task-list-head">
+              <Icon name="check-circle" size={16}/>
+              <span className="task-list-title">All tasks</span>
+              <span className="task-list-count">{totalTasks} open</span>
+              <button className="task-list-close" aria-label="Close" onClick={() => setListOpen(false)}>×</button>
+            </div>
+            <div className="task-list-body">
+              {groups.map(g => g.items.length > 0 && (
+                <div key={g.key} className="task-list-group">
+                  <div className="sub-section-head">
+                    <span style={g.color ? { color: g.color } : null}>{g.label}</span>
+                    <span className="bar"/><span>{g.items.length}</span>
+                  </div>
+                  {g.items.map(t => g.shipped ? (
+                    <div key={t.id} className="ship-row">
+                      <div className="tick"><Icon name="check" size={12}/></div>
+                      <div className="ship-body"><div className="ship-title">{t.title}</div></div>
+                      <div className="ship-meta">{t.meta}</div>
+                    </div>
+                  ) : (
+                    <TaskRow key={t.id + (t.done ? '-done' : '')} t={t} onToggle={onToggle} onDismiss={dismiss} okrApi={state.okrApi} projectColor={projColor(t.project)}/>
+                  ))}
+                </div>
+              ))}
+              {totalTasks === 0 && state.shipped.length === 0 && (
+                <div className="empty-ok"><span className="big">All clear</span>No tasks right now.</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       {dismissedCount > 0 && (
         <div className="tasks-restore-strip">
           {dismissedCount} hidden

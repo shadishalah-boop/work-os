@@ -2175,22 +2175,39 @@ function RefreshButton() {
 function RefreshBanner() {
   const [st, setSt] = React.useState(null);   // null=hidden | {phase:'running'|'done', ...}
   const [dismissed, setDismissed] = React.useState(false);
+  const dismissTimer = React.useRef(null);
+  // Auto-dismiss the "done" state after a few seconds (and on data-fresh reload).
+  const finish = (ok, last) => {
+    setSt({ phase: 'done', ok, last });
+    if (dismissTimer.current) clearTimeout(dismissTimer.current);
+    dismissTimer.current = setTimeout(() => setDismissed(true), 6000);
+  };
   React.useEffect(() => {
+    // If the page just auto-reloaded because fresh data landed, the refresh DID
+    // complete — resolve the banner instead of showing a lingering "Refreshing…".
+    let freshlyReloaded = false;
+    try {
+      const ts = Number(sessionStorage.getItem('dash:freshReload') || 0);
+      if (ts && Date.now() - ts < 20000) { freshlyReloaded = true; }
+      sessionStorage.removeItem('dash:freshReload');
+    } catch {}
+    if (freshlyReloaded) finish(true, 'Updated just now');
+
     let wasRunning = false;
     const poll = async () => {
       try {
         const s = await (await fetch('/refresh-status', { cache: 'no-store' })).json();
         if (s.running) { wasRunning = true; setDismissed(false); setSt({ phase: 'running', elapsed: s.elapsed || 0 }); }
-        else if (wasRunning) { wasRunning = false; setSt({ phase: 'done', ok: s.ok !== false, last: s.last }); }
+        else if (wasRunning) { wasRunning = false; finish(s.ok !== false, s.last); }
       } catch { /* server has no /refresh-status (file:// or plain server) — ignore */ }
     };
-    poll();
+    if (!freshlyReloaded) poll();
     const id = setInterval(poll, 3000);
-    const onStart = () => { setDismissed(false); setSt({ phase: 'running', elapsed: 0 }); };
-    const onUnavail = () => { setDismissed(false); setSt({ phase: 'done', ok: false, last: 'Refresh needs the dashboard server — open the dashboard via http://localhost (run schedule.sh serve), not as a file.' }); };
+    const onStart = () => { if (dismissTimer.current) clearTimeout(dismissTimer.current); setDismissed(false); setSt({ phase: 'running', elapsed: 0 }); };
+    const onUnavail = () => { setDismissed(false); finish(false, 'Refresh needs the dashboard server — open the dashboard via http://localhost (run schedule.sh serve), not as a file.'); };
     window.addEventListener('dash:refresh-started', onStart);
     window.addEventListener('dash:refresh-unavailable', onUnavail);
-    return () => { clearInterval(id); window.removeEventListener('dash:refresh-started', onStart); window.removeEventListener('dash:refresh-unavailable', onUnavail); };
+    return () => { clearInterval(id); if (dismissTimer.current) clearTimeout(dismissTimer.current); window.removeEventListener('dash:refresh-started', onStart); window.removeEventListener('dash:refresh-unavailable', onUnavail); };
   }, []);
 
   if (!st || dismissed) return null;

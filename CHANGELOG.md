@@ -14,6 +14,36 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.9.9 — 2026-06-16
+
+**Fixes from testing.**
+
+- **Refresh banner now clears when the data lands.** The banner could hang on
+  "Refreshing…" even after the dashboard updated. The auto-reload now marks the reload as
+  "fresh data arrived," so the banner resolves to "Updated just now" and **auto-dismisses
+  after a few seconds** (done states also auto-dismiss now).
+- **Metrics graph plots real data.** The sparkline was a fixed decorative line. It now
+  draws the metric's actual recent series — the agent fetches a ~12-point `series` per
+  metric (Snowflake/Looker, time-bucketed), and the card plots it. Demo metrics ship with
+  real series too.
+- **Tasks "Open list" works** — it now opens a popup with every task (Overdue / Due soon /
+  Blocked / Shipped) in a scrollable, readable list. (It previously had no handler.)
+- **Skill result popup shows the full output** — the truncation was a *stale local server*
+  (the popup + full-output capture shipped together, but the running `serve.py` was older).
+  Fixed systemically: **`open.sh` now restarts the server when the plugin version changed**,
+  so new server endpoints/fixes take effect without you manually restarting it. (This also
+  retroactively fixes the metrics save path on stale servers.)
+
+Still pending your input: "scroll for what actually matters today" — I need a bit more on
+what you'd like there (see the chat).
+
+Verified: refresh-banner fresh-reload resolve, Sparkline real-series rendering, Tasks
+open-list modal (opens/lists/closes), metrics editor + Slack regression. Bumps `app.jsx`
+v=54, `modules-a.jsx` v=20, `modules-b.jsx` v=36, `data.jsx` v=6, `dashboard.css` v=19,
+plugin 0.9.9.
+
+---
+
 ## v0.9.8 — 2026-06-16
 
 **Slack box redesigned — working tabs + a dense, readable list.** The tabs

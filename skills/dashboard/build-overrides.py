@@ -307,6 +307,8 @@ if _metric_defs:
             "source": d.get("source"),
             "trend": f.get("trend") or {"dir": "flat", "pct": 0, "period": ""},
         }
+        if isinstance(f.get("series"), list) and f["series"]:
+            row["series"] = f["series"]
         # carry the reference so the editor can re-derive rows after a refresh
         for k_ in ("nl", "sql", "field", "look", "query"):
             if d.get(k_):
