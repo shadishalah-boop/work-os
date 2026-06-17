@@ -788,8 +788,17 @@ function MetricChart({ series, labels, format, color }) {
   const ticks = Array.from({ length: NTICKS }, (_, i) => rawMax - tickStep * i);
   const c = color || 'var(--teal-500)';
   const lab = labels || [];
-  const firstLab = lab[0] || `${data.length} pts ago`;
-  const lastLab = lab[lab.length - 1] || 'now';
+  // X labels: up to ~5 evenly spaced across the series (first + middles + last),
+  // each anchored start/middle/end so they don't run off the chart edges.
+  const NX = Math.min(5, data.length);
+  const xticks = [];
+  if (NX >= 2) {
+    for (let j = 0; j < NX; j++) {
+      const idx = Math.round((j / (NX - 1)) * (data.length - 1));
+      const anchor = j === 0 ? 'start' : j === NX - 1 ? 'end' : 'middle';
+      xticks.push({ x: X(idx), text: lab[idx] || (idx === data.length - 1 ? 'now' : ''), anchor });
+    }
+  }
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="metric-chart" preserveAspectRatio="xMidYMid meet">
       {ticks.map((t, i) => (
@@ -798,11 +807,16 @@ function MetricChart({ series, labels, format, color }) {
           <text className="mc-ylabel" x={padL - 8} y={(Y(t) + 3).toFixed(1)}>{formatAxis(t, format, dec)}</text>
         </g>
       ))}
+      {/* faint vertical gridlines at each labelled x */}
+      {xticks.map((xt, i) => (i > 0 && i < xticks.length - 1) ? (
+        <line key={'vg' + i} className="mc-grid mc-vgrid" x1={xt.x.toFixed(1)} x2={xt.x.toFixed(1)} y1={padT} y2={(H - padB).toFixed(1)}/>
+      ) : null)}
       <path className="mc-area" d={area} style={{ fill: c }}/>
       <path className="mc-line" d={line} style={{ stroke: c }}/>
       <circle className="mc-dot" cx={X(data.length - 1).toFixed(1)} cy={Y(data[data.length - 1]).toFixed(1)} r="3.5" style={{ fill: c }}/>
-      <text className="mc-xlabel" x={padL} y={H - 9}>{firstLab}</text>
-      <text className="mc-xlabel" x={W - padR} y={H - 9} textAnchor="end">{lastLab}</text>
+      {xticks.map((xt, i) => (
+        <text key={'xl' + i} className="mc-xlabel" x={xt.x.toFixed(1)} y={H - 9} textAnchor={xt.anchor}>{xt.text}</text>
+      ))}
     </svg>
   );
 }
@@ -959,15 +973,35 @@ function KpiMod({ data }) {
         {(data || []).map((k, i) => {
           const t = k.trend || { dir: 'flat', pct: 0 };
           const good = t.good !== undefined ? t.good : t.dir === 'up';
+          const sd = (k.series || []).map(Number).filter(v => isFinite(v));
+          const lbls = k.seriesLabels || [];
+          const asOf = lbls[lbls.length - 1] || '';
+          const sinceLbl = lbls[0] || '';
+          const yHi = sd.length ? formatAxis(Math.max(...sd), k.format, axisDecimals((Math.max(...sd)-Math.min(...sd))/4 || Math.max(...sd)*0.01, k.format)) : '';
+          const yLo = sd.length ? formatAxis(Math.min(...sd), k.format, axisDecimals((Math.max(...sd)-Math.min(...sd))/4 || Math.max(...sd)*0.01, k.format)) : '';
+          const dirArrow = t.dir === 'up' ? '▲' : t.dir === 'down' ? '▼' : '—';
           return (
             <div key={k.id || i} className="kpi kpi--clickable" onClick={() => { setViewTf(k.timeframe || '12w'); setChartFor(k); }}
-                 title="Open chart">
-              <div className="kpi-label">{k.label}</div>
-              <div className="kpi-value">{k.value}</div>
-              <Sparkline dir={good ? 'up' : t.dir === 'flat' ? 'flat' : 'down'} data={k.series}/>
+                 title="Open full chart">
+              <div className="kpi-top">
+                <span className="kpi-label">{k.label}</span>
+                <span className="kpi-tf">{tfLabel(k.timeframe)}</span>
+              </div>
+              <div className="kpi-valrow">
+                <span className="kpi-value">{k.value}</span>
+                {asOf && <span className="kpi-asof">as of {asOf}</span>}
+              </div>
+              <div className="kpi-sparkwrap">
+                {sd.length >= 2 && <span className="kpi-yhi">{yHi}</span>}
+                <Sparkline dir={good ? 'up' : t.dir === 'flat' ? 'flat' : 'down'} data={k.series}/>
+                {sd.length >= 2 && <span className="kpi-ylo">{yLo}</span>}
+              </div>
+              {sd.length >= 2 && (sinceLbl || asOf) && (
+                <div className="kpi-xrow"><span>{sinceLbl}</span><span>{asOf}</span></div>
+              )}
               <div className="kpi-foot">
                 <span className="kpi-trend" data-dir={good ? 'up' : t.dir === 'flat' ? 'flat' : 'down'}>
-                  {t.dir === 'up' ? '▲' : t.dir === 'down' ? '▼' : '—'} {t.pct}%
+                  {dirArrow} {t.pct}%{sinceLbl ? <span className="kpi-trend-vs"> vs {sinceLbl}</span> : ''}
                 </span>
                 <span className="kpi-target">{k.target}</span>
               </div>
@@ -1113,12 +1147,17 @@ function TeamMod({ data }) {
   const pollRef = React.useRef(null);
   const fileRef = React.useRef(null);
 
-  // Detect the local server + hydrate any previously-imported roster.
+  // Detect the local server via /refresh-status (present in every serve.py version);
+  // hydrate any previously-imported roster separately so a stale server that lacks
+  // /team-config doesn't make us think we're not served.
   useEffectB(() => {
     let alive = true;
+    fetch('/refresh-status', { cache: 'no-store' })
+      .then(r => { if (alive && r.ok) setServed(true); })
+      .catch(() => {});
     fetch('/team-config', { cache: 'no-store' })
       .then(r => r.ok ? r.json() : null)
-      .then(d => { if (alive && d) { setServed(true); if (Array.isArray(d.people) && d.people.length) setImported(d.people); } })
+      .then(d => { if (alive && d && Array.isArray(d.people) && d.people.length) setImported(d.people); })
       .catch(() => {});
     return () => { alive = false; if (pollRef.current) clearInterval(pollRef.current); };
   }, []);
@@ -1155,6 +1194,8 @@ function TeamMod({ data }) {
     }).then(r => {
       if (r.status === 202 || r.ok) {
         if (!pollRef.current) pollRef.current = setInterval(pollStatus, 2500);
+      } else if (r.status === 404) {
+        setImp({ status: 'err', msg: 'Dashboard server is out of date — run /dashboard once to restart it, then try the import again.' });
       } else {
         setImp({ status: 'err', msg: 'Server rejected the image.' });
       }

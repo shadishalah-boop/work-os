@@ -259,7 +259,7 @@ window.SEED = {
       },
       {
         id: 'dm5', person: 'Lena G.', permalink: 'https://acme.slack.com/archives/D05',
-        unread: 0, priority: 'low', updated: 'yesterday',
+        unread: 0, priority: 'low', updated: 'Yesterday 16:40',
         summary: 'Shared the updated onboarding deck. No action needed, just FYI.',
         suggested: [],
       },

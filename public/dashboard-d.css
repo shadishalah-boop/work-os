@@ -1368,3 +1368,61 @@ html[data-theme="dark"] .layout-d .d-rail-skill-add .metric-in {
   background: var(--grey-100);
   border-color: var(--d-border);
 }
+
+/* ==========================================================================
+   v0.12.4 — app-shell scroll (fixed rail + topbar), dark icon visibility,
+   scrollbar styling, KPI tile enrichment
+   ========================================================================== */
+
+/* App shell: the rail + topbar stay put; only the content area scrolls. */
+/* Only at desktop widths (where the sidebar + canvas layout is active). Below the
+   1279px stacking breakpoint we keep natural document flow so nothing gets clipped. */
+@media (min-width: 1280px) {
+  .layout-d .app-d { height: 100vh; overflow: hidden; }
+  .layout-d .d-rail { height: 100vh; overflow-y: auto; overflow-x: hidden; position: relative; top: 0; }
+  .layout-d .d-main { height: 100vh; overflow-y: auto; overflow-x: hidden; }
+  .layout-d .d-topbar { position: sticky; top: 0; z-index: 20; }
+}
+
+/* Thin, rounded, theme-aware scrollbars that match the card aesthetic. */
+.layout-d .d-main::-webkit-scrollbar,
+.layout-d .d-rail::-webkit-scrollbar,
+.top3-list::-webkit-scrollbar,
+.box-inner > .mod::-webkit-scrollbar { width: 10px; height: 10px; }
+.layout-d .d-main::-webkit-scrollbar-track,
+.layout-d .d-rail::-webkit-scrollbar-track,
+.top3-list::-webkit-scrollbar-track,
+.box-inner > .mod::-webkit-scrollbar-track { background: transparent; }
+.layout-d .d-main::-webkit-scrollbar-thumb,
+.layout-d .d-rail::-webkit-scrollbar-thumb,
+.box-inner > .mod::-webkit-scrollbar-thumb {
+  background: var(--border-default); border-radius: 999px;
+  border: 3px solid transparent; background-clip: padding-box;
+}
+.layout-d .d-main:hover::-webkit-scrollbar-thumb { background: var(--d-border-strong); background-clip: padding-box; border: 3px solid transparent; }
+
+/* Top-3 lives on a dark card — give its scrollbar a light translucent thumb so it
+   matches the "What actually matters today" surface in BOTH themes. */
+.top3-list::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.22); border-radius: 999px;
+  border: 3px solid transparent; background-clip: padding-box;
+}
+.top3-list::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.38); background-clip: padding-box; border: 3px solid transparent; }
+.top3-list { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.25) transparent; }
+.layout-d .d-main, .layout-d .d-rail { scrollbar-width: thin; scrollbar-color: var(--border-default) transparent; }
+
+/* Dark mode: topbar + rail + module-header icons are black-stroke SVGs — invert
+   them to light so they're visible. Colourful app logos and avatars are excluded. */
+html[data-theme="dark"] .layout-d .d-topbar-icon img,
+html[data-theme="dark"] .layout-d .d-rail-item img,
+html[data-theme="dark"] .layout-d .d-rail-skill img,
+html[data-theme="dark"] .layout-d .d-search img,
+html[data-theme="dark"] .mod-h img,
+html[data-theme="dark"] .top3-title .badge-star img,
+html[data-theme="dark"] .icon-btn img {
+  filter: invert(1) brightness(1.6);
+}
+/* Never invert the brand app logos or user avatars. */
+html[data-theme="dark"] .layout-d .d-app-link-icon,
+html[data-theme="dark"] .pds-avatar img,
+html[data-theme="dark"] .d-rail-logo-avatar { filter: none; }

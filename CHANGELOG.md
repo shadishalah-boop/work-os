@@ -14,6 +14,32 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.12.4 — 2026-06-17
+
+Polish pass on the v0.12.3 feedback:
+
+1. **Fixed sidebar + topbar.** Switched Layout D to a proper app shell (desktop):
+   the left rail and top bar stay put while only the content area scrolls.
+2. **Scrollbars match the design.** Thin, rounded, theme-aware scrollbars; the
+   Top-3 list uses a translucent light thumb so it sits cleanly on the dark card.
+3. **Dark-mode icons visible.** Topbar / rail / module-header icons (black-stroke
+   SVGs) are now inverted to light in dark mode — brand app logos and avatars are
+   explicitly excluded so they keep their colour.
+4. **Metric tile is readable without opening it.** Each tile now shows the
+   timeframe, the value's as-of date, a min/max y-hint on the sparkline, the
+   period's start/end on the x, and "▲0.9% vs <start>" context.
+5. **Metric chart x-axis has middle labels.** Up to 5 evenly-spaced period labels
+   (with faint vertical gridlines), not just the two extremes.
+6. **Slack shows the time for today's messages.** Agent now formats `updated` as a
+   clock time (`14:30`) for same-day messages, `Yesterday 14:30`, `Tue 09:15`, or a
+   short date for older — never the bare word "today".
+7. **Photo import "not served" fixed.** Server detection now uses `/refresh-status`
+   (present in every server version) instead of the new endpoint, so the importer
+   no longer wrongly says "open over localhost." If the running server predates the
+   import endpoint, it now tells you to run `/dashboard` once to restart it.
+
+---
+
 ## v0.12.3 — 2026-06-17
 
 Round two on the v0.12 feedback:

@@ -229,7 +229,12 @@ Write the result to `<dataCacheDir>/slack.json` using the **Write tool**. A sing
 - **Cap**: search calls 4 (plus at most 1 retry each, plus 1 optional `is:dm` backfill if < 5 DMs) · dms 5–10 · needsReply ≤6 · channels 5–7 · blockers ≤5 · shipped ≤5. (`activeThreads` is always `[]`.)
 - **Always include Slack permalinks** — the user needs to jump to the source.
 - **No channel-history or thread reads.** Use only what message search returns. Summary must be YOUR synthesis from the snippets, not invented.
-- **Timezone**: convert message timestamps → human-relative form in the user's timezone from the kickoff prompt (e.g. "2h ago", "yesterday", "4d ago").
+- **Timezone / `updated` format**: convert each message timestamp to the user's timezone (from the kickoff prompt) and format it so TODAY's messages show a **clock time**, not just "today":
+  - **Today** → 24h clock time, e.g. `"14:30"` (this is what the user asked for — when it's today they want to see the time of day).
+  - **Yesterday** → `"Yesterday 14:30"`.
+  - **Earlier this week** → weekday + time, e.g. `"Tue 09:15"`.
+  - **Older** → short date, e.g. `"Jun 3"`.
+  Very recent items (< ~1h) may still use `"18m ago"` if you prefer — but never collapse a same-day message to the bare word "today".
 - **Exclude**: fully-resolved threads with no pending action, channel joins/leaves, bot notifications, stale (>7d) threads.
 - **On any failure** (no Slack tool found, all searches erroring): write `slack.json` with `"sourceOk": false`, `"error": "<short reason>"`, all arrays empty but `tabs` populated with `count: 0`.
 - Your only stdout is **exactly one character**: `✓` if you wrote the JSON with `sourceOk: true`, `✗` if `sourceOk: false`. No other text — no path, no counts, no debug. The orchestrator reads the JSON via `build-overrides.py`.
