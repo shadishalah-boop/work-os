@@ -49,8 +49,21 @@ function SlackMod({ data }) {
   // and fall back to a workspace search for the person / channel name instead.
   const REAL_SLACK_ID = /\/archives\/[CDG][A-Z0-9]{7,11}\b/;
   const isRealSlackPermalink = (url) => typeof url === 'string' && /^https?:\/\/[^/]+\.slack\.com\//.test(url) && REAL_SLACK_ID.test(url);
-  const slackSearchUrl = (term) => `https://${workspace}.slack.com/search/${encodeURIComponent(term || '')}`;
-  const safePermalink = (url, fallbackTerm) => isRealSlackPermalink(url) ? url : slackSearchUrl(fallbackTerm);
+  // Strip parenthetical role-hints from a DM name (e.g. "Sam O. (manager)") and
+  // any leading "#" so the Slack search box gets clean terms.
+  const cleanTerm = (s) => (s || '').replace(/\s*\([^)]*\)\s*/g, ' ').replace(/^#/, '').trim();
+  // Build a Slack search URL tailored to the item kind. For a DM we use
+  // `in:dm from:<person>` so the DM thread is the top hit (and the user can
+  // click into it to reply). For channels we just search the channel name.
+  const slackSearchUrl = (term, kind) => {
+    const q = cleanTerm(term);
+    if (!q) return `https://${workspace}.slack.com/`;
+    const query = kind === 'dm' ? `in:dm from:${q}` : q;
+    return `https://${workspace}.slack.com/search/${encodeURIComponent(query)}`;
+  };
+  // Use the real permalink when it parses; otherwise hand back a search URL
+  // that gets the user to the right thread quickly.
+  const safePermalink = (url, fallbackTerm, kind) => isRealSlackPermalink(url) ? url : slackSearchUrl(fallbackTerm, kind);
   const openInSlack = (url) => { if (url) window.open(url, '_blank', 'noopener'); };
 
   // Are we served by the local dashboard server (serve.py)? Only it answers
@@ -70,11 +83,11 @@ function SlackMod({ data }) {
   // Send via the local server, and ALWAYS fall back to copy-to-clipboard + open-in-Slack
   // if it can't (not served, or the headless Slack connector isn't reachable) so the
   // reply still lands. `chanId` keys the inline status shown on the card.
-  const slackSendOrFallback = async (text, permalink, where, chanId) => {
+  const slackSendOrFallback = async (text, permalink, where, chanId, kind) => {
     const trimmed = (text || '').trim();
     // Route any open-in-Slack through safePermalink so a fabricated link goes to
-    // a workspace search for the recipient/channel rather than the glitch page.
-    const safeUrl = safePermalink(permalink, where);
+    // a search that lands on the right thread (in:dm from:<person> for DMs).
+    const safeUrl = safePermalink(permalink, where, kind);
     if (!trimmed) { if (safeUrl) window.open(safeUrl, '_blank', 'noopener'); return; }
     const copyAndOpen = async () => {
       if (navigator.clipboard) { try { await navigator.clipboard.writeText(trimmed); } catch {} }
@@ -229,8 +242,8 @@ function SlackMod({ data }) {
                 : 'Copies to clipboard and opens in Slack'}
               onClick={()=>{
                 // Not served → harmless copy+open, no confirm needed.
-                if (!serveOnline) { slackSendOrFallback(s.label, item.permalink, where, item.id); return; }
-                if (armed) { disarm(); slackSendOrFallback(s.label, item.permalink, where, item.id); return; }
+                if (!serveOnline) { slackSendOrFallback(s.label, item.permalink, where, item.id, item.kind); return; }
+                if (armed) { disarm(); slackSendOrFallback(s.label, item.permalink, where, item.id, item.kind); return; }
                 // Arm this chip; auto-disarm after a few seconds.
                 if (armTimerRef.current) clearTimeout(armTimerRef.current);
                 setArmedSug(key);
@@ -254,7 +267,7 @@ function SlackMod({ data }) {
             if (e.key !== 'Enter') return;
             const t = replyText[item.id] || '';
             if (!t.trim()) return;
-            await slackSendOrFallback(t, item.permalink, where, item.id);
+            await slackSendOrFallback(t, item.permalink, where, item.id, item.kind);
           }}
         />
         <button
@@ -265,7 +278,7 @@ function SlackMod({ data }) {
           onClick={async ()=>{
             const t = replyText[item.id] || '';
             if (!t.trim()) return;
-            await slackSendOrFallback(t, item.permalink, where, item.id);
+            await slackSendOrFallback(t, item.permalink, where, item.id, item.kind);
           }}
         ><Icon name="send" size={14}/></button>
       </div>

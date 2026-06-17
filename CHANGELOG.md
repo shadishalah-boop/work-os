@@ -14,6 +14,16 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.12.8 — 2026-06-17
+
+**Better DM fallback.** When the permalink is missing/fake and the item is a DM,
+the click now opens `in:dm from:<person>` instead of a generic name search — so
+the actual DM thread is the top result and the user can click in to reply.
+(Real fix is still the agent emitting real permalinks per v0.12.7; this just
+makes the fallback land in the right place for DMs.)
+
+---
+
 ## v0.12.7 — 2026-06-17
 
 **Fix: Slack "There's been a glitch…" on click.** A colleague's refresh produced
