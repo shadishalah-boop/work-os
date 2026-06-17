@@ -82,10 +82,15 @@ Do this yourself, inline:
    `limit: 20`, and `include_context: false` on every search.
    `to:me after:<SINCE_WINDOW>` · `from:me after:<SINCE_1D>` (questions = those
    containing `?`) · `from:me after:<SINCE_1D>` (shipped) · `incident after:<SINCE_WINDOW>`.
+3b. **Fetch the user's Slack avatar for the tab favicon** (one small call). Resolve a
+   profile tool — `mcp__<MCP_SLACK>__slack_read_user_profile` (self), else
+   `mcp__<MCP_SLACK>__slack_search_users` for the config `user.name`/`user.email` — and
+   take a small square image URL (prefer `image_192`). Put it in `slack.json` as
+   `userAvatar`. Best-effort: on failure set `"userAvatar": ""` and continue.
 4. Build `slack.json` following the schema + scope/classification rules in
    `${CLAUDE_PLUGIN_ROOT}/agents/dashboard-slack.md` (Read it for the exact schema —
-   apply the scope filter: DMs + channels you posted in + `#incident-*`). **Write** it
-   to `<DATA_DIR>/slack.json`.
+   apply the scope filter: DMs + channels you posted in + `#incident-*`; include the
+   `userAvatar` from 3b). **Write** it to `<DATA_DIR>/slack.json`.
 5. If no Slack tool resolves at all, Write `slack.json` with `"sourceOk": false` and
    continue — the rest of the dashboard renders fine. Never block the refresh on Slack.
 

@@ -14,6 +14,25 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.9.3 — 2026-06-16
+
+**Fix: the Slack-photo favicon (v0.9.2) never populated.** Two bugs:
+
+- The avatar fetch was added to the Slack *agent spec* but **not to the Step 2 runbook the
+  `/dashboard` refresh actually executes** (Slack is fetched inline by the main session,
+  which follows SKILL.md, not the agent file). So the refresh ran its 4 searches, never
+  fetched the profile image, and `slack.json` had no `userAvatar` → `SEED.user.avatar` was
+  empty → the tab kept the "W". Step 2 now has an explicit avatar-fetch step.
+- Hardened the favicon script against a race: it no longer gives up the instant `SEED`
+  first appears (before the override with the avatar has loaded) — it polls until the
+  avatar shows up (or ~20s), then swaps.
+
+Verified: 4 favicon DOM checks (swap on present, keep W on absent, **swap when the avatar
+arrives late**). After updating, run `/dashboard` (it now captures your avatar) and
+hard-reload. Bumps plugin 0.9.3.
+
+---
+
 ## v0.9.2 — 2026-06-16
 
 **Two additions: your Slack photo as the tab favicon, and Zoom notes in the meetings feed.**

@@ -83,10 +83,12 @@
   let tries = 0;
   const t = setInterval(() => {
     tries += 1;
-    if (!window.SEED && tries < 100) return;   // wait for the async babel scripts
-    clearInterval(t);
     var url = window.SEED && window.SEED.user && window.SEED.user.avatar;
-    if (!url) return;                           // keep the bundled W favicon
+    if (!url) {                                  // keep waiting — the override (with the
+      if (tries < 100) return;                   // avatar) may load after SEED first appears
+      clearInterval(t); return;                  // give up after ~20s → bundled W stays
+    }
+    clearInterval(t);
     var link = document.querySelector("link[rel~='icon']") || document.createElement('link');
     link.setAttribute('rel', 'icon');
     link.removeAttribute('type');               // let the browser sniff (Slack serves jpg/png)
