@@ -82,11 +82,17 @@ Do this yourself, inline:
    `limit: 20`, and `include_context: false` on every search.
    `to:me after:<SINCE_WINDOW>` · `from:me after:<SINCE_1D>` (questions = those
    containing `?`) · `from:me after:<SINCE_1D>` (shipped) · `incident after:<SINCE_WINDOW>`.
-3b. **Fetch the user's Slack avatar for the tab favicon** (one small call). Resolve a
-   profile tool — `mcp__<MCP_SLACK>__slack_read_user_profile` (self), else
-   `mcp__<MCP_SLACK>__slack_search_users` for the config `user.name`/`user.email` — and
-   take a small square image URL (prefer `image_192`). Put it in `slack.json` as
-   `userAvatar`. Best-effort: on failure set `"userAvatar": ""` and continue.
+3b. **Fetch the user's Slack avatar for the tab favicon.** Try hard — the profile shape
+   varies, so check several places:
+   1. `mcp__<MCP_SLACK>__slack_search_users` with the config `user.email` (then `user.name`)
+      → take the matching user; OR `mcp__<MCP_SLACK>__slack_read_user_profile` for the
+      authed user. (Resolve the tool name with the usual `claude_ai_`/bare/ToolSearch fallback.)
+   2. From whatever it returns, pull the FIRST present of these image fields, checking both
+      the top level and a nested `profile` object: `image_512`, `image_192`, `image_72`,
+      `image_1024`, `image_original`, `image_48`. Accept any `https://…` value.
+   3. Put that URL in `slack.json` as `userAvatar`. If you truly can't find one after both
+      tools, set `"userAvatar": ""` and continue (the tab falls back to the default icon).
+   Do not give up after a single tool/field — the image is usually under `profile.image_192`.
 4. Build `slack.json` following the schema + scope/classification rules in
    `${CLAUDE_PLUGIN_ROOT}/agents/dashboard-slack.md` (Read it for the exact schema —
    apply the scope filter: DMs + channels you posted in + `#incident-*`; include the
@@ -113,10 +119,12 @@ each its server name and absolute output path. Kickoffs (substitute captured val
 - `dashboard-drive`: `Refresh drive (files modified last 14 days). Today=<TODAY>. Your drive MCP server is named <MCP_DRIVE>. Write the raw response to <DATA_DIR>/drive-raw.json.`
 - `dashboard-wellness`: `Refresh wellness for this week. Today=<TODAY>; NOW=<NOW>; timezone=<TZNAME>. Your calendar MCP server is named <MCP_CALENDAR>. Write <DATA_DIR>/wellness.json.`
 
-**Custom Metrics card (only if `HAS_METRICS=yes`):** also spawn `dashboard-metrics`.
-It reads the user's metric definitions and fetches each from Looker and/or Snowflake:
-- `dashboard-metrics`: `Fetch the custom Metrics-card numbers. Read definitions from <METRICS_DEFS> (or config metrics.items). Looker server=<MCP_LOOKER>; Snowflake server=<MCP_SNOWFLAKE>. timezone=<TZNAME>. For each metric, fetch the current value + prior-period value per agents/dashboard-metrics.md, then Write <DATA_DIR>/metrics.json.`
-  (Snowflake is a normal MCP a sub-agent can usually reach; Looker may be a desktop/local connector — if the sub-agent can't reach it, do this metric inline in the main session, same as the Slack/connector fallback below.)
+**Custom Metrics card — REQUIRED when `HAS_METRICS=yes`.** You MUST spawn
+`dashboard-metrics` in this same fan-out block (it's easy to forget — don't). Skipping it
+means the user's saved metrics never get values. If the sub-agent can't reach the data
+connector, run its spec inline in the main session (same fallback as below).
+- `dashboard-metrics`: `Fetch the custom Metrics-card numbers. Read definitions from <METRICS_DEFS> (or config metrics.items). Snowflake server=<MCP_SNOWFLAKE>; Looker server=<MCP_LOOKER>. timezone=<TZNAME>. For each metric, fetch the current value + a prior-period value per agents/dashboard-metrics.md (Snowflake "nl" metrics: discover the schema and write the SQL yourself), then Write <DATA_DIR>/metrics.json.`
+  (Snowflake is a normal MCP a sub-agent can usually reach; Looker may be a desktop/local connector — if unreachable, do the metric inline in the main session.)
 
 **Fallback (important):** if a spawned agent reports it can't reach its connector
 (some environments don't expose claude.ai connectors to sub-agents), perform that

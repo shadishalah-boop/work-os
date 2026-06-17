@@ -274,9 +274,48 @@ slack_seed = {
     "activeThreads": safe(slack, "activeThreads"),
 }
 
-# Custom metrics → Metrics card. Only override SEED.kpis when the agent produced
-# real metrics; otherwise leave the bundled demo numbers from data.jsx in place.
-kpis_seed = safe(metrics, "kpis")
+# Custom metrics → Metrics card.
+# Render from the user's DEFINITIONS (the editor file or config metrics.items) so a metric
+# the user added ALWAYS shows up — values come from the agent's metrics.json when it has
+# fetched them, else "—" (pending next refresh / unresolved). Only when there are NO
+# definitions do we keep the bundled demo numbers from data.jsx.
+def load_metric_defs():
+    p = os.path.expanduser("~/.claude/dashboard-metrics.local.json")
+    try:
+        if os.path.exists(p):
+            d = json.loads(open(p).read())
+            if isinstance(d, dict) and isinstance(d.get("items"), list) and d["items"]:
+                return d["items"]
+    except Exception:
+        pass
+    m = (CFG.get("metrics") or {}) if isinstance(CFG, dict) else {}
+    items = m.get("items")
+    return items if isinstance(items, list) else []
+
+_metric_defs = load_metric_defs()
+_fetched = {k.get("id"): k for k in safe(metrics, "kpis") if isinstance(k, dict)}
+if _metric_defs:
+    kpis_seed = []
+    for d in _metric_defs:
+        f = _fetched.get(d.get("id")) or {}
+        row = {
+            "id": d.get("id"),
+            "label": d.get("label", ""),
+            "value": f.get("value") or "—",
+            "target": d.get("target", ""),
+            "format": d.get("format", "plain"),
+            "source": d.get("source"),
+            "trend": f.get("trend") or {"dir": "flat", "pct": 0, "period": ""},
+        }
+        # carry the reference so the editor can re-derive rows after a refresh
+        for k_ in ("nl", "sql", "field", "look", "query"):
+            if d.get(k_):
+                row[k_] = d[k_]
+        if f.get("resolvedSql"):
+            row["resolvedSql"] = f["resolvedSql"]
+        kpis_seed.append(row)
+else:
+    kpis_seed = safe(metrics, "kpis")  # no custom metrics defined → keep demo kpis
 
 ps_drop = {"generatedAt", "sourceOk", "error"}
 ps = {k: v for k, v in wellness.items() if k not in ps_drop} if wellness.get("sourceOk", False) else {}

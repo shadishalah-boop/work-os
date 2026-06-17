@@ -14,6 +14,35 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.9.7 — 2026-06-16
+
+**Round of fixes from real-world testing.**
+
+- **Metrics now actually show what you defined.** Two fixes: (1) the Metrics card renders
+  straight from your saved **definitions**, so a metric you add always appears (value `—`
+  until fetched) instead of silently doing nothing; (2) running the `dashboard-metrics`
+  agent on refresh is now a **required** step in the runbook (it was a soft note the
+  refresh could skip — that's why your described metric never populated).
+- **Skill results open in a readable popup.** The full skill output is captured server-side
+  and shown in a modal (scrollable, copyable) when the skill finishes — not just a tiny
+  one-line status in the rail. The rail line becomes "✓ … done — view result" to reopen it.
+- **Refresh banner redesigned.** Gone is the big blue top bar; it's now a compact
+  bottom-right card that sets the expectation up front — "Refreshing… usually about 2
+  minutes" — with elapsed time, a clean result line, and dismiss.
+- **Slack-avatar favicon fetch hardened.** It now checks several image fields
+  (`image_512/192/72/…`, top-level and nested under `profile`) and both `slack_search_users`
+  + `slack_read_user_profile`, so the profile lookup actually yields a URL instead of
+  coming back empty.
+- **Zoom in the meetings agent — confirmed wired.** `dashboard-granola` pulls Granola +
+  Zoom and merges/dedupes; the kickoff passes your `mcp.zoom` server. (If Zoom items don't
+  appear, it's because the Zoom MCP isn't reachable in the session, not the agent.)
+
+Verified: skills server (full-output capture) + rail popup DOM tests, metrics
+defs→card merge (shows `—` with no fetched value, real value when fetched), and the
+existing editor tests. Bumps `app.jsx` v=53, `dashboard.css` v=17, plugin 0.9.7.
+
+---
+
 ## v0.9.6 — 2026-06-16
 
 **Fix: rail skills now actually run headlessly (like the refresh button).** v0.9.5 piped

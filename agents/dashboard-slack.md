@@ -89,14 +89,18 @@ These two are the dashboard's primary Slack surface, so build them first:
   `suggested` replies. It's fine for an item to also appear in `dms` — the two serve
   different purposes (browse-all vs. act-now).
 
-### 0.5. The user's avatar (`userAvatar`) — one small call
+### 0.5. The user's avatar (`userAvatar`)
 
-Fetch the **authed user's own Slack profile photo** so the dashboard can use it as the
-browser-tab favicon. Resolve a profile tool — `mcp__<server>__slack_read_user_profile`
-(self) or `mcp__<server>__slack_search_users` for the user's own name/email from config —
-and take a small square image URL (prefer `image_192`, else `image_72`/`image_512`). Put
-it in `userAvatar`. One call, best-effort: if it fails, set `userAvatar: ""` and move on —
-never block the refresh on it.
+Fetch the **authed user's own Slack profile photo** for the browser-tab favicon. Be
+thorough — the response shape varies:
+1. Call `mcp__<server>__slack_search_users` with the config `user.email` (then `user.name`),
+   or `mcp__<server>__slack_read_user_profile` for the authed user.
+2. Extract the FIRST present image field, checking **both top level and a nested `profile`
+   object**: `image_512` → `image_192` → `image_72` → `image_1024` → `image_original` →
+   `image_48`. Accept any `https://…` URL (Slack CDN images are public).
+3. Put it in `userAvatar`. Best-effort: if neither tool yields an image, set
+   `userAvatar: ""` and move on — never block the refresh. Don't conclude "no image" after
+   only one field; the URL is usually at `profile.image_192`.
 
 ### 1. The channels list
 

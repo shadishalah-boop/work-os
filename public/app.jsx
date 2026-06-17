@@ -1562,6 +1562,8 @@ function SkillsRailSection({ collapsed }) {
   const [adding, setAdding] = uS(false);
   const [form, setForm] = uS({ label: '', command: '' });
   const [status, setStatus] = uS(null);     // {running,label,ok,last,elapsed}
+  const [result, setResult] = uS(null);     // {label,ok,output} → shown in the popup
+  const [modalOpen, setModalOpen] = uS(false);
   const pollRef = React.useRef(null);
 
   uE(() => {
@@ -1600,17 +1602,25 @@ function SkillsRailSection({ collapsed }) {
     try {
       const s = await (await fetch('/run-skill-status', { cache: 'no-store' })).json();
       setStatus(s);
-      if (!s.running && pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+      if (!s.running) {
+        if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+        // Surface the full result in a readable popup.
+        setResult({ label: s.label, ok: s.ok !== false, output: s.output || s.last || '(no output)' });
+        setModalOpen(true);
+      }
     } catch {}
   };
   const runSkill = async (sk) => {
     setStatus({ running: true, label: sk.label, elapsed: 0 });
+    setResult(null);
     try {
       const r = await fetch('/run-skill', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ command: sk.command, label: sk.label }) });
       if (r.status !== 202 && !r.ok) throw new Error('bad');
       if (!pollRef.current) pollRef.current = setInterval(poll, 2000);
     } catch {
       setStatus({ running: false, ok: false, last: 'Skills run via the dashboard server — open over http://localhost, not as a file.' });
+      setResult({ label: sk.label, ok: false, output: 'This skill runs via the dashboard server. Open the dashboard over http://localhost (not as a file://), then try again.' });
+      setModalOpen(true);
     }
   };
 
@@ -1629,10 +1639,13 @@ function SkillsRailSection({ collapsed }) {
         </div>
       ))}
       {!collapsed && status && (
-        <div className={'d-rail-skill-status ' + (status.running ? 'run' : (status.ok === false ? 'err' : 'ok'))}>
+        <div className={'d-rail-skill-status ' + (status.running ? 'run' : (status.ok === false ? 'err' : 'ok'))}
+             onClick={() => { if (!status.running && result) setModalOpen(true); }}
+             style={!status.running && result ? { cursor: 'pointer', textDecoration: 'underline' } : null}
+             title={!status.running && result ? 'View full result' : undefined}>
           {status.running
             ? `▶ ${status.label || 'Running'}… (${status.elapsed || 0}s)`
-            : (status.ok === false ? `✗ ${status.last || 'failed'}` : `✓ ${status.last || 'done'}`)}
+            : (status.ok === false ? `✗ ${status.label || 'Skill'} failed — view` : `✓ ${status.label || 'Skill'} done — view result`)}
         </div>
       )}
       {!collapsed && (adding ? (
@@ -1652,6 +1665,23 @@ function SkillsRailSection({ collapsed }) {
           <Icon name="plus" size={16}/><span>Add skill</span>
         </div>
       ))}
+
+      {modalOpen && result && (
+        <div className="skill-result-overlay" onClick={() => setModalOpen(false)}>
+          <div className="skill-result-modal" onClick={e => e.stopPropagation()}>
+            <div className="skill-result-head">
+              <span className={'skill-result-badge ' + (result.ok ? 'ok' : 'err')}>{result.ok ? '✓' : '✗'}</span>
+              <span className="skill-result-title">{result.label || 'Skill result'}</span>
+              <button className="skill-result-close" aria-label="Close" onClick={() => setModalOpen(false)}>×</button>
+            </div>
+            <pre className="skill-result-body">{result.output}</pre>
+            <div className="skill-result-foot">
+              <button className="btn btn--ghost btn--sm" onClick={() => { try { navigator.clipboard.writeText(result.output || ''); } catch {} }}>Copy</button>
+              <button className="btn btn--primary btn--sm" onClick={() => setModalOpen(false)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
@@ -2166,23 +2196,30 @@ function RefreshBanner() {
   if (!st || dismissed) return null;
   const running = st.phase === 'running';
   const ok = st.ok;
-  const slow = running && st.elapsed > 150;
-  const bg = running ? 'var(--blue-600, #2f6df6)' : ok ? 'var(--teal-600, #0b9b77)' : 'var(--red-600, #d23f3f)';
-  const icon = running ? '🔄' : ok ? '✓' : '⚠';
-  const msg = running
-    ? `Refreshing your dashboard data…${st.elapsed ? ` (${st.elapsed}s)` : ''}${slow ? ' — taking longer than usual; you can keep working' : ''}`
-    : (ok ? `Refreshed — ${st.last || 'done'}` : `${st.last || 'Refresh failed'}`);
+  const slow = running && st.elapsed > 150;   // > ~2.5 min
+  const accent = running ? 'var(--blue-500, #2f6df6)' : ok ? 'var(--green-600, #1a7f4b)' : 'var(--red-600, #d23f3f)';
+  const icon = running ? '↻' : ok ? '✓' : '⚠';
+  const title = running ? 'Refreshing your dashboard…' : (ok ? 'Dashboard refreshed' : 'Refresh didn’t finish');
+  const detail = running
+    ? `Usually about 2 minutes${st.elapsed ? ` · ${st.elapsed}s` : ''}${slow ? ' · almost there' : ''} — you can keep working`
+    : (st.last || (ok ? 'Done.' : 'It may need an interactive session — run /dashboard in Claude Code.'));
   return (
     <div style={{
-      position: 'fixed', top: 0, left: 0, right: 0, zIndex: 10000, background: bg,
-      color: '#fff', font: '600 13px/1.3 system-ui, -apple-system, sans-serif',
-      padding: '9px 38px 9px 14px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      gap: 10, boxShadow: '0 2px 10px rgba(0,0,0,.18)',
+      position: 'fixed', bottom: 18, right: 18, zIndex: 10000,
+      width: 'min(360px, calc(100vw - 36px))',
+      background: 'var(--bg-surface, #fff)', color: 'var(--fg-1, #1a1a1a)',
+      borderRadius: 12, border: '1px solid var(--border-subtle, #e6e6e6)', borderLeft: `4px solid ${accent}`,
+      boxShadow: '0 8px 28px rgba(0,0,0,.16)',
+      font: '500 13px/1.45 system-ui, -apple-system, sans-serif',
+      padding: '12px 34px 12px 14px', display: 'flex', gap: 10, alignItems: 'flex-start',
     }}>
-      <span style={running ? { display: 'inline-block', animation: 'dash-spin 1s linear infinite' } : null}>{icon}</span>
-      <span style={{ maxWidth: '88%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{msg}</span>
+      <span style={{ fontSize: 15, color: accent, lineHeight: 1.2, ...(running ? { display: 'inline-block', animation: 'dash-spin 1s linear infinite' } : null) }}>{icon}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontWeight: 700, marginBottom: 2 }}>{title}</div>
+        <div style={{ color: 'var(--fg-2, #5a5a5a)', fontSize: 12, maxHeight: 60, overflow: 'hidden' }}>{detail}</div>
+      </div>
       <button onClick={() => setDismissed(true)} aria-label="Dismiss"
-              style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 15, opacity: 0.85, lineHeight: 1 }}>✕</button>
+              style={{ position: 'absolute', right: 10, top: 8, background: 'none', border: 'none', color: 'var(--fg-3, #999)', cursor: 'pointer', fontSize: 16, lineHeight: 1 }}>×</button>
     </div>
   );
 }

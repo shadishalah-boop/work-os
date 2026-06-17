@@ -59,8 +59,9 @@ SLACK_SEND_TIMEOUT = 120  # seconds — a single send is light; bound it tightly
 SKILL_RUN_TIMEOUT = 300  # seconds — hard cap so a stuck skill run always resolves
 
 # Skill-run state — mirrors the refresh state machine (background job + status poll).
-_skill_state = {"running": False, "last": None, "ok": None, "started_at": None, "label": None}
+_skill_state = {"running": False, "last": None, "ok": None, "started_at": None, "label": None, "output": None}
 _skill_lock = threading.Lock()
+SKILL_OUTPUT_CAP = 40000  # chars — enough to read a result in the popup, bounded
 
 
 def _run_refresh():
@@ -180,20 +181,24 @@ def _run_skill(command):
             [LOGIN_SHELL, "-lc", f"bash {shlex.quote(SKILL_RUN)} {shlex.quote(tmp_path)}"],
             capture_output=True, text=True, timeout=SKILL_RUN_TIMEOUT,
         )
+        full = ((proc.stdout or "") + (("\n" + proc.stderr) if proc.stderr else "")).strip()
         out = (proc.stdout or "").strip().splitlines()
         err = (proc.stderr or "").strip().splitlines()
         last = (out[-1] if out else (err[-1] if err else "")).strip()
         with _skill_lock:
             _skill_state["last"] = last or "(done — no output)"
+            _skill_state["output"] = full[:SKILL_OUTPUT_CAP] or "(the skill produced no output)"
             _skill_state["ok"] = proc.returncode == 0
     except subprocess.TimeoutExpired:
         with _skill_lock:
             _skill_state["last"] = (f"Skill timed out after {SKILL_RUN_TIMEOUT // 60} min. "
                                     "It may need an interactive session (connector/consent) — run it in Claude Code.")
+            _skill_state["output"] = _skill_state["last"]
             _skill_state["ok"] = False
     except Exception as e:
         with _skill_lock:
             _skill_state["last"] = f"skill error: {e}"
+            _skill_state["output"] = _skill_state["last"]
             _skill_state["ok"] = False
     finally:
         if tmp_path:
@@ -290,6 +295,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 _skill_state["running"] = True
                 _skill_state["ok"] = None
                 _skill_state["last"] = None
+                _skill_state["output"] = None
                 _skill_state["started_at"] = time.time()
                 _skill_state["label"] = (body.get("label") or command)
             threading.Thread(target=_run_skill, args=(command,), daemon=True).start()
