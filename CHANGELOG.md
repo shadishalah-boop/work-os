@@ -14,6 +14,30 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.9.5 — 2026-06-16
+
+**Run your Claude skills from the dashboard's left rail.** A new **Skills** section in the
+sidebar lets each user add their own skill shortcuts and launch them with one click —
+**run headlessly via the local server, the exact same way as the refresh button**
+(`POST /run-skill` → `claude -p … --permission-mode bypassPermissions` → poll
+`/run-skill-status`, with an inline ▶/✓/✗ status line).
+
+- **Add skill** form right in the rail (label + `/command`), saved to
+  `~/.claude/dashboard-skills.local.json` via the server (localStorage fallback). Bare
+  names are normalized to a slash command.
+- New `skill-run-headless.sh` (mirrors `refresh-headless.sh`/`slack-send-headless.sh`) +
+  `serve.py` `GET/POST /skills-config`, `POST /run-skill`, `GET /run-skill-status`.
+- Same honest caveat as the refresh button: headless runs can't see claude.ai-managed
+  connectors, so connector-dependent skills should be run in an interactive session;
+  self-contained skills work one-click.
+
+Verified: 8 server checks (skills-config round-trip + validation; run-skill starts,
+executes, relays output via status poll) and 9 rail DOM checks (add → normalize → persist
+→ render → run → status resolves to done). Bumps `app.jsx` v=52, `dashboard-d.css` v=21,
+plugin 0.9.5.
+
+---
+
 ## v0.9.4 — 2026-06-16
 
 **Snowflake metrics: just describe them — no SQL required.** You can now add a Snowflake

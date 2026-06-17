@@ -152,6 +152,28 @@
   width: 1px; height: 20px; background: var(--d-border);
 }
 
+/* -------- Left-rail Skills section -------- */
+.layout-d .d-rail-skill { position: relative; cursor: pointer; }
+.layout-d .d-rail-skill > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.layout-d .d-rail-skill-x {
+  margin-left: auto; border: none; background: transparent; color: var(--fg-3);
+  cursor: pointer; font-size: 14px; line-height: 1; padding: 0 2px; opacity: 0;
+}
+.layout-d .d-rail-skill:hover .d-rail-skill-x { opacity: 0.8; }
+.layout-d .d-rail-skill-x:hover { color: var(--red-600); opacity: 1; }
+.layout-d .d-rail-skill-addbtn { cursor: pointer; color: var(--fg-2); }
+.layout-d .d-rail-skill-addbtn:hover { color: var(--fg-1); }
+.layout-d .d-rail-skill-status {
+  font-size: 11px; line-height: 1.35; padding: 4px 12px; margin: 2px 0;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.layout-d .d-rail-skill-status.run { color: var(--fg-2); }
+.layout-d .d-rail-skill-status.ok  { color: var(--green-600, #1a7f4b); }
+.layout-d .d-rail-skill-status.err { color: var(--red-600); }
+.layout-d .d-rail-skill-add { display: grid; gap: 6px; padding: 6px 12px; }
+.layout-d .d-rail-skill-add .metric-in { width: 100%; }
+.layout-d .d-rail[data-collapsed="true"] .d-rail-skill-x { display: none; }
+
 /* -------- App quick links (Calendar / Gmail / Slack / Drive) -------- */
 .layout-d .d-app-links {
   display: flex; align-items: center; gap: 4px;

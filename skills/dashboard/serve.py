@@ -43,9 +43,12 @@ DASH_DIR = sys.argv[2] if len(sys.argv) > 2 else os.getcwd()
 SKILL_DIR = os.path.dirname(os.path.abspath(__file__))
 REFRESH = os.path.join(SKILL_DIR, "refresh-headless.sh")
 SLACK_SEND = os.path.join(SKILL_DIR, "slack-send-headless.sh")
+SKILL_RUN = os.path.join(SKILL_DIR, "skill-run-headless.sh")
 # Custom Metrics-card definitions — the on-dashboard editor reads/writes this; the
 # refresh agent reads it to know what to fetch from Looker/Snowflake.
 METRICS_FILE = os.path.expanduser("~/.claude/dashboard-metrics.local.json")
+# Left-rail skill shortcuts — the on-dashboard "Add skill" form reads/writes this.
+SKILLS_FILE = os.path.expanduser("~/.claude/dashboard-skills.local.json")
 LOGIN_SHELL = "/bin/zsh" if os.path.exists("/bin/zsh") else "/bin/bash"
 
 _state = {"running": False, "last": None, "ok": None, "started_at": None}
@@ -53,6 +56,11 @@ _lock = threading.Lock()
 
 REFRESH_TIMEOUT = 300  # seconds — hard cap so a stuck refresh always resolves (~5 min)
 SLACK_SEND_TIMEOUT = 120  # seconds — a single send is light; bound it tightly
+SKILL_RUN_TIMEOUT = 300  # seconds — hard cap so a stuck skill run always resolves
+
+# Skill-run state — mirrors the refresh state machine (background job + status poll).
+_skill_state = {"running": False, "last": None, "ok": None, "started_at": None, "label": None}
+_skill_lock = threading.Lock()
 
 
 def _run_refresh():
@@ -160,6 +168,43 @@ def _run_slack_send(text, permalink, channel, result):
                 pass
 
 
+def _run_skill(command):
+    """Run a skill/command headlessly (mirrors _run_refresh): write the invocation to a
+    temp prompt file, run skill-run-headless.sh through a login shell, record the result."""
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as f:
+            f.write(command)
+            tmp_path = f.name
+        proc = subprocess.run(
+            [LOGIN_SHELL, "-lc", f"bash {shlex.quote(SKILL_RUN)} {shlex.quote(tmp_path)}"],
+            capture_output=True, text=True, timeout=SKILL_RUN_TIMEOUT,
+        )
+        out = (proc.stdout or "").strip().splitlines()
+        err = (proc.stderr or "").strip().splitlines()
+        last = (out[-1] if out else (err[-1] if err else "")).strip()
+        with _skill_lock:
+            _skill_state["last"] = last or "(done — no output)"
+            _skill_state["ok"] = proc.returncode == 0
+    except subprocess.TimeoutExpired:
+        with _skill_lock:
+            _skill_state["last"] = (f"Skill timed out after {SKILL_RUN_TIMEOUT // 60} min. "
+                                    "It may need an interactive session (connector/consent) — run it in Claude Code.")
+            _skill_state["ok"] = False
+    except Exception as e:
+        with _skill_lock:
+            _skill_state["last"] = f"skill error: {e}"
+            _skill_state["ok"] = False
+    finally:
+        if tmp_path:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+        with _skill_lock:
+            _skill_state["running"] = False
+
+
 class Handler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *a, **k):
         super().__init__(*a, directory=DASH_DIR, **k)
@@ -221,6 +266,34 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return self._json(200, {"ok": True, "count": len(items)})
             except Exception as e:
                 return self._json(500, {"ok": False, "message": f"write error: {e}"})
+        if path == "/skills-config":
+            body = self._read_json_body()
+            items = body.get("items")
+            if not isinstance(items, list):
+                return self._json(400, {"ok": False, "message": "expected {items: [...]}"})
+            try:
+                os.makedirs(os.path.dirname(SKILLS_FILE), exist_ok=True)
+                with open(SKILLS_FILE, "w") as f:
+                    json.dump({"items": items}, f, indent=2)
+                return self._json(200, {"ok": True, "count": len(items)})
+            except Exception as e:
+                return self._json(500, {"ok": False, "message": f"write error: {e}"})
+        if path == "/run-skill":
+            # Launch a skill headlessly, EXACTLY like /refresh: background job + status poll.
+            body = self._read_json_body()
+            command = (body.get("command") or "").strip()
+            if not command:
+                return self._json(400, {"ok": False, "message": "no command"})
+            with _skill_lock:
+                if _skill_state["running"]:
+                    return self._json(202, {"status": "already-running", "label": _skill_state.get("label")})
+                _skill_state["running"] = True
+                _skill_state["ok"] = None
+                _skill_state["last"] = None
+                _skill_state["started_at"] = time.time()
+                _skill_state["label"] = (body.get("label") or command)
+            threading.Thread(target=_run_skill, args=(command,), daemon=True).start()
+            return self._json(202, {"status": "started"})
         self.send_error(404)
 
     def do_GET(self):
@@ -239,6 +312,21 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return self._json(200, {"items": []})
             except Exception as e:
                 return self._json(200, {"items": [], "error": str(e)})
+        if self.path.rstrip("/") == "/skills-config":
+            try:
+                if os.path.exists(SKILLS_FILE):
+                    with open(SKILLS_FILE) as f:
+                        data = json.load(f)
+                    items = data.get("items") if isinstance(data, dict) else None
+                    return self._json(200, {"items": items if isinstance(items, list) else []})
+                return self._json(200, {"items": []})
+            except Exception as e:
+                return self._json(200, {"items": [], "error": str(e)})
+        if self.path.rstrip("/") == "/run-skill-status":
+            with _skill_lock:
+                s = dict(_skill_state)
+            s["elapsed"] = int(time.time() - s["started_at"]) if s.get("started_at") else 0
+            return self._json(200, s)
         return super().do_GET()
 
 

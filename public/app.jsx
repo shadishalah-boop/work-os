@@ -1553,6 +1553,109 @@ function LayoutFocusFlow({ tod }) {
 // =============================================================================
 // LAYOUT D — Modern SaaS · expanded sidebar, top bar with search, polished cards
 // =============================================================================
+// Left-rail "Skills" section: users add their own Claude skills and launch them with one
+// click — run headlessly via the local server, EXACTLY like the refresh button
+// (POST /run-skill → claude -p, poll /run-skill-status). Definitions persist to
+// ~/.claude/dashboard-skills.local.json (with a localStorage fallback when not served).
+function SkillsRailSection({ collapsed }) {
+  const [items, setItems] = uS(null);       // null = still loading
+  const [adding, setAdding] = uS(false);
+  const [form, setForm] = uS({ label: '', command: '' });
+  const [status, setStatus] = uS(null);     // {running,label,ok,last,elapsed}
+  const pollRef = React.useRef(null);
+
+  uE(() => {
+    let alive = true;
+    fetch('/skills-config', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : { items: null })
+      .then(d => {
+        if (!alive) return;
+        if (Array.isArray(d.items)) { setItems(d.items); return; }
+        throw new Error('no server list');
+      })
+      .catch(() => {
+        try { const ls = JSON.parse(localStorage.getItem('dashboard.skills.v1') || '[]'); setItems(Array.isArray(ls) ? ls : []); }
+        catch { setItems([]); }
+      });
+    return () => { alive = false; };
+  }, []);
+  uE(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
+
+  const persist = async (next) => {
+    setItems(next);
+    try { localStorage.setItem('dashboard.skills.v1', JSON.stringify(next)); } catch {}
+    try { await fetch('/skills-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: next }) }); } catch {}
+  };
+  const addSkill = async () => {
+    const label = (form.label || '').trim();
+    let command = (form.command || '').trim();
+    if (!label || !command) return;
+    if (!command.startsWith('/')) command = '/' + command;   // normalize to a slash command
+    await persist([...(items || []), { id: 's' + Date.now(), label, command }]);
+    setForm({ label: '', command: '' }); setAdding(false);
+  };
+  const removeSkill = (id) => persist((items || []).filter(s => s.id !== id));
+
+  const poll = async () => {
+    try {
+      const s = await (await fetch('/run-skill-status', { cache: 'no-store' })).json();
+      setStatus(s);
+      if (!s.running && pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    } catch {}
+  };
+  const runSkill = async (sk) => {
+    setStatus({ running: true, label: sk.label, elapsed: 0 });
+    try {
+      const r = await fetch('/run-skill', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ command: sk.command, label: sk.label }) });
+      if (r.status !== 202 && !r.ok) throw new Error('bad');
+      if (!pollRef.current) pollRef.current = setInterval(poll, 2000);
+    } catch {
+      setStatus({ running: false, ok: false, last: 'Skills run via the dashboard server — open over http://localhost, not as a file.' });
+    }
+  };
+
+  if (items === null) return null;
+
+  return (
+    <>
+      <div className="d-rail-section">Skills</div>
+      {items.map(sk => (
+        <div key={sk.id} className="d-rail-item d-rail-skill" title={collapsed ? sk.label : sk.command}
+             onClick={() => runSkill(sk)}>
+          <Icon name="sparkle" size={16}/>
+          <span>{sk.label}</span>
+          <button className="d-rail-skill-x" aria-label="Remove skill" title="Remove"
+                  onClick={(e) => { e.stopPropagation(); removeSkill(sk.id); }}>×</button>
+        </div>
+      ))}
+      {!collapsed && status && (
+        <div className={'d-rail-skill-status ' + (status.running ? 'run' : (status.ok === false ? 'err' : 'ok'))}>
+          {status.running
+            ? `▶ ${status.label || 'Running'}… (${status.elapsed || 0}s)`
+            : (status.ok === false ? `✗ ${status.last || 'failed'}` : `✓ ${status.last || 'done'}`)}
+        </div>
+      )}
+      {!collapsed && (adding ? (
+        <div className="d-rail-skill-add" onClick={e => e.stopPropagation()}>
+          <input className="metric-in" placeholder="Label (e.g. Weekly report)" value={form.label}
+                 onChange={e => setForm({ ...form, label: e.target.value })}/>
+          <input className="metric-in" placeholder="/command" value={form.command}
+                 onChange={e => setForm({ ...form, command: e.target.value })}
+                 onKeyDown={e => { if (e.key === 'Enter') addSkill(); }}/>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button className="btn btn--primary btn--sm" onClick={addSkill}>Add</button>
+            <button className="btn btn--ghost btn--sm" onClick={() => { setAdding(false); setForm({ label: '', command: '' }); }}>Cancel</button>
+          </div>
+        </div>
+      ) : (
+        <div className="d-rail-item d-rail-skill-addbtn" onClick={() => setAdding(true)} title="Add a skill">
+          <Icon name="plus" size={16}/><span>Add skill</span>
+        </div>
+      ))}
+    </>
+  );
+}
+
 function ModernRail({ active = 'home', collapsed, onToggle, onResize }) {
   const sections = [
     { label: 'Workspace', items: [
@@ -1618,6 +1721,7 @@ function ModernRail({ active = 'home', collapsed, onToggle, onResize }) {
           ))}
         </React.Fragment>
       ))}
+      <SkillsRailSection collapsed={collapsed}/>
       <div className="d-rail-user">
         <span className="pds-avatar size-32">
           <img src={(window.SEED && window.SEED.user && window.SEED.user.avatarUrl) || 'ds/assets/avatar-default.svg'} alt={(window.SEED && window.SEED.user && window.SEED.user.name) || 'You'}/>

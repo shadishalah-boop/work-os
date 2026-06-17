@@ -1,0 +1,12 @@
+{
+  "_README": [
+    "Left-rail skill shortcuts for the Work Dashboard. Each one becomes a clickable item under 'Skills' in the sidebar; clicking it RUNS the skill headlessly via the local server — the same mechanism as the dashboard's refresh button (claude -p, bypassPermissions).",
+    "Easiest: use the dashboard's 'Add skill' button in the rail — it writes this file for you. Or COPY this to ~/.claude/dashboard-skills.local.json and hand-edit.",
+    "Each item: a 'label' (what shows in the rail) and a 'command' (the slash command to run, e.g. /my-skill or /my-skill some args).",
+    "CAVEAT: headless runs can't see claude.ai-managed connectors (same as the refresh button). Skills that are self-contained (local compute/files, or MCPs that load headlessly) work; skills that need an interactive connector/consent should be run in a Claude Code session instead."
+  ],
+  "items": [
+    { "id": "s1", "label": "Refresh dashboard", "command": "/dashboard" },
+    { "id": "s2", "label": "Weekly report",     "command": "/my-weekly-report" }
+  ]
+}
