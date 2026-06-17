@@ -495,13 +495,15 @@ function CalendarMod({ data, next }) {
     <Module title="Today" sub={`${_dateLabel} · ${_eventCount} event${_eventCount===1?'':'s'}`}
             icon={<span style={{width:28, height:28, borderRadius:8, background:'var(--grey-100)', display:'grid', placeItems:'center'}}><Icon name="calendar" size={16}/></span>}
             action="Week view" actionHref="https://calendar.google.com/calendar/u/0/r/week">
-      <div className="countdown">
-        <div className="cd-l">
-          <div className="cd-title">{next.title}</div>
-          <div className="cd-sub">with {next.with} · {next.room}</div>
+      {next && next.title && next.startsIn != null && next.startsIn > 0 && (
+        <div className="countdown">
+          <div className="cd-l">
+            <div className="cd-title">{next.title}</div>
+            <div className="cd-sub">with {next.with}{next.room ? ` · ${next.room}` : ''}</div>
+          </div>
+          <div className="cd-big">{next.startsIn}m</div>
         </div>
-        <div className="cd-big">{next.startsIn}m</div>
-      </div>
+      )}
       <div style={{marginTop:4}}>
         {data.map((e, idx) => {
           const toMin = (t) => { const [h,m] = t.split(':').map(Number); return h*60+m; };

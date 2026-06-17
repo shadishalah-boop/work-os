@@ -253,14 +253,46 @@ def _extract_json_array(text):
     return None
 
 
+def _user_name_keys():
+    """Load the dashboard owner's name(s) from the config so we can skip them in
+    the imported roster. Best-effort; if the config is unreadable we just skip
+    the filter (build-overrides applies the same filter as a backstop)."""
+    try:
+        cfg_path = os.path.expanduser("~/.claude/dashboard-config.local")
+        if not os.path.exists(cfg_path):
+            return set()
+        with open(cfg_path) as f:
+            cfg = json.load(f)
+        u = (cfg.get("user") or {}) if isinstance(cfg, dict) else {}
+        keys = set()
+        for n in [u.get("name"), u.get("fullName")]:
+            n = (n or "").strip().lower()
+            if not n:
+                continue
+            keys.add(n)
+            first = n.split()[0]
+            if len(first) >= 3:
+                keys.add(first)
+        return keys
+    except Exception:
+        return set()
+
+
 def _normalize_people(raw):
-    """Coerce the extracted array into the dashboard's team-person shape."""
+    """Coerce the extracted array into the dashboard's team-person shape, and drop
+    the dashboard owner — their card is usually on the Personio chart but they
+    shouldn't end up in their own team."""
+    self_keys = _user_name_keys()
     people = []
     for p in (raw or []):
         if not isinstance(p, dict):
             continue
         name = (p.get("name") or "").strip()
         if not name:
+            continue
+        lc = name.lower()
+        first = lc.split()[0] if lc else ""
+        if lc in self_keys or (first and first in self_keys):
             continue
         status = (p.get("status") or "in").strip().lower()
         person = {

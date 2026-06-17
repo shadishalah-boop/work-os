@@ -2421,7 +2421,11 @@ function SettingsButton() {
                 </div>
               </div>
               <div className="settings-group">
-                <div className="settings-label">Show modules</div>
+                <div className="settings-label-row">
+                  <span className="settings-label">Show modules</span>
+                  <button className="settings-mini-btn" onClick={() => set('hiddenModules', [])}>Select all</button>
+                  <button className="settings-mini-btn" onClick={() => set('hiddenModules', SETTABLE_MODULES.slice())}>Select none</button>
+                </div>
                 <div className="settings-modules">
                   {SETTABLE_MODULES.map(id => (
                     <label key={id} className="settings-check">
@@ -2430,6 +2434,7 @@ function SettingsButton() {
                     </label>
                   ))}
                 </div>
+                <div className="settings-hint">Hidden modules reflow the remaining cards to the top — no gaps left behind.</div>
               </div>
             </div>
           </div>
@@ -2549,7 +2554,6 @@ function LayoutModernSaaS({ tod }) {
     setTimeout(() => setJustSaved(false), 1800);
   };
 
-  const onBoxChange    = (id, next) => setBoxes(prev => prev.map(b => b.id === id ? { ...b, ...next } : b));
   const onBoxDragStart = (id) => setActiveId(id);
   const onBoxDragEnd   = () => setActiveId(null);
   const resetLayout    = () => {
@@ -2571,9 +2575,49 @@ function LayoutModernSaaS({ tod }) {
     };
   }, [boxes, savedSnapshot]);
 
-  const canvasH = boxes.reduce((acc, b) => Math.max(acc, b.top + b.height), 0) + 32;
-  const canvasW = boxes.reduce((acc, b) => Math.max(acc, b.left + b.width), 0);
-  const visibleBoxes = boxes.filter(b => !hiddenMods.includes(b.id));
+  // Compact reflow: when modules are hidden via Settings, the remaining visible
+  // ones get packed into a tight 2-column grid (left=720 wide, right=400 wide,
+  // 16px gutter) in their canonical DEFAULT_D_BOXES order, instead of leaving
+  // gaps where the hidden ones used to live. Skipped when nothing is hidden so
+  // the user's saved arrangement is preserved.
+  const reflowed = uM(() => {
+    if (!hiddenMods.length) return boxes;
+    const order = DEFAULT_D_BOXES.map(d => d.id);
+    const visible = order
+      .filter(id => !hiddenMods.includes(id))
+      .map(id => boxes.find(b => b.id === id))
+      .filter(Boolean);
+    let leftY = 0, rightY = 0;
+    return visible.map(b => {
+      const def = DEFAULT_D_BOXES.find(d => d.id === b.id) || b;
+      const onLeft = def.left === 0;
+      if (onLeft) {
+        const next = { ...b, left: 0, top: leftY, width: 720, height: def.height };
+        leftY += def.height + 16;
+        return next;
+      }
+      const next = { ...b, left: 736, top: rightY, width: 400, height: def.height };
+      rightY += def.height + 16;
+      return next;
+    });
+  }, [boxes, hiddenMods]);
+
+  const canvasH = reflowed.reduce((acc, b) => Math.max(acc, b.top + b.height), 0) + 32;
+  const canvasW = reflowed.reduce((acc, b) => Math.max(acc, b.left + b.width), 0);
+  const visibleBoxes = reflowed.filter(b => !hiddenMods.includes(b.id));
+
+  // Overlap-aware change handler: if a move/resize would overlap another visible
+  // box, reject it (keep the previous position). Snap rather than freely stack —
+  // dragging a card on top of another is almost always a user mistake.
+  const overlaps = (a, b) => !(a.left + a.width  <= b.left || b.left + b.width  <= a.left
+                            || a.top  + a.height <= b.top  || b.top  + b.height <= a.top);
+  const onBoxChangeSafe = (id, next) => {
+    const proposed = { ...boxes.find(b => b.id === id), ...next };
+    const others = visibleBoxes.filter(b => b.id !== id);
+    if (others.some(o => overlaps(proposed, o))) return;   // reject: would overlap
+    setBoxes(prev => prev.map(b => b.id === id ? { ...b, ...next } : b));
+  };
+
   const ordered = activeId
     ? [...visibleBoxes.filter(b => b.id !== activeId), visibleBoxes.find(b => b.id === activeId)].filter(Boolean)
     : visibleBoxes;
@@ -2730,7 +2774,7 @@ function LayoutModernSaaS({ tod }) {
             <div className="box-canvas" style={{ height: canvasH, minWidth: canvasW }}>
               {ordered.map(b => (
                 <DraggableBox key={b.id} id={b.id} box={b}
-                              onChange={onBoxChange}
+                              onChange={onBoxChangeSafe}
                               onDragStart={onBoxDragStart}
                               onDragEnd={onBoxDragEnd}>
                   {renderModule(b.id)}

@@ -1144,8 +1144,47 @@ function TeamMod({ data }) {
   const [drag, setDrag] = useStateB(false);
   const [imp, setImp] = useStateB({ status: 'idle', msg: null });  // idle|running|ok|err
   const [served, setServed] = useStateB(false);
+  // Manually-removed people (per-name, localStorage). Survives /dashboard refreshes
+  // so a deleted teammate doesn't keep reappearing every time the agent reruns.
+  const REMOVED_KEY = 'dashboard.peopleRemoved.v1';
+  const [removed, setRemoved] = useStateB(() => {
+    try { return new Set(JSON.parse(localStorage.getItem(REMOVED_KEY) || '[]')); } catch { return new Set(); }
+  });
+  const removePerson = (name) => {
+    const next = new Set(removed); next.add((name || '').toLowerCase());
+    try { localStorage.setItem(REMOVED_KEY, JSON.stringify(Array.from(next))); } catch {}
+    setRemoved(next);
+  };
+  const restoreAll = () => {
+    try { localStorage.removeItem(REMOVED_KEY); } catch {}
+    setRemoved(new Set());
+  };
   const pollRef = React.useRef(null);
   const fileRef = React.useRef(null);
+
+  // Identify the current user so the importer doesn't add them to their own team
+  // (their face usually appears on the Personio org chart). Match against the
+  // configured full name and first name, case-insensitively.
+  const userNames = useMemoB(() => {
+    const u = (window.SEED && window.SEED.user) || {};
+    const candidates = [u.fullName, u.name].filter(Boolean);
+    const out = new Set();
+    candidates.forEach(n => {
+      const s = String(n).trim().toLowerCase();
+      if (!s) return;
+      out.add(s);
+      const first = s.split(/\s+/)[0];
+      if (first && first.length >= 3) out.add(first);
+    });
+    return out;
+  }, []);
+  const isSelf = (name) => {
+    const s = (name || '').trim().toLowerCase();
+    if (!s) return false;
+    if (userNames.has(s)) return true;
+    const first = s.split(/\s+/)[0];
+    return first && userNames.has(first);
+  };
 
   // Detect the local server via /refresh-status (present in every serve.py version);
   // hydrate any previously-imported roster separately so a stale server that lacks
@@ -1157,19 +1196,30 @@ function TeamMod({ data }) {
       .catch(() => {});
     fetch('/team-config', { cache: 'no-store' })
       .then(r => r.ok ? r.json() : null)
-      .then(d => { if (alive && d && Array.isArray(d.people) && d.people.length) setImported(d.people); })
+      .then(d => {
+        if (alive && d && Array.isArray(d.people) && d.people.length) {
+          setImported(d.people.filter(p => !isSelf(p && p.name)));
+        }
+      })
       .catch(() => {});
     return () => { alive = false; if (pollRef.current) clearInterval(pollRef.current); };
   }, []);
 
-  // Merge config + imported by name (imported wins so a fresh drop updates a person).
+  // Merge config + imported by name. Drop the current user (their face is on the
+  // org chart but it's their OWN team they're tracking, not themselves) and any
+  // names the user has removed via the × button.
   const people = useMemoB(() => {
-    if (!imported || !imported.length) return basePeople;
+    const drop = (p) => {
+      const k = (p && p.name || '').toLowerCase();
+      return !k || isSelf(k) || removed.has(k);
+    };
+    const base = basePeople.filter(p => !drop(p));
+    if (!imported || !imported.length) return base;
     const byName = new Map();
-    basePeople.forEach(p => byName.set((p.name || '').toLowerCase(), p));
-    imported.forEach(p => byName.set((p.name || '').toLowerCase(), { ...byName.get((p.name || '').toLowerCase()), ...p }));
+    base.forEach(p => byName.set((p.name || '').toLowerCase(), p));
+    imported.filter(p => !drop(p)).forEach(p => byName.set((p.name || '').toLowerCase(), { ...byName.get((p.name || '').toLowerCase()), ...p }));
     return Array.from(byName.values());
-  }, [basePeople, imported]);
+  }, [basePeople, imported, removed, userNames]);
 
   const pollStatus = async () => {
     try {
@@ -1177,8 +1227,13 @@ function TeamMod({ data }) {
       if (!s.running) {
         if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
         if (s.ok && Array.isArray(s.people)) {
-          setImported(s.people);
-          setImp({ status: 'ok', msg: s.message || `Imported ${s.people.length} people` });
+          // Filter out the user themselves — their card on the org chart is them,
+          // not a teammate to track. (build-overrides also filters server-side.)
+          const filtered = s.people.filter(p => !isSelf(p && p.name));
+          setImported(filtered);
+          const skipped = s.people.length - filtered.length;
+          const note = skipped ? ` (skipped you on the chart)` : '';
+          setImp({ status: 'ok', msg: (s.message || `Imported ${filtered.length} people`) + note });
         } else {
           setImp({ status: 'err', msg: s.message || 'Could not read that image.' });
         }
@@ -1268,9 +1323,14 @@ function TeamMod({ data }) {
               <div className="team-status">{p.note}{p.group ? (p.note ? ' · ' : '') + p.group : ''}</div>
             </div>
             <span className="team-dot" data-s={p.status}/>
+            <button className="team-remove" aria-label={`Remove ${p.name}`} title={`Remove ${p.name} from your team`}
+                    onClick={(e) => { e.stopPropagation(); removePerson(p.name); }}>×</button>
           </div>
         ))}
       </div>
+      {removed.size > 0 && (
+        <div className="team-removed-strip">{removed.size} hidden · <button className="link-btn" onClick={restoreAll}>restore</button></div>
+      )}
     </Module>
   );
 }
@@ -1404,16 +1464,27 @@ function BlockersMod({ data }) {
           Nothing blocked right now. Blockers from Slack incidents and meeting notes land here after a refresh.
         </div>
       )}
-      {rows.map((r, i) => (
-        <div key={i} className="block-row" data-sev={r.sev}>
-          <div className="block-icon">{r.icon}</div>
-          <div>
-            <div className="block-title">{r.title}</div>
-            <div className="block-meta">{r.meta}</div>
+      {rows.map((r, i) => {
+        // Open priority: explicit permalink/href on the blocker → Slack/source search
+        // for the title → noop. The Slack agent ships permalinks for incident-channel
+        // blockers; older runs may not, so we fall back to a workspace search.
+        const ws = (window.SEED && window.SEED.slack && window.SEED.slack.workspace) || '';
+        const fallback = ws
+          ? `https://${ws}.slack.com/search/${encodeURIComponent(r.title || '')}`
+          : `https://www.google.com/search?q=${encodeURIComponent(r.title || '')}`;
+        const href = r.permalink || r.href || fallback;
+        return (
+          <div key={i} className="block-row" data-sev={r.sev}>
+            <div className="block-icon">{r.icon}</div>
+            <div>
+              <div className="block-title">{r.title}</div>
+              <div className="block-meta">{r.meta}</div>
+            </div>
+            <a className="btn btn--tertiary btn--xs" href={href} target="_blank" rel="noreferrer"
+               title={r.permalink || r.href ? 'Open in source' : 'Search the workspace for this incident'}>Open</a>
           </div>
-          <button className="btn btn--tertiary btn--xs">Open</button>
-        </div>
-      ))}
+        );
+      })}
     </Module>
   );
 }

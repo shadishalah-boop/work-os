@@ -199,7 +199,7 @@ Write the result to `<dataCacheDir>/slack.json` using the **Write tool**. A sing
   ],
   "activeThreads": [],
   "blockers": [
-    { "sev": "high", "title": "OOM incident in #incident-2205", "meta": "Slack · 9h debate · still open", "icon": "!" }
+    { "sev": "high", "title": "OOM incident in #incident-2205", "meta": "Slack · 9h debate · still open", "icon": "!", "permalink": "https://your-workspace.slack.com/archives/C0INCIDENT2205" }
   ],
   "shipped": [
     { "id": "s1", "title": "4 msgs pushed #supply-brand thread forward", "meta": "Slack · today · brand" }
@@ -223,6 +223,7 @@ Write the result to `<dataCacheDir>/slack.json` using the **Write tool**. A sing
 - `activeThreads` — **always emit `[]`**. Removed in the speed-tuning pass.
 - `suggested` — 2–3 possible next actions the user could take; set `primary: true` on the top recommendation.
 - `blockers.icon` — `!` for high severity, `•` for medium.
+- `blockers.permalink` — link the dashboard's "Open" button jumps to. Use the matching search-result permalink, or the channel URL `https://<workspace>.slack.com/archives/<CHANNEL_ID>` if the result has none.
 - `shipped.meta` — `Slack · today · <theme>` where theme is one of: `brand | product | infra | ops | strategy`.
 
 ## Rules

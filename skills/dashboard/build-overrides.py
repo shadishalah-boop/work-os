@@ -112,7 +112,22 @@ def load_imported_team():
     return []
 
 
-_imported_team = load_imported_team()
+# Don't add the dashboard's owner to their own team — their face usually appears
+# on the Personio org chart. Match against full name + first name (>= 3 chars).
+def _is_self(name, user):
+    s = (name or "").strip().lower()
+    if not s:
+        return False
+    u_full = (user.get("name") or "").strip().lower()
+    u_first = u_full.split()[0] if u_full else ""
+    if u_full and s == u_full:
+        return True
+    if u_first and len(u_first) >= 3 and s.split()[0:1] == [u_first]:
+        return True
+    return False
+
+
+_imported_team = [p for p in load_imported_team() if not _is_self(p.get("name"), STATIC_USER)]
 if _imported_team:
     # Merge by name (config entries win on conflict so hand-curated notes stay).
     _existing = STATIC_TEAM.get("people") if isinstance(STATIC_TEAM, dict) else None

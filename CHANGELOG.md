@@ -14,6 +14,31 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.12.6 — 2026-06-17
+
+Layout, settings and People fixes from the follow-up review:
+
+1. **Boxes can't be dropped on top of each other.** Move/resize now rejects any
+   change that would overlap another visible card — it snaps to the last valid
+   position instead of stacking.
+2. **Hidden modules reflow to the top.** When you uncheck modules in Settings the
+   remaining cards repack into a tight 2-column grid (left = 720, right = 400),
+   no more leftover gaps where a hidden card used to live.
+3. **Settings has Select all / Select none.** Plus a short hint explaining the
+   reflow behaviour.
+4. **Calendar "Nothing else today / 0m" card is gone** when there's no upcoming
+   meeting. The countdown only shows when there's something to count down to.
+5. **Risks & blockers "Open" actually opens.** The button is now a link that goes
+   to the source permalink (or a workspace search as a fallback). The Slack
+   agent now emits a `permalink` on each blocker.
+6. **People: remove + drop self.** Each card has a × to remove someone (persisted
+   in localStorage, with a "restore" link). The Personio import drops the
+   dashboard owner (their card on the org chart is them, not a teammate to
+   track) — both client-side and in `build-overrides.py` / `serve.py` so the
+   self-filter holds across refreshes.
+
+---
+
 ## v0.12.5 — 2026-06-17
 
 **Photo import "server out of date" fix.** The root cause: `/dashboard` (refresh)

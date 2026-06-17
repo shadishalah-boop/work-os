@@ -2667,3 +2667,35 @@ html[data-theme="dark"] .team-onboard { background: rgba(234,179,8,0.18); color:
 
 html[data-theme="dark"] .kpi-tf { background: var(--grey-200); color: var(--fg-2); }
 html[data-theme="dark"] .kpi-yhi, html[data-theme="dark"] .kpi-ylo { background: var(--grey-100); }
+
+/* ==========================================================================
+   v0.12.6 — settings select-all/reflow hint, team remove X
+   ========================================================================== */
+.settings-label-row { display: flex; align-items: center; gap: 10px; }
+.settings-label-row .settings-label { margin: 0; }
+.settings-mini-btn {
+  border: 1px solid var(--border-default); background: transparent; color: var(--fg-2);
+  font-size: 11px; padding: 2px 8px; border-radius: 6px; cursor: pointer;
+}
+.settings-mini-btn:hover { background: var(--grey-100); color: var(--fg-1); }
+.settings-hint { font-size: 11px; color: var(--fg-3); margin-top: 8px; line-height: 1.4; }
+html[data-theme="dark"] .settings-mini-btn { border-color: var(--border-default); }
+html[data-theme="dark"] .settings-mini-btn:hover { background: var(--grey-200); }
+
+.team-person { position: relative; }
+.team-remove {
+  position: absolute; top: 4px; right: 4px;
+  border: none; background: transparent; color: var(--fg-3);
+  font-size: 14px; line-height: 1; padding: 2px 5px; border-radius: 4px;
+  cursor: pointer; opacity: 0; transition: opacity 120ms;
+}
+.team-person:hover .team-remove { opacity: 0.7; }
+.team-remove:hover { opacity: 1; background: var(--red-50); color: var(--red-600); }
+html[data-theme="dark"] .team-remove:hover { background: rgba(239,68,68,0.18); color: #f87171; }
+.team-removed-strip {
+  margin-top: 10px; padding: 6px 10px; font-size: 11px; color: var(--fg-3);
+  background: var(--grey-50); border-radius: 6px; text-align: center;
+}
+html[data-theme="dark"] .team-removed-strip { background: var(--grey-100); }
+.link-btn { background: none; border: none; color: var(--fg-2); cursor: pointer; padding: 0; font: inherit; text-decoration: underline; }
+.link-btn:hover { color: var(--fg-1); }
