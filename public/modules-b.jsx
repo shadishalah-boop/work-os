@@ -21,6 +21,26 @@ function SlackMod({ data }) {
   const armTimerRef = React.useRef(null);
   const disarm = () => { if (armTimerRef.current) clearTimeout(armTimerRef.current); setArmedSug(null); };
 
+  // Read-state (client-side): marking a message read drops it out of "Missed".
+  const SLACK_READ_KEY = 'dashboard.slackRead.v1';
+  const [readSet, setReadSet] = useStateB(() => {
+    try { return JSON.parse(localStorage.getItem(SLACK_READ_KEY) || '{}'); } catch { return {}; }
+  });
+  const markRead = (key) => {
+    setReadSet(prev => {
+      const next = { ...prev, [key]: Date.now() };
+      try { localStorage.setItem(SLACK_READ_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+  const markUnread = (key) => {
+    setReadSet(prev => {
+      const next = { ...prev }; delete next[key];
+      try { localStorage.setItem(SLACK_READ_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+
   const workspace = data.workspace || 'workspace';
   const openInSlack = (url) => { if (url) window.open(url, '_blank', 'noopener'); };
 
@@ -145,8 +165,11 @@ function SlackMod({ data }) {
              ...(c.unread ? ['missed'] : []), ...(c.priority === 'high' ? ['needs'] : [])],
     }));
     const rank = { high: 3, med: 2, low: 1 };
-    return Array.from(byKey.values()).sort((a, b) => (rank[b.priority] || 0) - (rank[a.priority] || 0) || (b.unread || 0) - (a.unread || 0));
-  }, [data]);
+    const all = Array.from(byKey.values());
+    // Apply client-side read-state: a read item drops out of "Missed" and dims.
+    all.forEach(it => { if (readSet[it.key]) { it.read = true; it.tags.delete('missed'); } });
+    return all.sort((a, b) => (a.read ? 1 : 0) - (b.read ? 1 : 0) || (rank[b.priority] || 0) - (rank[a.priority] || 0) || (b.unread || 0) - (a.unread || 0));
+  }, [data, readSet]);
 
   const TAB_DEFS = [
     { id: 'needs',    label: 'Needs you' },
@@ -249,15 +272,20 @@ function SlackMod({ data }) {
     const open = expanded === it.id;
     const where = it.name;
     return (
-      <div key={it.key} className={'slk-row' + (open ? ' open' : '')} data-pri={it.priority || 'low'}
+      <div key={it.key} className={'slk-row' + (open ? ' open' : '') + (it.read ? ' read' : '')} data-pri={it.priority || 'low'}
            onClick={() => setExpanded(open ? null : it.id)}>
         <div className="slk-line">
           <span className="slk-ic">{it.kind === 'dm' ? '✉' : '#'}</span>
-          <span className="slk-name">{it.kind === 'channel' ? it.name : it.name}</span>
+          <span className="slk-name">{it.name}</span>
           {!open && <span className="slk-sum">{it.summary}</span>}
-          {it.unread > 0 && <span className="slk-unread">{it.unread}</span>}
+          {it.unread > 0 && !it.read && <span className="slk-unread">{it.unread}</span>}
           <span className="slk-time">{it.updated || ''}</span>
-          {it.tags.has('needs') && <span className="slk-dot" title="Needs you"/>}
+          {it.tags.has('needs') && !it.read && <span className="slk-dot" title="Needs you"/>}
+          <button className="slk-read-btn" title={it.read ? 'Mark unread' : 'Mark read (remove from Missed)'}
+                  aria-label={it.read ? 'Mark unread' : 'Mark read'}
+                  onClick={(e) => { e.stopPropagation(); it.read ? markUnread(it.key) : markRead(it.key); }}>
+            {it.read ? '↺' : '✓'}
+          </button>
         </div>
         {open && (
           <div className="slk-body" onClick={e => e.stopPropagation()}>

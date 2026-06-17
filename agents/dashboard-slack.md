@@ -72,7 +72,7 @@ calls for them.
 
 These two are the dashboard's primary Slack surface, so build them first:
 
-- **`dms`** — up to **8** of the user's most recent DM conversations (1:1 and small group
+- **`dms`** — up to **10** of the user's most recent DM conversations (1:1 and small group
   DMs), newest/most-important first, taken from the DM-channel results in queries #1–#2.
   Include a DM even if no reply is strictly owed (the user wants to reply to any DM). Each
   entry: `person` (the other participant's display name, or "Group · A, B, C" for a group
@@ -205,7 +205,7 @@ Write the result to `<dataCacheDir>/slack.json` using the **Write tool**. A sing
 ### Field reference
 - `workspace` — from the config (`slack.workspace`) if provided; else derive from a result permalink hostname; else `"slack"`.
 - `userAvatar` — the authed user's Slack profile image URL (square, ~192px); used as the browser-tab favicon. `""` if unavailable.
-- `dms[]` — up to 8 recent DM conversations; `person` is the other participant (never invented); `suggested` = 2–3 reply options. The dashboard renders these as a "Direct messages" lane with an inline reply box that sends directly.
+- `dms[]` — up to 10 recent DM conversations; `person` is the other participant (never invented); `suggested` = 2–3 reply options. The dashboard renders these as a "Direct messages" lane with an inline reply box that sends directly.
 - `needsReply[]` — up to 6 ranked items awaiting the user's reply; `kind` ∈ `dm|mention|owed`; `who` is the DM person or `#channel`; `ask` is a 2–4 word reason. Rendered as the top "Needs your reply" action queue.
 - `tabs.count` — running total across all channels that belong to that tab.
 - `tabs.active` — set `true` only on `missed` (default open tab). All others `false`.
@@ -218,7 +218,7 @@ Write the result to `<dataCacheDir>/slack.json` using the **Write tool**. A sing
 - `shipped.meta` — `Slack · today · <theme>` where theme is one of: `brand | product | infra | ops | strategy`.
 
 ## Rules
-- **Cap**: search calls 4 (plus at most 1 retry each) · dms ≤8 · needsReply ≤6 · channels 5–7 · blockers ≤5 · shipped ≤5. (`activeThreads` is always `[]`.) All lists come from the same 4 searches — no extra MCP calls.
+- **Cap**: search calls 4 (plus at most 1 retry each) · dms ≤10 · needsReply ≤6 · channels 5–7 · blockers ≤5 · shipped ≤5. (`activeThreads` is always `[]`.) All lists come from the same 4 searches — no extra MCP calls.
 - **Always include Slack permalinks** — the user needs to jump to the source.
 - **No channel-history or thread reads.** Use only what message search returns. Summary must be YOUR synthesis from the snippets, not invented.
 - **Timezone**: convert message timestamps → human-relative form in the user's timezone from the kickoff prompt (e.g. "2h ago", "yesterday", "4d ago").

@@ -427,8 +427,22 @@ function TasksMod({ state, onToggle }) {
                   ))}
                 </div>
               ))}
-              {totalTasks === 0 && state.shipped.length === 0 && (
+              {totalTasks === 0 && state.shipped.length === 0 && (state.hiddenTasks || []).length === 0 && (
                 <div className="empty-ok"><span className="big">All clear</span>No tasks right now.</div>
+              )}
+              {(state.hiddenTasks || []).length > 0 && (
+                <div className="task-list-group">
+                  <div className="sub-section-head"><span style={{color:'var(--fg-3)'}}>Hidden</span><span className="bar"/><span>{state.hiddenTasks.length}</span></div>
+                  {state.hiddenTasks.map((t, i) => (
+                    <div key={(t.id||t.label)+i} className="task-hidden-row">
+                      <span className="task-hidden-label">{t.label}</span>
+                      <span className="task-hidden-meta">{t.meta}</span>
+                      {state.unhideTask && (
+                        <button className="task-hidden-unhide" onClick={() => state.unhideTask(t.label)} title="Un-hide this task">restore</button>
+                      )}
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           </div>

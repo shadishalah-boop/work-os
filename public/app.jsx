@@ -1458,6 +1458,19 @@ function useDashboardState() {
     META: OKR_META,
   };
 
+  // Hidden tasks (dismissed or archived-done) — surfaced in the Tasks "Open list" popup
+  // so they can be seen and individually restored.
+  const hiddenTasks = [];
+  [['overdue', overdue], ['dueSoon', dueSoon], ['blocked', blocked]].forEach(([bucket, list]) => {
+    list.forEach(t => { if (isHidden(t.label)) hiddenTasks.push({ ...t, bucket }); });
+  });
+  (SEED.shipped || []).forEach(s => { if (isHidden(s.title)) hiddenTasks.push({ id: s.id, label: s.title, meta: s.meta, bucket: 'shipped' }); });
+  const unhideTask = (label) => {
+    const k = normalizeTaskKey(label);
+    setDismissed(prev => { const n = { ...prev }; delete n[k]; try { localStorage.setItem(DISMISS_KEY, JSON.stringify(n)); } catch {} return n; });
+    setDoneStore(prev => { const n = { ...prev }; delete n[k]; try { localStorage.setItem(DONE_KEY, JSON.stringify(n)); } catch {} return n; });
+  };
+
   return {
     top3:    top3.filter(t => !isHidden(t.label)),
     overdue: overdue.filter(t => !isHidden(t.label)),
@@ -1470,6 +1483,7 @@ function useDashboardState() {
     restoreHidden,
     // backward-compat alias used by existing callers
     restoreDismissed: restoreHidden,
+    hiddenTasks, unhideTask,
     hiddenCount: Object.keys(dismissed).length + Object.keys(doneStore).length,
     dismissedCount: Object.keys(dismissed).length + Object.keys(doneStore).length,
     okrApi,
@@ -2264,6 +2278,67 @@ function AppLinks() {
   );
 }
 
+// Collect the dashboard's current trackable items (tasks, decisions, Slack) for the
+// "what changed since last refresh" bell. Each has a stable key + a human label.
+function currentNotifItems() {
+  const S = window.SEED || {};
+  const out = [];
+  (S.overdue || []).forEach(t => out.push({ k: 'task:' + t.label, type: 'Overdue task', label: t.label }));
+  (S.dueSoon || []).forEach(t => out.push({ k: 'task:' + t.label, type: 'Task due soon', label: t.label }));
+  (S.blocked || []).forEach(t => out.push({ k: 'task:' + t.label, type: 'Now blocked', label: t.label }));
+  (S.decisions || []).forEach(d => out.push({ k: 'dec:' + (d.id || d.title), type: 'Decision to make', label: d.title }));
+  const sl = S.slack || {};
+  [...(sl.needsReply || []), ...(sl.dms || []), ...(sl.channels || [])].forEach(x =>
+    out.push({ k: 'slk:' + (x.permalink || x.id || x.who || x.person || x.channel), type: 'Slack', label: (x.who || x.person || x.channel || 'message') }));
+  const seen = new Set();
+  return out.filter(i => i.k && !seen.has(i.k) && seen.add(i.k));
+}
+
+function NotificationsBell() {
+  const [open, setOpen] = React.useState(false);
+  const [changes, setChanges] = React.useState([]);
+  React.useEffect(() => {
+    let last = {};
+    try { last = JSON.parse(localStorage.getItem('dash:lastSeen.v1') || '{}'); } catch {}
+    const cur = currentNotifItems();
+    const first = !Object.keys(last).length;          // first ever load → no noise
+    const added = first ? [] : cur.filter(i => !last[i.k]);
+    setChanges(added);
+    const next = {}; cur.forEach(i => next[i.k] = 1);
+    try { localStorage.setItem('dash:lastSeen.v1', JSON.stringify(next)); } catch {}
+  }, []);
+  return (
+    <>
+      <button className="d-topbar-icon" title="What changed since last refresh" onClick={() => setOpen(o => !o)}>
+        <Icon name="bell" size={16}/>
+        {changes.length > 0 && <span className="dot"/>}
+      </button>
+      {open && (
+        <div className="notif-overlay" onClick={() => setOpen(false)}>
+          <div className="notif-panel" onClick={e => e.stopPropagation()}>
+            <div className="notif-head">
+              <Icon name="bell" size={14}/>
+              <span className="notif-title">Since last refresh</span>
+              <span className="notif-count">{changes.length}</span>
+              <button className="notif-close" aria-label="Close" onClick={() => setOpen(false)}>×</button>
+            </div>
+            <div className="notif-body">
+              {changes.length === 0
+                ? <div className="notif-empty">Nothing new since you last looked.</div>
+                : changes.map((c, i) => (
+                    <div key={i} className="notif-row">
+                      <span className="notif-type">{c.type}</span>
+                      <span className="notif-label">{c.label}</span>
+                    </div>
+                  ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 function ModernTopbar() {
   const openFind = () => window.dispatchEvent(new Event('dash:open-find'));
   return (
@@ -2284,10 +2359,7 @@ function ModernTopbar() {
         <Icon name="share" size={16}/>
       </button>
       <button className="d-topbar-icon" title="Filter"><Icon name="filter" size={16}/></button>
-      <button className="d-topbar-icon" title="Notifications">
-        <Icon name="bell" size={16}/>
-        <span className="dot"/>
-      </button>
+      <NotificationsBell/>
       <div className="d-topbar-divider"/>
       <LiveClock/>
     </div>

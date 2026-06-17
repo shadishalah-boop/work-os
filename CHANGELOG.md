@@ -14,6 +14,30 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.10.0 — 2026-06-16
+
+**Slack read-state, Tasks "hidden" view, and a working notifications bell.**
+
+- **Slack — mark as read.** Each row has a ✓ (on hover) to mark a message read; read items
+  **drop out of "Missed"** and dim. ↺ marks unread again. Stored locally (`slackRead.v1`).
+  Recent DMs already live in the **DMs tab** (now up to 10) — read or not.
+- **Tasks — see hidden ones.** The "Open list" popup now has a **Hidden** section listing
+  every dismissed/archived task with a per-item **restore**, so nothing is lost.
+- **Bell = changes since last refresh.** The 🔔 next to the clock now opens a popover
+  listing what's **new since you last looked** (new tasks, decisions, Slack items), with a
+  dot when there's anything. (First load shows nothing — no false noise.)
+
+Carried over: the **skill-popup truncation** was a stale local `serve.py` — v0.9.9 makes
+`open.sh` restart the server on version change, so "open the dashboard" (or restarting
+Claude Code) now gets the full-output server. **Metrics comprehensive chart** and **Settings
+panel** are being designed with your input (see chat) — not in this release.
+
+Verified: 9 DOM checks (bell diff incl. first-load-quiet + already-seen filtering; Slack
+mark-read leaves Missed) + Slack-redesign and Tasks-modal regressions. Bumps `app.jsx`
+v=55, `modules-a.jsx` v=21, `modules-b.jsx` v=37, `dashboard.css` v=20, plugin 0.10.0.
+
+---
+
 ## v0.9.9 — 2026-06-16
 
 **Fixes from testing.**
