@@ -17,7 +17,7 @@
 <link rel="stylesheet" href="ds/components/progress-bar.css"/>
 <link rel="stylesheet" href="ds/components/bubble-counter.css"/>
 <link rel="stylesheet" href="ds/components/divider.css"/>
-<link rel="stylesheet" href="dashboard.css?v=21"/>
+<link rel="stylesheet" href="dashboard.css?v=22"/>
 <link rel="stylesheet" href="dashboard-d.css?v=21"/>
 <link rel="stylesheet" href="custom.css"/>
 <style>
@@ -45,6 +45,42 @@
   if (document.body) render(); else document.addEventListener('DOMContentLoaded', render);
 })();
 </script>
+<script>
+// Dashboard settings (Settings ⚙): theme / density / accent / hidden modules. Applied
+// here BEFORE the app renders so there's no flash, and exposed as window.applyDashSetting
+// for the in-app Settings panel. Persisted in localStorage 'dashboard.settings.v1'.
+(function applyDashboardSettings() {
+  var root = document.documentElement;
+  function get() { try { return JSON.parse(localStorage.getItem('dashboard.settings.v1') || '{}'); } catch (e) { return {}; } }
+  function resolveDark(theme) {
+    return theme === 'dark' || (theme === 'auto' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  }
+  function applyAll(s) {
+    var theme = s.theme || 'auto';
+    root.setAttribute('data-theme-pref', theme);
+    root.setAttribute('data-theme', resolveDark(theme) ? 'dark' : 'light');
+    root.setAttribute('data-density', s.density || 'comfortable');
+    root.setAttribute('data-accent', s.accent || 'pink');
+  }
+  applyAll(get());
+  if (window.matchMedia) {
+    try {
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function (e) {
+        if ((root.getAttribute('data-theme-pref') || 'auto') === 'auto') root.setAttribute('data-theme', e.matches ? 'dark' : 'light');
+      });
+    } catch (e) {}
+  }
+  window.getDashSettings = get;
+  window.applyDashSetting = function (key, val) {
+    var s = get(); s[key] = val;
+    try { localStorage.setItem('dashboard.settings.v1', JSON.stringify(s)); } catch (e) {}
+    if (key === 'theme') { root.setAttribute('data-theme-pref', val); root.setAttribute('data-theme', resolveDark(val) ? 'dark' : 'light'); }
+    if (key === 'density') root.setAttribute('data-density', val);
+    if (key === 'accent') root.setAttribute('data-accent', val);
+    window.dispatchEvent(new CustomEvent('dash:settings-changed', { detail: s }));
+  };
+})();
+</script>
 </head>
 <body>
 <div id="root"></div>
@@ -70,7 +106,7 @@
 <script type="text/babel" src="drive-index.jsx?v=10"></script>
 <script type="text/babel" src="modules-a.jsx?v=21"></script>
 <script type="text/babel" src="modules-b.jsx?v=38"></script>
-<script type="text/babel" src="app.jsx?v=55"></script>
+<script type="text/babel" src="app.jsx?v=56"></script>
 
 <script>
 // =============================================================================

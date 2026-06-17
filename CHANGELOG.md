@@ -14,6 +14,27 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.12.0 — 2026-06-16
+
+**Settings panel (⚙ in the topbar).** Click the gear (left of the bell) to open Dashboard
+settings — all four approved options, all matching the current aesthetic:
+
+- **Theme** — Auto / Light / **Dark**. Dark flips the grey ramp so the whole dashboard
+  (surfaces, text, borders) goes dark while brand/accent colors stay; Auto follows your OS.
+- **Density** — Comfortable / Compact (tightens card padding + grid gaps).
+- **Accent** — Pink / Blue / Teal / Yellow (recolors buttons, active tabs, highlights).
+- **Show / hide modules** — checkboxes to hide any card (Top 3, Tasks, Metrics, Slack, …);
+  hidden cards drop out of the layout live.
+
+Settings persist in `localStorage` and apply **before render** (an early inline script,
+so no flash), with a live `dash:settings-changed` event for module visibility.
+
+Verified: 8 DOM checks (modal opens; theme/density/accent apply to `<html>`; hiding a
+module records it + dispatches the event) + chart/bell regressions. Bumps `app.jsx` v=56,
+`dashboard.css` v=22, plugin 0.12.0.
+
+---
+
 ## v0.11.0 — 2026-06-16
 
 **Metrics: a real, comprehensive chart.** Click any metric tile to open a full chart with

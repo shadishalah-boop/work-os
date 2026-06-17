@@ -2339,6 +2339,74 @@ function NotificationsBell() {
   );
 }
 
+const SETTABLE_MODULES = ['top3', 'tasks', 'projects', 'commitments', 'kpi', 'calendar', 'inbox', 'slack', 'blockers', 'team', 'wellness'];
+const MODULE_LABELS = { top3: 'Top 3', tasks: 'Tasks', projects: 'Projects', commitments: 'Commitments', kpi: 'Metrics', calendar: 'Calendar', inbox: 'Inbox', slack: 'Slack', blockers: 'Blockers', team: 'People', wellness: 'Wellness' };
+
+// Settings ⚙ — theme / density / accent / show-hide modules. Theme/density/accent apply
+// instantly via window.applyDashSetting (CSS attributes on <html>); module visibility
+// dispatches dash:settings-changed which the layout listens to.
+function SettingsButton() {
+  const [open, setOpen] = React.useState(false);
+  const [s, setS] = React.useState(() => (window.getDashSettings ? window.getDashSettings() : {}));
+  const set = (k, v) => { if (window.applyDashSetting) window.applyDashSetting(k, v); setS(p => ({ ...p, [k]: v })); };
+  const hidden = s.hiddenModules || [];
+  const toggleModule = (id) => set('hiddenModules', hidden.includes(id) ? hidden.filter(x => x !== id) : [...hidden, id]);
+  return (
+    <>
+      <button className="d-topbar-icon" title="Settings" aria-label="Dashboard settings" onClick={() => setOpen(true)}>
+        <Icon name="filter" size={16}/>
+      </button>
+      {open && (
+        <div className="settings-overlay" onClick={() => setOpen(false)}>
+          <div className="settings-modal" onClick={e => e.stopPropagation()}>
+            <div className="settings-head">
+              <Icon name="filter" size={15}/><span className="settings-title">Dashboard settings</span>
+              <button className="settings-close" aria-label="Close" onClick={() => setOpen(false)}>×</button>
+            </div>
+            <div className="settings-body">
+              <div className="settings-group">
+                <div className="settings-label">Theme</div>
+                <div className="settings-seg">
+                  {['auto', 'light', 'dark'].map(t => (
+                    <button key={t} className={'seg-btn' + ((s.theme || 'auto') === t ? ' on' : '')} onClick={() => set('theme', t)}>{t[0].toUpperCase() + t.slice(1)}</button>
+                  ))}
+                </div>
+              </div>
+              <div className="settings-group">
+                <div className="settings-label">Density</div>
+                <div className="settings-seg">
+                  {[['comfortable', 'Comfortable'], ['compact', 'Compact']].map(([v, l]) => (
+                    <button key={v} className={'seg-btn' + ((s.density || 'comfortable') === v ? ' on' : '')} onClick={() => set('density', v)}>{l}</button>
+                  ))}
+                </div>
+              </div>
+              <div className="settings-group">
+                <div className="settings-label">Accent</div>
+                <div className="settings-swatches">
+                  {[['pink', 'var(--pink-400)'], ['blue', 'var(--blue-400)'], ['teal', 'var(--teal-400)'], ['yellow', 'var(--yellow-400)']].map(([v, c]) => (
+                    <button key={v} className={'swatch' + ((s.accent || 'pink') === v ? ' on' : '')} style={{ background: c }} title={v} aria-label={v} onClick={() => set('accent', v)}/>
+                  ))}
+                </div>
+              </div>
+              <div className="settings-group">
+                <div className="settings-label">Show modules</div>
+                <div className="settings-modules">
+                  {SETTABLE_MODULES.map(id => (
+                    <label key={id} className="settings-check">
+                      <input type="checkbox" checked={!hidden.includes(id)} onChange={() => toggleModule(id)}/>
+                      <span>{MODULE_LABELS[id]}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 function ModernTopbar() {
   const openFind = () => window.dispatchEvent(new Event('dash:open-find'));
   return (
@@ -2358,7 +2426,7 @@ function ModernTopbar() {
               onClick={() => window.dispatchEvent(new Event('dash:open-share'))}>
         <Icon name="share" size={16}/>
       </button>
-      <button className="d-topbar-icon" title="Filter"><Icon name="filter" size={16}/></button>
+      <SettingsButton/>
       <NotificationsBell/>
       <div className="d-topbar-divider"/>
       <LiveClock/>
@@ -2419,6 +2487,13 @@ function LayoutModernSaaS({ tod }) {
   const [savedSnapshot, setSavedSnapshot] = uS(() => JSON.stringify(loadLayoutD()));
   const [justSaved, setJustSaved] = uS(false);
   const [railWidth, setRailWidth] = uS(loadRailWidth);
+  // Settings → show/hide modules (live).
+  const [hiddenMods, setHiddenMods] = uS(() => (window.getDashSettings ? (window.getDashSettings().hiddenModules || []) : []));
+  uE(() => {
+    const onChange = (e) => setHiddenMods((e.detail && e.detail.hiddenModules) || []);
+    window.addEventListener('dash:settings-changed', onChange);
+    return () => window.removeEventListener('dash:settings-changed', onChange);
+  }, []);
 
   // Persist rail width on change (debounced via ref to avoid hammering localStorage during drag)
   uE(() => { saveRailWidth(railWidth); }, [railWidth]);
@@ -2466,9 +2541,10 @@ function LayoutModernSaaS({ tod }) {
 
   const canvasH = boxes.reduce((acc, b) => Math.max(acc, b.top + b.height), 0) + 32;
   const canvasW = boxes.reduce((acc, b) => Math.max(acc, b.left + b.width), 0);
+  const visibleBoxes = boxes.filter(b => !hiddenMods.includes(b.id));
   const ordered = activeId
-    ? [...boxes.filter(b => b.id !== activeId), boxes.find(b => b.id === activeId)].filter(Boolean)
-    : boxes;
+    ? [...visibleBoxes.filter(b => b.id !== activeId), visibleBoxes.find(b => b.id === activeId)].filter(Boolean)
+    : visibleBoxes;
 
   const renderModule = (id) => {
     switch (id) {
