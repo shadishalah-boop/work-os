@@ -31,10 +31,26 @@ fi
 WORKDIR="$(mktemp -d 2>/dev/null || echo /tmp)"
 cd "$WORKDIR" 2>/dev/null || cd /tmp
 
-OUT=$(claude -p \
+# The skill invocation (e.g. "/my-skill args") must be passed as the PROMPT ARGUMENT,
+# not piped on stdin: per the headless docs, "user-invoked skills and custom commands
+# work in -p mode: include /skill-name in the prompt string and Claude Code expands it
+# before running." Passing it on stdin sends it as literal model text and the skill may
+# not expand. Do NOT add --bare (that skips skill/plugin discovery).
+CMD="$(cat "$PROMPT_FILE")"
+OUT=$(claude -p "$CMD" \
         --permission-mode bypassPermissions \
-        --no-session-persistence < "$PROMPT_FILE" 2>&1)
+        --no-session-persistence 2>&1)
 status=$?
+
+# If a bare slash command didn't trigger the skill, retry once phrased as an instruction
+# so the model invokes it via the Skill tool (belt-and-suspenders for reliability).
+if [ "$status" -eq 0 ] && echo "$OUT" | grep -qiE "unknown (command|slash)|not a (recognized|valid) command|no such (command|skill)"; then
+  NAME="${CMD#/}"; NAME="${NAME%% *}"
+  OUT=$(claude -p "Use the ${NAME} skill. ${CMD}" \
+          --permission-mode bypassPermissions \
+          --no-session-persistence 2>&1)
+  status=$?
+fi
 
 if [ -n "${WORKDIR:-}" ] && [ "$WORKDIR" != "/tmp" ]; then
   rm -rf "$WORKDIR" 2>/dev/null || true

@@ -14,6 +14,22 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.9.6 — 2026-06-16
+
+**Fix: rail skills now actually run headlessly (like the refresh button).** v0.9.5 piped
+the skill's slash command to `claude -p` on **stdin**, which sends it as literal model
+text — so the skill often didn't expand/run. Per the headless docs, a skill runs when
+`/skill-name` is in the **prompt string**, so `skill-run-headless.sh` now passes the
+command as the `-p` **argument** (`claude -p "/my-skill args"`), which Claude Code expands
+and executes. Added a one-time fallback that re-invokes as "Use the <name> skill…" (Skill
+tool) if the slash form isn't recognized. (Refresh's `claude -p`/server machinery was
+already correct — only the skill invocation form needed fixing.)
+
+Verified: 8 server checks still pass (run-skill starts, executes, relays output). Bumps
+plugin 0.9.6 (re-syncs the updated script on `/plugin update`).
+
+---
+
 ## v0.9.5 — 2026-06-16
 
 **Run your Claude skills from the dashboard's left rail.** A new **Skills** section in the
