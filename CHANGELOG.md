@@ -14,6 +14,24 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.12.7 — 2026-06-17
+
+**Fix: Slack "There's been a glitch…" on click.** A colleague's refresh produced
+DM permalinks like `https://preply.slack.com/archives/D_shadi` — the Slack agent
+had fabricated the channel ID from the recipient's name instead of using the
+real one from the search result. Clicking landed on Slack's error page.
+
+- Agent spec (`agents/dashboard-slack.md`): explicit rule that permalinks must
+  match `[CDG][A-Z0-9]{8,10}` (real Slack channel IDs), never invented from a
+  name. If no real ID is available, the item is omitted entirely instead of
+  shipping a broken link.
+- Client-side guard (`SlackMod`): any permalink that doesn't match the real-ID
+  regex is routed through a workspace search for the recipient/channel name
+  instead of being opened directly. The dedupe key now also requires a real
+  permalink so fabricated IDs can't collide.
+
+---
+
 ## v0.12.6 — 2026-06-17
 
 Layout, settings and People fixes from the follow-up review:

@@ -42,6 +42,15 @@ function SlackMod({ data }) {
   };
 
   const workspace = data.workspace || 'workspace';
+  // Client-side guard against fabricated Slack permalinks. A REAL Slack channel
+  // ID is C/D/G + 8–11 alphanumeric chars (e.g. `D0A99KKUS7K`). Anything else
+  // (e.g. `D_shadi` from an older agent run that invented IDs) lands on Slack's
+  // "There's been a glitch…" page when clicked — so we treat those as missing
+  // and fall back to a workspace search for the person / channel name instead.
+  const REAL_SLACK_ID = /\/archives\/[CDG][A-Z0-9]{7,11}\b/;
+  const isRealSlackPermalink = (url) => typeof url === 'string' && /^https?:\/\/[^/]+\.slack\.com\//.test(url) && REAL_SLACK_ID.test(url);
+  const slackSearchUrl = (term) => `https://${workspace}.slack.com/search/${encodeURIComponent(term || '')}`;
+  const safePermalink = (url, fallbackTerm) => isRealSlackPermalink(url) ? url : slackSearchUrl(fallbackTerm);
   const openInSlack = (url) => { if (url) window.open(url, '_blank', 'noopener'); };
 
   // Are we served by the local dashboard server (serve.py)? Only it answers
@@ -63,13 +72,19 @@ function SlackMod({ data }) {
   // reply still lands. `chanId` keys the inline status shown on the card.
   const slackSendOrFallback = async (text, permalink, where, chanId) => {
     const trimmed = (text || '').trim();
-    if (!trimmed) { if (permalink) window.open(permalink, '_blank', 'noopener'); return; }
+    // Route any open-in-Slack through safePermalink so a fabricated link goes to
+    // a workspace search for the recipient/channel rather than the glitch page.
+    const safeUrl = safePermalink(permalink, where);
+    if (!trimmed) { if (safeUrl) window.open(safeUrl, '_blank', 'noopener'); return; }
     const copyAndOpen = async () => {
       if (navigator.clipboard) { try { await navigator.clipboard.writeText(trimmed); } catch {} }
-      if (permalink) window.open(permalink, '_blank', 'noopener');
+      if (safeUrl) window.open(safeUrl, '_blank', 'noopener');
       if (chanId) setSendStatus(s => ({ ...s, [chanId]: 'copied' }));
     };
     if (!serveOnline) { await copyAndOpen(); return; }
+    // Only ask the server to send if the permalink is real — otherwise the
+    // headless Slack call would fail at the channel-resolve step.
+    if (!isRealSlackPermalink(permalink)) { await copyAndOpen(); return; }
     if (chanId) setSendStatus(s => ({ ...s, [chanId]: 'sending' }));
     try {
       const ctrl = new AbortController();
@@ -130,7 +145,9 @@ function SlackMod({ data }) {
   const items = useMemoB(() => {
     const byKey = new Map();
     const add = (raw, base) => {
-      const key = base.permalink || raw.id;
+      // Only dedupe on permalink when it's a REAL Slack permalink; fabricated
+      // ones (e.g. `D_shadi`) would otherwise collide and merge unrelated DMs.
+      const key = (isRealSlackPermalink(base.permalink) && base.permalink) || raw.id;
       let it = byKey.get(key);
       if (!it) { it = { id: raw.id, key, tags: new Set(), suggested: [], mentions: [] }; byKey.set(key, it); }
       it.kind = base.kind || it.kind;
@@ -392,7 +409,7 @@ function SlackMod({ data }) {
                 <span>{m.user}</span>
                 {m.permalink && (<>
                   <span style={{marginLeft:'auto'}}></span>
-                  <a href={m.permalink} target="_blank" rel="noreferrer" style={{fontSize:11, color:'var(--fg-2)'}}>Open ↗</a>
+                  <a href={safePermalink(m.permalink, m.channel || m.user)} target="_blank" rel="noreferrer" style={{fontSize:11, color:'var(--fg-2)'}}>Open ↗</a>
                 </>)}
               </div>
               <div style={{fontSize:13, lineHeight:1.45, color:'var(--fg-1)'}}>{m.text}</div>

@@ -218,17 +218,21 @@ Write the result to `<dataCacheDir>/slack.json` using the **Write tool**. A sing
 - `tabs.count` — running total across all channels that belong to that tab.
 - `tabs.active` — set `true` only on `missed` (default open tab). All others `false`.
 - `priority` (channels) — `high` (senior stakeholder + action owed) / `med` (action owed but lower stakes) / `low` (informational).
-- `permalink` — use the permalink the search result provides; if a result has none, link the channel: `https://<workspace>.slack.com/archives/<CHANNEL_ID>`.
+- `permalink` — **MUST be a real Slack permalink from a search result, or the canonical channel URL using a real channel ID**. NEVER invent one. Specifically:
+  - **Required format**: `https://<workspace>.slack.com/archives/<CHANNEL_ID>(/p<TIMESTAMP>)?` where `<CHANNEL_ID>` is `C…`/`D…`/`G…` followed by **8–11 alphanumeric characters** (e.g. `D0A99KKUS7K`, `C04B5GTQM31`). The `p<TIMESTAMP>` suffix is optional.
+  - **NEVER** construct an ID from a person's name (`D_shadi`, `D_jane`), from a channel name (`C_growth`), from initials, from a username, or any other guess. If you do, the link lands on Slack's "There's been a glitch…" page and the dashboard's reply/click breaks.
+  - **If the search result has no `permalink` AND you don't have a real channel ID**: **OMIT the item entirely**. Do not output a fabricated permalink. (Dropping one DM is far better than shipping a broken link.)
+  - Validate before emitting: the path segment after `/archives/` must match `^[CDG][A-Z0-9]{8,10}$`. Anything else is a fabrication — drop it.
 - `peek` — **always emit `[]`**. The dashboard hides the section when empty.
 - `activeThreads` — **always emit `[]`**. Removed in the speed-tuning pass.
 - `suggested` — 2–3 possible next actions the user could take; set `primary: true` on the top recommendation.
 - `blockers.icon` — `!` for high severity, `•` for medium.
-- `blockers.permalink` — link the dashboard's "Open" button jumps to. Use the matching search-result permalink, or the channel URL `https://<workspace>.slack.com/archives/<CHANNEL_ID>` if the result has none.
+- `blockers.permalink` — link the dashboard's "Open" button jumps to. Same rule as `permalink` above: only real channel IDs (`[CDG][A-Z0-9]{8,10}`), never invented from a channel name. Omit the field entirely if you don't have a real ID — the dashboard falls back to a workspace search.
 - `shipped.meta` — `Slack · today · <theme>` where theme is one of: `brand | product | infra | ops | strategy`.
 
 ## Rules
 - **Cap**: search calls 4 (plus at most 1 retry each, plus 1 optional `is:dm` backfill if < 5 DMs) · dms 5–10 · needsReply ≤6 · channels 5–7 · blockers ≤5 · shipped ≤5. (`activeThreads` is always `[]`.)
-- **Always include Slack permalinks** — the user needs to jump to the source.
+- **Always include REAL Slack permalinks** — never invent one. A real Slack channel ID is `[CDG][A-Z0-9]{8,10}` (e.g. `D0A99KKUS7K`). If you can't get a real ID from the search result, omit the item — fabricated IDs like `D_shadi` or `C_growth` land Slack's "There's been a glitch…" error page when clicked.
 - **No channel-history or thread reads.** Use only what message search returns. Summary must be YOUR synthesis from the snippets, not invented.
 - **Timezone / `updated` format**: convert each message timestamp to the user's timezone (from the kickoff prompt) and format it so TODAY's messages show a **clock time**, not just "today":
   - **Today** → 24h clock time, e.g. `"14:30"` (this is what the user asked for — when it's today they want to see the time of day).
