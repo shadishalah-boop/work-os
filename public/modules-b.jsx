@@ -740,24 +740,52 @@ function formatMetricNum(n, format) {
   return String(Math.round(n * 10) / 10);
 }
 
-// Full metric chart: real line with Y axis (min/mid/max labels), gridlines, X axis
+// Pick the number of decimals needed so adjacent Y-axis ticks render as DISTINCT
+// labels. With tightly-clustered data (e.g. 2.41% vs 2.45%) one decimal collapses
+// them to the same "2.4%" — so we widen precision until the step is visible.
+function axisDecimals(step, format) {
+  if (!isFinite(step) || step === 0) return format === '%' ? 1 : 0;
+  let d = 0;
+  let s = Math.abs(step);
+  while (s < 1 && d < 4) { s *= 10; d += 1; }
+  // %/plain: d decimals already make the step's first significant digit visible;
+  // non-% values get one extra digit of headroom.
+  return Math.min(4, d + (format === '%' ? 0 : 1));
+}
+function formatAxis(n, format, decimals) {
+  if (n == null || !isFinite(n)) return '—';
+  if (format === '%') return n.toFixed(decimals) + '%';
+  if (format === 'k') return (n / 1000).toFixed(Math.max(1, decimals)) + 'k';
+  if (format === 'M') return (n / 1e6).toFixed(Math.max(1, decimals)) + 'M';
+  if (format === 'h') return n.toFixed(decimals) + 'h';
+  if (Math.abs(n) >= 1000) return Math.round(n).toLocaleString();
+  return n.toFixed(decimals);
+}
+
+// Full metric chart: real line with Y axis (5 labelled gridlines), X axis
 // (first/last period labels), area fill, and a marker on the latest point.
 function MetricChart({ series, labels, format, color }) {
   const data = (series || []).map(Number).filter(v => isFinite(v));
   if (data.length < 2) {
     return <div className="metric-chart-empty">No series yet — run <code>/dashboard</code> to fetch this metric's history.</div>;
   }
-  const W = 580, H = 240, padL = 56, padR = 14, padT = 16, padB = 30;
+  const W = 580, H = 240, padL = 64, padR = 14, padT = 16, padB = 30;
   const rawMax = Math.max(...data), rawMin = Math.min(...data);
   const rawSpan = rawMax - rawMin;
-  const margin = rawSpan < rawMax * 0.05 ? Math.max(Math.abs(rawMax) * 0.1, 0.001) : rawSpan * 0.08;
+  // Pad the domain a touch so the line never sits flush on the top/bottom edge.
+  const margin = rawSpan === 0 ? Math.max(Math.abs(rawMax) * 0.1, 0.001) : rawSpan * 0.12;
   const max = rawMax + margin, min = rawMin - margin;
-  const span = max - min;
+  const span = (max - min) || 1;
   const X = i => padL + (i / (data.length - 1)) * (W - padL - padR);
   const Y = v => padT + (1 - (v - min) / span) * (H - padT - padB);
   const line = data.map((v, i) => `${i === 0 ? 'M' : 'L'}${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(' ');
   const area = `${line} L${X(data.length - 1).toFixed(1)},${(H - padB).toFixed(1)} L${X(0).toFixed(1)},${(H - padB).toFixed(1)} Z`;
-  const ticks = [rawMax, (rawMax + rawMin) / 2, rawMin];
+  // 5 evenly-spaced ticks across the *actual data* range (not the padded domain),
+  // with enough decimals that neighbouring ticks read as different numbers.
+  const NTICKS = 5;
+  const tickStep = rawSpan / (NTICKS - 1);
+  const dec = axisDecimals(tickStep || rawMax * 0.01, format);
+  const ticks = Array.from({ length: NTICKS }, (_, i) => rawMax - tickStep * i);
   const c = color || 'var(--teal-500)';
   const lab = labels || [];
   const firstLab = lab[0] || `${data.length} pts ago`;
@@ -767,7 +795,7 @@ function MetricChart({ series, labels, format, color }) {
       {ticks.map((t, i) => (
         <g key={i}>
           <line className="mc-grid" x1={padL} x2={W - padR} y1={Y(t).toFixed(1)} y2={Y(t).toFixed(1)}/>
-          <text className="mc-ylabel" x={padL - 8} y={(Y(t) + 3).toFixed(1)}>{formatMetricNum(t, format)}</text>
+          <text className="mc-ylabel" x={padL - 8} y={(Y(t) + 3).toFixed(1)}>{formatAxis(t, format, dec)}</text>
         </g>
       ))}
       <path className="mc-area" d={area} style={{ fill: c }}/>
@@ -820,7 +848,8 @@ function KpiMod({ data }) {
   const [saveMsg, setSaveMsg] = useStateB(null);
   const [served, setServed] = useStateB(false);
   const [chartFor, setChartFor] = useStateB(null);   // kpi shown in the expanded chart
-  const [tfMsg, setTfMsg] = useStateB(null);         // timeframe-change confirmation
+  const [viewTf, setViewTf] = useStateB(null);       // timeframe currently VIEWED (client-side, instant)
+  const [tfMsg, setTfMsg] = useStateB(null);         // background-save confirmation
 
   const TIMEFRAMES = [
     { id: '12w', label: '12 weeks' },
@@ -831,24 +860,42 @@ function KpiMod({ data }) {
   ];
   const tfLabel = (id) => (TIMEFRAMES.find(t => t.id === id) || { label: id || '12 weeks' }).label;
 
-  // Change a metric's timeframe → persist to the definitions (applies next refresh,
-  // since the browser can't re-query the warehouse).
-  const setTimeframe = async (id, tf) => {
-    setTfMsg('saving');
-    let items = [];
-    try {
-      const r = await fetch('/metrics-config', { cache: 'no-store' });
-      if (r.ok) { const d = await r.json().catch(() => ({})); if (Array.isArray(d.items)) items = d.items; }
-    } catch {}
-    if (!items.length) items = dataToItems(data);   // fall back to current
-    const found = items.find(it => it.id === id);
-    if (found) found.timeframe = tf; else items.push({ id, timeframe: tf });
-    try { localStorage.setItem('dashboard.metricDefs.v1', JSON.stringify(items)); } catch {}
-    try {
-      const r = await fetch('/metrics-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items }) });
-      setTfMsg(r.ok ? 'saved' : 'local');
-    } catch { setTfMsg('local'); }
+  // How much of the loaded series each timeframe shows. The fetched series is the
+  // WIDEST view available; shorter timeframes zoom into its tail so switching is
+  // instant (no warehouse round-trip). Wider-than-loaded just shows everything.
+  const TF_FRACTION = { ytd: 1, qtd: 0.6, '12w': 0.45, '30d': 0.3, '7d': 0.15 };
+  const sliceForTf = (series, labels, tf) => {
+    const s = Array.isArray(series) ? series.map(Number).filter(v => isFinite(v)) : [];
+    const l = Array.isArray(labels) ? labels : [];
+    if (s.length < 4) return { series: s, labels: l };
+    const frac = TF_FRACTION[tf] != null ? TF_FRACTION[tf] : 1;
+    const n = Math.max(4, Math.round(s.length * frac));
+    if (n >= s.length) return { series: s, labels: l };
+    const start = s.length - n;
+    return { series: s.slice(start), labels: l.slice(start) };
+  };
+
+  // Switch the VIEWED timeframe instantly (client-side slice), and persist the
+  // preference in the background so the next /dashboard fetches matching granularity.
+  const setTimeframe = (id, tf) => {
+    setViewTf(tf);                       // instant — re-renders the chart now
     setChartFor(c => c && c.id === id ? { ...c, timeframe: tf } : c);
+    (async () => {
+      setTfMsg('saving');
+      let items = [];
+      try {
+        const r = await fetch('/metrics-config', { cache: 'no-store' });
+        if (r.ok) { const d = await r.json().catch(() => ({})); if (Array.isArray(d.items)) items = d.items; }
+      } catch {}
+      if (!items.length) items = dataToItems(data);
+      const found = items.find(it => it.id === id);
+      if (found) found.timeframe = tf; else items.push({ id, timeframe: tf });
+      try { localStorage.setItem('dashboard.metricDefs.v1', JSON.stringify(items)); } catch {}
+      try {
+        const r = await fetch('/metrics-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items }) });
+        setTfMsg(r.ok ? 'saved' : 'local');
+      } catch { setTfMsg('local'); }
+    })();
   };
 
   // On first edit, load saved definitions from the local server; fall back to
@@ -913,7 +960,7 @@ function KpiMod({ data }) {
           const t = k.trend || { dir: 'flat', pct: 0 };
           const good = t.good !== undefined ? t.good : t.dir === 'up';
           return (
-            <div key={k.id || i} className="kpi kpi--clickable" onClick={() => setChartFor(k)}
+            <div key={k.id || i} className="kpi kpi--clickable" onClick={() => { setViewTf(k.timeframe || '12w'); setChartFor(k); }}
                  title="Open chart">
               <div className="kpi-label">{k.label}</div>
               <div className="kpi-value">{k.value}</div>
@@ -1014,35 +1061,34 @@ function KpiMod({ data }) {
         const tt = k.trend || { dir: 'flat', pct: 0 };
         const goodC = tt.good !== undefined ? tt.good : tt.dir === 'up';
         const color = goodC ? 'var(--teal-500)' : tt.dir === 'flat' ? 'var(--grey-400)' : 'var(--red-500)';
-        const tf = k.timeframe || '12w';
-        const hasAllTf = k.seriesAll && typeof k.seriesAll === 'object';
-        const chartSeries = hasAllTf ? (k.seriesAll[tf] || k.series) : k.series;
-        const chartLabels = hasAllTf && k.seriesLabelsAll ? (k.seriesLabelsAll[tf] || k.seriesLabels) : k.seriesLabels;
+        const tf = viewTf || k.timeframe || '12w';
+        // Prefer real per-timeframe data when the agent fetched it; otherwise zoom
+        // into the loaded series' tail so switching is instant.
+        const hasAllTf = k.seriesAll && typeof k.seriesAll === 'object' && k.seriesAll[tf] && k.seriesAll[tf].length;
+        const sliced = sliceForTf(k.series, k.seriesLabels, tf);
+        const chartSeries = hasAllTf ? k.seriesAll[tf] : sliced.series;
+        const chartLabels = hasAllTf && k.seriesLabelsAll ? (k.seriesLabelsAll[tf] || k.seriesLabels) : sliced.labels;
         return (
-          <div className="metric-chart-overlay" onClick={() => { setChartFor(null); setTfMsg(null); }}>
+          <div className="metric-chart-overlay" onClick={() => { setChartFor(null); setTfMsg(null); setViewTf(null); }}>
             <div className="metric-chart-modal" onClick={e => e.stopPropagation()}>
               <div className="metric-chart-head">
                 <div>
                   <div className="metric-chart-title">{k.label}</div>
                   <div className="metric-chart-now">{k.value} <span className="metric-chart-trend" data-dir={goodC ? 'up' : tt.dir}>{tt.dir === 'up' ? '▲' : tt.dir === 'down' ? '▼' : '—'} {tt.pct}%</span> · {k.target}</div>
                 </div>
-                <button className="metric-chart-close" aria-label="Close" onClick={() => { setChartFor(null); setTfMsg(null); }}>×</button>
+                <button className="metric-chart-close" aria-label="Close" onClick={() => { setChartFor(null); setTfMsg(null); setViewTf(null); }}>×</button>
               </div>
-              <MetricChart series={chartSeries} labels={chartLabels} format={k.format} color={color}/>
+              <MetricChart key={tf} series={chartSeries} labels={chartLabels} format={k.format} color={color}/>
               <div className="metric-chart-foot">
                 <span className="metric-tf-label">Timeframe</span>
                 <div className="metric-tf-switch">
-                  {TIMEFRAMES.map(t => {
-                    const avail = !hasAllTf || (k.seriesAll[t.id] && k.seriesAll[t.id].length);
-                    return (
-                      <button key={t.id} className={'metric-tf-btn' + (tf === t.id ? ' on' : '') + (!avail ? ' dim' : '')}
-                              onClick={() => setTimeframe(k.id, t.id)}
-                              title={avail ? t.label : `${t.label} — updates on next /dashboard refresh`}>{t.label}</button>
-                    );
-                  })}
+                  {TIMEFRAMES.map(t => (
+                    <button key={t.id} className={'metric-tf-btn' + (tf === t.id ? ' on' : '')}
+                            onClick={() => setTimeframe(k.id, t.id)}
+                            title={t.label}>{t.label}</button>
+                  ))}
                 </div>
-                {!hasAllTf && tfMsg === 'saved' && <span className="metric-save-msg ok">✓ chart updates on next /dashboard refresh</span>}
-                {!hasAllTf && tfMsg === 'local' && <span className="metric-save-msg">saved locally — refresh to see new data</span>}
+                <span className="metric-tf-note">{hasAllTf ? '' : 'showing recent window · finer data on next /dashboard'}</span>
               </div>
             </div>
           </div>
@@ -1053,23 +1099,120 @@ function KpiMod({ data }) {
 }
 
 // --- Team Module ---
+// Roster + a Personio/org-chart photo importer: drop (or pick) a screenshot and the
+// local server reads it headlessly (vision) into people, persisted so it survives
+// /dashboard refreshes. Imported people merge on top of whatever the config provided.
 function TeamMod({ data }) {
-  const people = Array.isArray(data) ? data : data.people;
+  const basePeople = Array.isArray(data) ? data : (data.people || []);
   const attention = Array.isArray(data) ? null : data.attention;
+
+  const [imported, setImported] = useStateB(null);   // people loaded/imported client-side
+  const [drag, setDrag] = useStateB(false);
+  const [imp, setImp] = useStateB({ status: 'idle', msg: null });  // idle|running|ok|err
+  const [served, setServed] = useStateB(false);
+  const pollRef = React.useRef(null);
+  const fileRef = React.useRef(null);
+
+  // Detect the local server + hydrate any previously-imported roster.
+  useEffectB(() => {
+    let alive = true;
+    fetch('/team-config', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (alive && d) { setServed(true); if (Array.isArray(d.people) && d.people.length) setImported(d.people); } })
+      .catch(() => {});
+    return () => { alive = false; if (pollRef.current) clearInterval(pollRef.current); };
+  }, []);
+
+  // Merge config + imported by name (imported wins so a fresh drop updates a person).
+  const people = useMemoB(() => {
+    if (!imported || !imported.length) return basePeople;
+    const byName = new Map();
+    basePeople.forEach(p => byName.set((p.name || '').toLowerCase(), p));
+    imported.forEach(p => byName.set((p.name || '').toLowerCase(), { ...byName.get((p.name || '').toLowerCase()), ...p }));
+    return Array.from(byName.values());
+  }, [basePeople, imported]);
+
+  const pollStatus = async () => {
+    try {
+      const s = await (await fetch('/import-org-status', { cache: 'no-store' })).json();
+      if (!s.running) {
+        if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+        if (s.ok && Array.isArray(s.people)) {
+          setImported(s.people);
+          setImp({ status: 'ok', msg: s.message || `Imported ${s.people.length} people` });
+        } else {
+          setImp({ status: 'err', msg: s.message || 'Could not read that image.' });
+        }
+      }
+    } catch {}
+  };
+
+  const sendImage = (dataUrl, ext) => {
+    setImp({ status: 'running', msg: 'Reading the org chart…' });
+    fetch('/import-org-photo', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: dataUrl, ext }),
+    }).then(r => {
+      if (r.status === 202 || r.ok) {
+        if (!pollRef.current) pollRef.current = setInterval(pollStatus, 2500);
+      } else {
+        setImp({ status: 'err', msg: 'Server rejected the image.' });
+      }
+    }).catch(() => setImp({ status: 'err', msg: 'Open the dashboard over http://localhost to import photos.' }));
+  };
+
+  const handleFile = (file) => {
+    if (!file || !file.type.startsWith('image/')) { setImp({ status: 'err', msg: 'Drop an image (PNG/JPG screenshot).' }); return; }
+    if (!served) { setImp({ status: 'err', msg: 'Photo import needs the local dashboard server — open over http://localhost.' }); return; }
+    const ext = (file.type.split('/')[1] || 'png').split('+')[0];
+    const reader = new FileReader();
+    reader.onload = () => sendImage(reader.result, ext);
+    reader.onerror = () => setImp({ status: 'err', msg: 'Could not read that file.' });
+    reader.readAsDataURL(file);
+  };
+
+  const onDrop = (e) => {
+    e.preventDefault(); setDrag(false);
+    const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    handleFile(file);
+  };
+
+  const around = people.filter(p => !p.ooo).length;
+  const out = people.filter(p => p.ooo).length;
+
   return (
-    <Module title="Your people" sub={`${people.filter(p=>!p.ooo).length} around · ${people.filter(p=>p.ooo).length} out`}
+    <Module title="Your people" sub={`${around} around · ${out} out`}
             icon={<span style={{width:28, height:28, borderRadius:8, background:'var(--grey-100)', display:'grid', placeItems:'center'}}><Icon name="user-group" size={16}/></span>}
+            action="Import photo"
+            onAction={() => { if (served) fileRef.current && fileRef.current.click(); else setImp({ status: 'err', msg: 'Open over http://localhost to import.' }); }}
             className="team-mod">
-      {attention && (
+      <input ref={fileRef} type="file" accept="image/*" style={{display:'none'}}
+             onChange={e => handleFile(e.target.files && e.target.files[0])}/>
+
+      {attention && people.length > 0 && (
         <div style={{marginBottom: 10, padding: '10px 12px', background:'var(--accent-bg)', borderRadius: 8, fontSize: 13}}>
           <strong>Who needs attention:</strong> <span dangerouslySetInnerHTML={{__html: attention}}/>
         </div>
       )}
+
+      {/* Drop zone — drag a Personio org-chart screenshot here */}
+      <div className={'team-dropzone' + (drag ? ' drag' : '') + (imp.status === 'running' ? ' busy' : '')}
+           onDragOver={e => { e.preventDefault(); if (served) setDrag(true); }}
+           onDragLeave={() => setDrag(false)}
+           onDrop={onDrop}
+           onClick={() => { if (served && imp.status !== 'running') fileRef.current && fileRef.current.click(); }}>
+        {imp.status === 'running'
+          ? <><span className="team-drop-spin"/> {imp.msg}</>
+          : <>📸 <strong>Drop a Personio org chart</strong> (or click) to import your team{!served && <span className="team-drop-note"> · needs the local server</span>}</>}
+      </div>
+      {imp.status === 'ok' && <div className="team-import-msg ok">✓ {imp.msg} · run <code>/dashboard</code> to enrich them</div>}
+      {imp.status === 'err' && <div className="team-import-msg err">{imp.msg}</div>}
+
       <div className="team-grid">
-        {people.length === 0 && (
+        {people.length === 0 && imp.status !== 'running' && (
           <div style={{fontSize:13, color:'var(--fg-2)', padding:'8px 2px', gridColumn:'1 / -1'}}>
-            No team added yet. Tell Claude Code <em>"add my team to the dashboard"</em>, or edit{' '}
-            <code style={{fontSize:12}}>~/.claude/dashboard-config.local</code> → <code style={{fontSize:12}}>org.team</code>, then run <code style={{fontSize:12}}>/dashboard</code>.
+            No team yet. Drop a Personio org-chart screenshot above, tell Claude Code <em>"add my team"</em>, or edit{' '}
+            <code style={{fontSize:12}}>~/.claude/dashboard-config.local</code> → <code style={{fontSize:12}}>org.team</code>.
           </div>
         )}
         {people.map((p, i) => (
@@ -1078,10 +1221,10 @@ function TeamMod({ data }) {
                role="button" tabIndex={0}
                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); window.dispatchEvent(new CustomEvent('dash:open-lens', { detail: { person: p } })); } }}
                title={`Open stakeholder lens for ${p.name}`}>
-            <span className="pds-avatar size-32"><img src="ds/assets/avatar-default.svg" alt={p.name}/></span>
+            <span className="pds-avatar size-32"><img src={p.avatar || 'ds/assets/avatar-default.svg'} alt={p.name}/></span>
             <div className="who">
-              <div className="team-name">{p.name}{p.manager && <span style={{fontSize:10, marginLeft:6, color:'var(--fg-3)'}}>MGR</span>}</div>
-              <div className="team-status">{p.note}</div>
+              <div className="team-name">{p.name}{p.manager && <span style={{fontSize:10, marginLeft:6, color:'var(--fg-3)'}}>MGR</span>}{p.status === 'onboarding' && <span className="team-onboard">Onboarding</span>}</div>
+              <div className="team-status">{p.note}{p.group ? (p.note ? ' · ' : '') + p.group : ''}</div>
             </div>
             <span className="team-dot" data-s={p.status}/>
           </div>
@@ -1097,9 +1240,27 @@ function TeamMod({ data }) {
 // blocked, filtered through KNOWN_PEOPLE name-matching against meta and label.
 // Click a recipient row → opens the Stakeholder Lens for them.
 function CommitmentsMod({ state }) {
-  const known = (window.KNOWN_PEOPLE && window.KNOWN_PEOPLE.length)
+  // Source 1: explicit knownPeople (config). Source 2 (fallback): the team roster
+  // — so Commitments populates automatically from real data even when nobody set
+  // up knownPeople. We build match patterns from each teammate's full name AND
+  // first name (longest-match-wins ordering happens below).
+  const S = window.SEED || {};
+  const explicit = (window.KNOWN_PEOPLE && window.KNOWN_PEOPLE.length)
     ? window.KNOWN_PEOPLE
-    : (window.SEED && Array.isArray(window.SEED.knownPeople) ? window.SEED.knownPeople : []);
+    : (Array.isArray(S.knownPeople) ? S.knownPeople : []);
+  const fromTeam = () => {
+    const roster = Array.isArray(S.team) ? S.team : (S.team && Array.isArray(S.team.people) ? S.team.people : []);
+    const out = [];
+    roster.forEach(p => {
+      const name = (p.name || '').trim();
+      if (!name) return;
+      const first = name.split(/\s+/)[0];
+      out.push({ match: name, name, note: p.note || p.role || '', manager: p.manager });
+      if (first && first.length >= 3 && first !== name) out.push({ match: first, name, note: p.note || p.role || '', manager: p.manager });
+    });
+    return out;
+  };
+  const known = explicit.length ? explicit : fromTeam();
 
   // Pull from all open work-item buckets
   const all = []
@@ -1155,7 +1316,7 @@ function CommitmentsMod({ state }) {
     >
       {groups.length === 0 ? (
         <div className="commit-empty">
-          No open commitments to known stakeholders. Items mentioning the people you work with will appear here as they show up in tasks.
+          No open commitments to your people yet. Tasks that mention a teammate (from your People list or config) show up here automatically — add your team via <code>/dashboard</code> or drop a Personio org chart into the People card.
         </div>
       ) : (
         <div className="commit-list">

@@ -2523,3 +2523,119 @@ html[data-theme="dark"] .dash-toast {
   background: var(--grey-100);
   border-color: rgba(255,255,255,0.10);
 }
+
+/* ==========================================================================
+   v0.12.3 — density (visible compact mode), Top3 scroll, metric note,
+   final dark-mode authority rules for inverted "spotlight" cards
+   ========================================================================== */
+
+/* ---- Density: make Compact visibly tighter than Comfortable ---- */
+[data-density="compact"] .mod { gap: 9px; padding: 13px 14px; }
+[data-density="compact"] .mod-h { margin-bottom: 2px; }
+[data-density="compact"] .top3 { padding: 13px 15px; }
+[data-density="compact"] .top3-h { margin-bottom: 9px; }
+[data-density="compact"] .top3-list { gap: 6px; }
+[data-density="compact"] .top3-item { padding: 6px 10px; }
+[data-density="compact"] .task-row { padding: 5px 0; }
+[data-density="compact"] .task-title { font-size: 13px; line-height: 18px; }
+[data-density="compact"] .slk-row { padding: 5px 8px; }
+[data-density="compact"] .slk-list { gap: 3px; }
+[data-density="compact"] .kpi { padding: 9px 11px; }
+[data-density="compact"] .commit-row { padding: 5px 8px; }
+[data-density="compact"] .team-person { padding: 6px 8px; }
+[data-density="compact"] .inbox-row { padding: 6px 0; }
+[data-density="compact"] .d-stat { padding: 12px 14px; }
+[data-density="compact"] .d-stats { gap: 10px; }
+[data-density="compact"] .d-greeting { margin-bottom: 14px; }
+
+/* Comfortable: a touch more air than the base so the toggle reads both ways */
+[data-density="comfortable"] .mod { gap: 16px; }
+[data-density="comfortable"] .top3-list { gap: 11px; }
+
+/* ---- Top-3: header pinned, list scrolls inside the box ---- */
+.top3 { display: flex; flex-direction: column; min-height: 0; }
+.top3-h { flex: 0 0 auto; }
+.top3-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; max-height: 460px; }
+.top3-suggest { flex: 0 0 auto; }
+
+/* In Layout D the box has a fixed height — let the LIST scroll, not the whole
+   module (so the "What actually matters today" header stays put). */
+.layout-d .box-inner > .top3 { overflow: hidden; height: 100%; }
+.layout-d .box-inner > .top3 .top3-list { max-height: none; }
+
+/* ---- Metric chart footer note ---- */
+.metric-tf-note { font-size: 11px; color: var(--fg-3); margin-left: 10px; }
+html[data-theme="dark"] .metric-tf-note { color: var(--fg-3); }
+
+/* ==========================================================================
+   FINAL dark-mode authority — these come last so they win over any earlier
+   duplicate rule. The Top-3 is an intentionally-dark "spotlight" card; when the
+   grey ramp flips it would invert to white-on-dark-text, so pin it explicitly.
+   ========================================================================== */
+html[data-theme="dark"] .top3 {
+  background: linear-gradient(180deg, #211f2a 0%, #1a1922 100%);
+  color: #f4f4f7;
+  border: 1px solid var(--border-default);
+}
+html[data-theme="dark"] .top3-title { color: #f6f6f9; }
+html[data-theme="dark"] .top3-label { color: #f1f1f5; }
+html[data-theme="dark"] .top3-meta { color: #a9a8b6; }
+html[data-theme="dark"] .top3-item {
+  background: rgba(255,255,255,0.045);
+  border: 1px solid rgba(255,255,255,0.09);
+}
+html[data-theme="dark"] .top3-num { color: var(--accent); }
+html[data-theme="dark"] .top3-stamp { color: #8d8c9c; }
+
+/* Next-meeting countdown card — an inverted "spotlight" surface (grey-900 base),
+   so pin it dark explicitly rather than letting the flipped ramp turn it white. */
+html[data-theme="dark"] .countdown {
+  background: linear-gradient(180deg, #211f2a 0%, #1a1922 100%);
+  color: #f4f4f7;
+  border: 1px solid var(--border-default);
+}
+html[data-theme="dark"] .countdown .cd-title { color: #f6f6f9; }
+html[data-theme="dark"] .countdown .cd-sub { color: #a9a8b6; }
+
+/* Wellness card */
+html[data-theme="dark"] .wellness,
+html[data-theme="dark"] .wellness-mod { background: var(--bg-surface); border-color: var(--border-default); }
+
+/* Any module card that somehow still resolves light */
+html[data-theme="dark"] .mod { background: var(--bg-surface); color: var(--fg-1); border-color: var(--border-default); }
+html[data-theme="dark"] .commitments-mod,
+html[data-theme="dark"] .team-mod,
+html[data-theme="dark"] .kpi-mod,
+html[data-theme="dark"] .slack-mod,
+html[data-theme="dark"] .proj-mod { background: var(--bg-surface); }
+
+/* ---- Team: Personio org-chart photo importer ---- */
+.team-dropzone {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  text-align: center; font-size: 12.5px; color: var(--fg-2);
+  padding: 14px 12px; margin-bottom: 12px;
+  border: 1.5px dashed var(--border-default); border-radius: 10px;
+  background: var(--grey-50); cursor: pointer;
+  transition: border-color 140ms, background 140ms;
+}
+.team-dropzone:hover { border-color: var(--accent, #2f6df6); }
+.team-dropzone.drag { border-color: var(--accent, #2f6df6); background: var(--accent-bg, #f0f6ff); color: var(--fg-1); }
+.team-dropzone.busy { cursor: default; border-style: solid; }
+.team-dropzone strong { font-weight: 600; color: var(--fg-1); }
+.team-drop-note { color: var(--fg-3); }
+.team-drop-spin {
+  width: 13px; height: 13px; border-radius: 50%;
+  border: 2px solid var(--border-default); border-top-color: var(--accent, #2f6df6);
+  display: inline-block; animation: dash-spin 0.8s linear infinite;
+}
+.team-import-msg { font-size: 12px; margin: -4px 0 12px; padding: 0 2px; }
+.team-import-msg.ok { color: var(--green-600, #1a7f4b); }
+.team-import-msg.err { color: var(--red-600, #d4351c); }
+.team-onboard {
+  font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+  margin-left: 6px; padding: 1px 5px; border-radius: 4px;
+  background: var(--yellow-100, #fef3c7); color: var(--yellow-800, #92610a);
+}
+html[data-theme="dark"] .team-dropzone { background: var(--grey-100); border-color: var(--border-default); }
+html[data-theme="dark"] .team-dropzone.drag { background: rgba(255,255,255,0.05); }
+html[data-theme="dark"] .team-onboard { background: rgba(234,179,8,0.18); color: #fbbf24; }

@@ -91,13 +91,56 @@ STATIC_GREETING = {
 
 # Team: prefer org.team; else empty roster with a friendly attention note.
 STATIC_TEAM = cfg_get("org.team") or {
-    "attention": "Add your team in <code>~/.claude/dashboard-config.local</code> → <code>org.team</code>.",
+    "attention": "Add your team in <code>~/.claude/dashboard-config.local</code> → <code>org.team</code>, or drop a Personio org chart on the People card.",
     "people": [],
 }
 
+
+def load_imported_team():
+    """People imported by dropping a Personio/org-chart photo on the People card
+    (written by serve.py → ~/.claude/dashboard-team.local.json). Merged on top of
+    the config roster so the drop persists across refreshes."""
+    p = os.path.expanduser("~/.claude/dashboard-team.local.json")
+    try:
+        if os.path.exists(p):
+            with open(p) as f:
+                data = json.load(f)
+            people = data.get("people") if isinstance(data, dict) else None
+            return people if isinstance(people, list) else []
+    except Exception:
+        pass
+    return []
+
+
+_imported_team = load_imported_team()
+if _imported_team:
+    # Merge by name (config entries win on conflict so hand-curated notes stay).
+    _existing = STATIC_TEAM.get("people") if isinstance(STATIC_TEAM, dict) else None
+    _existing = _existing if isinstance(_existing, list) else []
+    _by_name = {(p.get("name") or "").strip().lower(): p for p in _existing}
+    for p in _imported_team:
+        key = (p.get("name") or "").strip().lower()
+        if key and key not in _by_name:
+            _existing.append(p)
+            _by_name[key] = p
+    STATIC_TEAM = {"people": _existing}
+    if isinstance(cfg_get("org.team"), dict) and cfg_get("org.team", {}).get("attention"):
+        STATIC_TEAM["attention"] = cfg_get("org.team")["attention"]
+
 STATIC_OKRS = cfg_get("dashboard.okrs") or []
 STATIC_PINS = cfg_get("dashboard.pins") or []
+# knownPeople: explicit config first; else derive from the (possibly imported) team
+# so Commitments + name-detection work automatically from the roster.
 STATIC_KNOWN_PEOPLE = cfg_get("dashboard.knownPeople") or []
+if not STATIC_KNOWN_PEOPLE and isinstance(STATIC_TEAM, dict):
+    for _p in (STATIC_TEAM.get("people") or []):
+        _nm = (_p.get("name") or "").strip()
+        if not _nm:
+            continue
+        _first = _nm.split()[0]
+        STATIC_KNOWN_PEOPLE.append({"match": _nm, "name": _nm, "note": _p.get("note") or _p.get("role") or "", "manager": _p.get("manager", False)})
+        if len(_first) >= 3 and _first != _nm:
+            STATIC_KNOWN_PEOPLE.append({"match": _first, "name": _nm, "note": _p.get("note") or _p.get("role") or "", "manager": _p.get("manager", False)})
 STATIC_PINNED_PEOPLE = cfg_get("dashboard.pinnedPeople") or []
 
 _city = cfg_get("dashboard.weather.city", "")

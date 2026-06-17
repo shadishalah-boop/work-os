@@ -14,6 +14,44 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.12.3 — 2026-06-17
+
+Round two on the v0.12 feedback:
+
+1. **Dark mode — inverted "spotlight" cards fixed.** The Top-3 ("What actually
+   matters today") and the next-meeting countdown card are intentionally dark in
+   light mode (grey-900 base); the ramp-flip was turning them into white cards with
+   dark text. They're now pinned to an explicit dark surface with light text, placed
+   last in the stylesheet so they win over earlier overrides. Calendar, wellness and
+   any stray light module surfaces also forced dark.
+
+2. **Metric chart — readable Y-axis + instant timeframe switching.** The axis now
+   picks enough decimals that adjacent gridlines read as DIFFERENT numbers
+   (2.50% / 2.48% / 2.45% instead of "2.4%" three times), with 5 evenly-spaced ticks.
+   Switching timeframe now re-renders the chart immediately client-side (zooming into
+   the loaded series' recent window) — no /dashboard refresh needed to see a change.
+   Finer-grained data still arrives on the next refresh.
+
+3. **Density actually does something.** Compact vs Comfortable now visibly changes
+   padding, gaps and row sizing across modules, stats, tasks, Slack, KPIs and people
+   (previously density only touched two selectors).
+
+4. **Top-3 scrolls.** The list region scrolls inside its box with the header pinned,
+   matching the Tasks card.
+
+5. **Commitments populates automatically.** When no `knownPeople` is configured it
+   now derives stakeholders from your team roster (full + first names), both
+   client-side and in build-overrides. So tasks that mention a teammate surface here
+   without any extra setup.
+
+6. **People — import from a Personio org-chart photo.** The "Your people" card has a
+   drop zone (and an "Import photo" action): drop a screenshot of your Personio org
+   chart and the local server reads it headlessly (vision) into structured people —
+   name, role, group, onboarding/OOO status — then persists them so they survive
+   /dashboard refreshes and feed Commitments + name detection.
+
+---
+
 ## v0.12.1 — 2026-06-17
 
 Six quality-of-life improvements:

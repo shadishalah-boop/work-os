@@ -44,11 +44,15 @@ SKILL_DIR = os.path.dirname(os.path.abspath(__file__))
 REFRESH = os.path.join(SKILL_DIR, "refresh-headless.sh")
 SLACK_SEND = os.path.join(SKILL_DIR, "slack-send-headless.sh")
 SKILL_RUN = os.path.join(SKILL_DIR, "skill-run-headless.sh")
+ORG_PHOTO_RUN = os.path.join(SKILL_DIR, "org-photo-headless.sh")
 # Custom Metrics-card definitions — the on-dashboard editor reads/writes this; the
 # refresh agent reads it to know what to fetch from Looker/Snowflake.
 METRICS_FILE = os.path.expanduser("~/.claude/dashboard-metrics.local.json")
 # Left-rail skill shortcuts — the on-dashboard "Add skill" form reads/writes this.
 SKILLS_FILE = os.path.expanduser("~/.claude/dashboard-skills.local.json")
+# Team roster — populated by dropping a Personio/org-chart photo on the People card.
+# build-overrides.py merges this into SEED.team so it survives /dashboard refreshes.
+TEAM_FILE = os.path.expanduser("~/.claude/dashboard-team.local.json")
 LOGIN_SHELL = "/bin/zsh" if os.path.exists("/bin/zsh") else "/bin/bash"
 
 _state = {"running": False, "last": None, "ok": None, "started_at": None}
@@ -62,6 +66,11 @@ SKILL_RUN_TIMEOUT = 300  # seconds — hard cap so a stuck skill run always reso
 _skill_state = {"running": False, "last": None, "ok": None, "started_at": None, "label": None, "output": None}
 _skill_lock = threading.Lock()
 SKILL_OUTPUT_CAP = 40000  # chars — enough to read a result in the popup, bounded
+
+# Org-photo import state — same background-job + status-poll pattern.
+_org_state = {"running": False, "ok": None, "message": None, "people": None, "started_at": None}
+_org_lock = threading.Lock()
+ORG_PHOTO_TIMEOUT = 240  # seconds — vision read + extraction, bounded
 
 
 def _run_refresh():
@@ -210,6 +219,106 @@ def _run_skill(command):
             _skill_state["running"] = False
 
 
+def _extract_json_array(text):
+    """Pull the first top-level JSON array out of a headless run's stdout (which may
+    include log noise around it). Returns a Python list, or None if none parses."""
+    if not text:
+        return None
+    # Fast path: whole thing is the array.
+    t = text.strip()
+    try:
+        v = json.loads(t)
+        if isinstance(v, list):
+            return v
+    except Exception:
+        pass
+    # Otherwise scan for the first balanced [...] block.
+    start = t.find("[")
+    while start != -1:
+        depth = 0
+        for i in range(start, len(t)):
+            if t[i] == "[":
+                depth += 1
+            elif t[i] == "]":
+                depth -= 1
+                if depth == 0:
+                    chunk = t[start:i + 1]
+                    try:
+                        v = json.loads(chunk)
+                        if isinstance(v, list):
+                            return v
+                    except Exception:
+                        break
+        start = t.find("[", start + 1)
+    return None
+
+
+def _normalize_people(raw):
+    """Coerce the extracted array into the dashboard's team-person shape."""
+    people = []
+    for p in (raw or []):
+        if not isinstance(p, dict):
+            continue
+        name = (p.get("name") or "").strip()
+        if not name:
+            continue
+        status = (p.get("status") or "in").strip().lower()
+        person = {
+            "name": name,
+            "note": (p.get("role") or p.get("note") or "").strip(),
+            "group": (p.get("group") or "").strip(),
+            "status": status if status in ("in", "ooo", "onboarding") else "in",
+            "ooo": status == "ooo",
+        }
+        people.append(person)
+    return people
+
+
+def _run_org_photo(image_path):
+    """Read a dropped org-chart image headlessly, extract people JSON, persist to
+    TEAM_FILE so build-overrides merges it into SEED.team on the next refresh."""
+    try:
+        proc = subprocess.run(
+            [LOGIN_SHELL, "-lc", f"bash {shlex.quote(ORG_PHOTO_RUN)} {shlex.quote(image_path)}"],
+            capture_output=True, text=True, timeout=ORG_PHOTO_TIMEOUT,
+        )
+        out = (proc.stdout or "").strip()
+        people = _normalize_people(_extract_json_array(out))
+        if proc.returncode == 0 and people:
+            try:
+                os.makedirs(os.path.dirname(TEAM_FILE), exist_ok=True)
+                with open(TEAM_FILE, "w") as f:
+                    json.dump({"people": people}, f, indent=2)
+            except Exception:
+                pass
+            with _org_lock:
+                _org_state["ok"] = True
+                _org_state["people"] = people
+                _org_state["message"] = f"Imported {len(people)} people"
+        else:
+            tail = (proc.stderr or out or "").strip().splitlines()
+            with _org_lock:
+                _org_state["ok"] = False
+                _org_state["people"] = None
+                _org_state["message"] = (tail[-1] if tail else "Couldn't read any people from that image.")
+    except subprocess.TimeoutExpired:
+        with _org_lock:
+            _org_state["ok"] = False
+            _org_state["message"] = (f"Photo import timed out after {ORG_PHOTO_TIMEOUT // 60} min. "
+                                     "Try a clearer screenshot, or add your team via /dashboard.")
+    except Exception as e:
+        with _org_lock:
+            _org_state["ok"] = False
+            _org_state["message"] = f"import error: {e}"
+    finally:
+        try:
+            os.unlink(image_path)
+        except OSError:
+            pass
+        with _org_lock:
+            _org_state["running"] = False
+
+
 class Handler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *a, **k):
         super().__init__(*a, directory=DASH_DIR, **k)
@@ -300,6 +409,55 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 _skill_state["label"] = (body.get("label") or command)
             threading.Thread(target=_run_skill, args=(command,), daemon=True).start()
             return self._json(202, {"status": "started"})
+        if path == "/import-org-photo":
+            # Body: {"image": "data:image/png;base64,...."} OR {"image": "<base64>", "ext": "png"}.
+            # Decode → temp file → headless vision extraction (background, poll for status).
+            body = self._read_json_body()
+            data_url = (body.get("image") or "").strip()
+            if not data_url:
+                return self._json(400, {"ok": False, "message": "no image"})
+            ext = (body.get("ext") or "png").lstrip(".")
+            b64 = data_url
+            if data_url.startswith("data:"):
+                try:
+                    header, b64 = data_url.split(",", 1)
+                    if "image/" in header:
+                        ext = header.split("image/")[1].split(";")[0] or ext
+                except ValueError:
+                    return self._json(400, {"ok": False, "message": "malformed data URL"})
+            import base64
+            try:
+                raw = base64.b64decode(b64, validate=False)
+            except Exception as e:
+                return self._json(400, {"ok": False, "message": f"bad base64: {e}"})
+            if len(raw) > 12 * 1024 * 1024:
+                return self._json(413, {"ok": False, "message": "image too large (max 12MB)"})
+            with _org_lock:
+                if _org_state["running"]:
+                    return self._json(202, {"status": "already-running"})
+                _org_state.update({"running": True, "ok": None, "message": None, "people": None, "started_at": time.time()})
+            try:
+                fd, img_path = tempfile.mkstemp(suffix="." + (ext if ext.isalnum() else "png"))
+                with os.fdopen(fd, "wb") as f:
+                    f.write(raw)
+            except Exception as e:
+                with _org_lock:
+                    _org_state.update({"running": False, "ok": False, "message": f"temp write error: {e}"})
+                return self._json(500, {"ok": False, "message": str(e)})
+            threading.Thread(target=_run_org_photo, args=(img_path,), daemon=True).start()
+            return self._json(202, {"status": "started"})
+        if path == "/team-config":
+            body = self._read_json_body()
+            people = body.get("people")
+            if not isinstance(people, list):
+                return self._json(400, {"ok": False, "message": "expected {people: [...]}"})
+            try:
+                os.makedirs(os.path.dirname(TEAM_FILE), exist_ok=True)
+                with open(TEAM_FILE, "w") as f:
+                    json.dump({"people": people}, f, indent=2)
+                return self._json(200, {"ok": True, "count": len(people)})
+            except Exception as e:
+                return self._json(500, {"ok": False, "message": f"write error: {e}"})
         self.send_error(404)
 
     def do_GET(self):
@@ -333,6 +491,21 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 s = dict(_skill_state)
             s["elapsed"] = int(time.time() - s["started_at"]) if s.get("started_at") else 0
             return self._json(200, s)
+        if self.path.rstrip("/") == "/import-org-status":
+            with _org_lock:
+                s = dict(_org_state)
+            s["elapsed"] = int(time.time() - s["started_at"]) if s.get("started_at") else 0
+            return self._json(200, s)
+        if self.path.rstrip("/") == "/team-config":
+            try:
+                if os.path.exists(TEAM_FILE):
+                    with open(TEAM_FILE) as f:
+                        data = json.load(f)
+                    people = data.get("people") if isinstance(data, dict) else None
+                    return self._json(200, {"people": people if isinstance(people, list) else []})
+                return self._json(200, {"people": []})
+            except Exception as e:
+                return self._json(200, {"people": [], "error": str(e)})
         return super().do_GET()
 
 
