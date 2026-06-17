@@ -67,18 +67,23 @@
     "items": [
       {
         "id": "m1", "label": "Weekly active learners", "source": "snowflake", "format": "k", "target": "target 450k",
-        "sql": "SELECT wal_current AS value, wal_prior AS prev FROM analytics.kpis.weekly_active_learners",
-        "_sql_note": "Return one row: a 'value' column (current) and an optional 'prev' column (prior period, for the ▲/▼ delta)."
+        "nl": "weekly active learners, this week vs last week",
+        "_nl_note": "SIMPLEST: just describe the metric. The refresh agent explores your Snowflake and writes the query for you (and remembers it). No SQL needed."
       },
       {
-        "id": "m2", "label": "Payment fees / GMV", "source": "looker", "format": "%", "target": "target < 2%",
+        "id": "m2", "label": "Avg revenue / user", "source": "snowflake", "format": "plain", "target": "target $42",
+        "sql": "SELECT arpu_current AS value, arpu_prior AS prev FROM analytics.kpis.arpu",
+        "_sql_note": "OR give exact SQL: return one row with a 'value' column (current) and an optional 'prev' column (prior period, for the ▲/▼ delta)."
+      },
+      {
+        "id": "m3", "label": "Payment fees / GMV", "source": "looker", "format": "%", "target": "target < 2%",
         "field": "fact_payment.payment_fees_over_gmv_proceeds",
         "_field_note": "OPTIONAL — only works if you've added a Looker MCP to Claude Code. A LookML view.field measure the agent runs for the current vs prior period."
       }
     ],
     "_ref_types_README": [
-      "snowflake reference (recommended, zero setup): 'sql' = a query returning a 'value' column (and optional 'prev' column).",
-      "looker references (optional, needs the Looker MCP in Claude Code; use ONE): 'field' = LookML view.field measure | 'look' = a Look URL or ID | 'query' = plain-English | 'dashboard'+'tile' = a Looker dashboard tile."
+      "snowflake (recommended, zero setup) — use ONE: 'nl' = a plain-English description (Claude finds + writes the query) | 'sql' = an exact query returning a 'value' column (and optional 'prev').",
+      "looker (optional, needs the Looker MCP in Claude Code) — use ONE: 'field' = LookML view.field measure | 'look' = a Look URL or ID | 'query' = plain-English | 'dashboard'+'tile' = a Looker dashboard tile."
     ]
   },
 

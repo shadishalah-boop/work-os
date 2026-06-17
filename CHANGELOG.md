@@ -14,6 +14,28 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.9.4 — 2026-06-16
+
+**Snowflake metrics: just describe them — no SQL required.** You can now add a Snowflake
+metric by typing a plain-English description (e.g. *"weekly active learners, this week vs
+last week"*); the refresh agent explores your Snowflake, writes the query, fetches the
+current + prior value, and remembers the SQL it generated so later refreshes skip
+re-discovery. SQL is still available for when you want exact control.
+
+- Editor: Snowflake now has a **Describe it / SQL** toggle (Describe is the default). The
+  describe box takes a sentence; the SQL box takes a query.
+- Agent (`dashboard-metrics`): handles a Snowflake `nl` reference — discovers the schema
+  (scoped to any database/area you name; the account can have many DBs and no default),
+  writes a current-vs-prior query, runs it, and emits the `resolvedSql` it used. Reuses a
+  prior `resolvedSql` when the description is unchanged.
+- Config/template/README lead with the describe-it path.
+
+Verified against the live Snowflake connector: `sql_exec` runs, and schema discovery
+works (`SHOW TERSE DATABASES` enumerated the account's databases). 12 editor DOM checks
+incl. the new describe→`nl` default mapping. Bumps `modules-b.jsx` v=34, plugin 0.9.4.
+
+---
+
 ## v0.9.3 — 2026-06-16
 
 **Fix: the Slack-photo favicon (v0.9.2) never populated.** Two bugs:

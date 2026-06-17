@@ -36,9 +36,35 @@ Each item: `{ id, label, source, target?, format?, goodDirection?, <reference> }
 ### source = "snowflake"
 Resolve the SQL tool: `mcp__<MCP_SNOWFLAKE>__sql_exec` (server name from the kickoff /
 config `mcp.snowflake`, default `Snowflake`) → `mcp__Snowflake__sql_exec` → else
-`ToolSearch "snowflake execute sql"`. Run the item's `sql` (it should return **one row**
-with a `value` column and, ideally, a `prev` column for the prior period). Parse the
-response: `result_set.data` is an array of rows (values as strings); map columns by
+`ToolSearch "snowflake execute sql"`.
+
+A Snowflake metric is referenced ONE of two ways:
+
+- **`sql`** — a ready query. Run it as-is. It should return **one row** with a `value`
+  column and, ideally, a `prev` column for the prior period.
+- **`nl`** — a plain-English **description** (e.g. "weekly active learners, this week vs
+  last week"). **You write the SQL.** This is the simple path most users use:
+  1. **Reuse if already resolved.** If a previous `metrics.json` (Read it once if present)
+     has a `resolvedSql` for this metric `id` and the `nl` text is unchanged, just run that
+     SQL — skip discovery.
+  2. **Discover the schema** efficiently (≤3–4 queries). The account may have **many
+     databases and no default** — if the description names a database / schema / product
+     area (e.g. "…in CARGO" or "the analytics KPI table"), scope discovery there first.
+     Otherwise pull keywords from the description and search the catalog, e.g.
+     `SELECT table_catalog, table_schema, table_name, column_name FROM SNOWFLAKE.ACCOUNT_USAGE.COLUMNS WHERE column_name ILIKE '%<kw>%' OR table_name ILIKE '%<kw>%' LIMIT 50`
+     (fall back to a specific database's `INFORMATION_SCHEMA.COLUMNS`, or `SHOW TERSE TABLES IN ACCOUNT`/`SHOW TABLES LIKE '%<kw>%'` if ACCOUNT_USAGE isn't granted). Pick the
+     best-matching table/measure; if there's an obvious curated metrics/KPI schema, prefer it.
+  3. **Write the query** returning the **current value AND a prior-period value** so the
+     card shows a trend — e.g. current week vs the week before, using the table's date
+     column: `SELECT <agg> AS value, <agg over prior period> AS prev FROM <fqtn> …`. Use
+     fully-qualified names (`db.schema.table`).
+  4. Run it. If you genuinely can't find a matching table after discovery, set this
+     metric's `value:"—"`, `sourceOk:false`, `error:"couldn't find a table matching '<nl>'"`
+     — never guess a number.
+  Include the SQL you used as `resolvedSql` on this metric in the output (so the user can
+  verify it and so the next run can reuse it).
+
+Parse any result: `result_set.data` is an array of rows (values as strings); map columns by
 `result_set.resultSetMetaData.rowType[*].name` (case-insensitive: `value`/`current` →
 current, `prev`/`prior`/`previous` → prior). If there are no named matches, use column 0
 as current and column 1 (if present) as prior. Coerce to numbers.
@@ -99,13 +125,17 @@ reports the file exists, Read once then Write again — never `cat`/`echo`/hered
 ### Field reference
 - `kpis[]` preserves the **order** of the definitions (the card renders them in order).
 - `value` — the formatted string the card shows big. `"—"` if that metric failed.
+- `resolvedSql` — for `nl` Snowflake metrics, the SQL you generated (lets the user verify it
+  and lets the next run skip re-discovery). Omit for `sql`/Looker metrics.
 - `trend.good` — drives the green/red color; honor `goodDirection`.
 - `trend.period` — short label (e.g. `"vs prior period"`, `"vs last week"`).
 - Per-metric `sourceOk:false` keeps the others rendering; only set top-level
   `sourceOk:false` if you couldn't read the definitions at all.
 
 ## Rules
-- **Cap**: at most ~8 metrics; ≤2 queries per metric (current + prior). Don't scan schemas.
+- **Cap**: at most ~8 metrics. A `sql`/`field`/`look` metric = 1–2 queries. An `nl`
+  metric = ≤4 discovery queries + 1 fetch the FIRST time, then reuses `resolvedSql` (1
+  query) on later runs. Keep discovery tight — don't dump whole schemas.
 - **Never fabricate** a value. Failed metric → `value:"—"`, `sourceOk:false`, short error.
 - **Read-only.** Only run SELECT/queries that read; never write to the warehouse.
 - Your only stdout is **exactly one character**: `✓` if you wrote the JSON, `✗` if you

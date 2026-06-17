@@ -732,15 +732,24 @@ function Sparkline({ dir }) {
 // Build editable definitions from the rendered metrics (so the editor isn't empty
 // for demo users who have no saved definitions yet).
 function metricsDefsFromData(data) {
-  return (data || []).map((k, i) => ({
-    id: k.id || ('m' + (i + 1)),
-    label: k.label || '',
-    source: k.source || 'looker',
-    refType: k.field ? 'field' : k.look ? 'look' : k.query ? 'query' : 'field',
-    ref: k.field || k.look || k.query || k.sql || '',
-    target: k.target || '',
-    format: k.format || 'plain',
-  }));
+  return (data || []).map((k, i) => {
+    const source = k.source || 'snowflake';
+    let refType, ref;
+    if (source === 'snowflake') {
+      refType = k.sql ? 'sql' : 'nl';
+      ref = k.nl || k.sql || '';
+    } else {
+      refType = k.field ? 'field' : k.look ? 'look' : k.query ? 'query' : 'field';
+      ref = k.field || k.look || k.query || '';
+    }
+    return {
+      id: k.id || ('m' + (i + 1)),
+      label: k.label || '',
+      source, refType, ref,
+      target: k.target || '',
+      format: k.format || 'plain',
+    };
+  });
 }
 
 function KpiMod({ data }) {
@@ -771,7 +780,7 @@ function KpiMod({ data }) {
   const openEditor = async () => { await ensureDefs(); setSaveMsg(null); setEditing(true); };
 
   const setDef = (i, patch) => setDefs(ds => ds.map((d, j) => j === i ? { ...d, ...patch } : d));
-  const addDef = () => setDefs(ds => [...(ds || []), { id: 'm' + Date.now(), label: '', source: 'snowflake', refType: 'field', ref: '', target: '', format: 'plain' }]);
+  const addDef = () => setDefs(ds => [...(ds || []), { id: 'm' + Date.now(), label: '', source: 'snowflake', refType: 'nl', ref: '', target: '', format: 'plain' }]);
   const removeDef = (i) => setDefs(ds => ds.filter((_, j) => j !== i));
   const moveDef = (i, dir) => setDefs(ds => {
     const j = i + dir; if (j < 0 || j >= ds.length) return ds;
@@ -782,7 +791,7 @@ function KpiMod({ data }) {
   const toItems = () => (defs || []).filter(d => (d.label || '').trim()).map(d => {
     const item = { id: d.id, label: d.label.trim(), source: d.source, target: d.target || '', format: d.format || 'plain' };
     const ref = (d.ref || '').trim();
-    if (d.source === 'snowflake') item.sql = ref;
+    if (d.source === 'snowflake') item[d.refType === 'sql' ? 'sql' : 'nl'] = ref;  // describe (nl) or raw sql
     else item[d.refType || 'field'] = ref;   // looker: field | look | query
     return item;
   });
@@ -842,7 +851,8 @@ function KpiMod({ data }) {
               <div className="metric-row-top">
                 <input className="metric-in metric-in--label" placeholder="Label (e.g. Activation)"
                        value={d.label} onChange={e => setDef(i, { label: e.target.value })}/>
-                <select className="metric-in" value={d.source} onChange={e => setDef(i, { source: e.target.value })}>
+                <select className="metric-in" value={d.source}
+                        onChange={e => { const src = e.target.value; setDef(i, { source: src, refType: src === 'snowflake' ? 'nl' : 'field' }); }}>
                   <option value="snowflake">Snowflake</option>
                   <option value="looker">Looker</option>
                 </select>
@@ -853,7 +863,12 @@ function KpiMod({ data }) {
                 </div>
               </div>
               <div className="metric-row-ref">
-                {d.source === 'looker' && (
+                {d.source === 'snowflake' ? (
+                  <select className="metric-in" value={d.refType || 'nl'} onChange={e => setDef(i, { refType: e.target.value })}>
+                    <option value="nl">Describe it</option>
+                    <option value="sql">SQL query</option>
+                  </select>
+                ) : (
                   <select className="metric-in" value={d.refType || 'field'} onChange={e => setDef(i, { refType: e.target.value })}>
                     <option value="field">LookML field</option>
                     <option value="look">Look ID/URL</option>
@@ -861,10 +876,13 @@ function KpiMod({ data }) {
                   </select>
                 )}
                 <input className="metric-in metric-in--ref"
-                       placeholder={d.source === 'snowflake' ? 'SELECT … AS value, … AS prev FROM …'
-                         : d.refType === 'look' ? 'Look URL or ID'
-                         : d.refType === 'query' ? 'e.g. avg NPS this quarter vs last'
-                         : 'view.field — e.g. fact_payment.payment_fees_over_gmv_proceeds'}
+                       placeholder={
+                         d.source === 'snowflake'
+                           ? (d.refType === 'sql' ? 'SELECT … AS value, … AS prev FROM …'
+                              : 'Describe it — e.g. weekly active learners, this week vs last week')
+                           : d.refType === 'look' ? 'Look URL or ID'
+                           : d.refType === 'query' ? 'e.g. avg NPS this quarter vs last'
+                           : 'view.field — e.g. fact_payment.payment_fees_over_gmv_proceeds'}
                        value={d.ref} onChange={e => setDef(i, { ref: e.target.value })}/>
               </div>
               <div className="metric-row-ref">

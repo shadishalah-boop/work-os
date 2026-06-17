@@ -193,9 +193,14 @@ CLI setup. (If you have neither connector, the card just shows demo numbers.)
 **Add metrics right on the dashboard:** click **Edit** on the Metrics card to add / remove
 / reorder metrics, set targets and number format, and choose the source + reference.
 
-- **Snowflake (recommended, zero setup)** — a SQL query returning a `value` column (and an
-  optional `prev` column for the ▲/▼ delta), e.g.
-  `SELECT wal_current AS value, wal_prior AS prev FROM analytics.kpis.weekly_active_learners`.
+- **Snowflake (recommended, zero setup)** — two ways:
+  - **Describe it (simplest):** type the metric in plain English (e.g. *"weekly active
+    learners, this week vs last week"*) and the refresh agent explores your Snowflake,
+    writes the query, and remembers it — no SQL required. This is the "just tell Claude
+    what you want" path.
+  - **SQL:** paste an exact query returning a `value` column (and an optional `prev` column
+    for the ▲/▼ delta), e.g.
+    `SELECT wal_current AS value, wal_prior AS prev FROM analytics.kpis.weekly_active_learners`.
 - **Looker (optional)** — a LookML field (`fact_payment.payment_fees_over_gmv_proceeds`), a
   Look URL/ID, plain English, or a dashboard tile. Supported, but it currently requires
   **each person to add a Looker MCP to their Claude Code** (e.g. `claude mcp add … --scope
