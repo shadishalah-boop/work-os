@@ -727,11 +727,17 @@ function Sparkline({ dir, data }) {
 // Format a raw number for axis labels, honoring the metric's display format.
 function formatMetricNum(n, format) {
   if (n == null || !isFinite(n)) return '—';
-  if (format === '%') return (Math.round(n * 10) / 10) + '%';
+  if (format === '%') {
+    if (Math.abs(n) < 1) return n.toFixed(2) + '%';
+    if (Math.abs(n) < 10) return (Math.round(n * 100) / 100).toFixed(1) + '%';
+    return Math.round(n) + '%';
+  }
   if (format === 'k') return (Math.round(n / 100) / 10) + 'k';
   if (format === 'M') return (Math.round(n / 1e5) / 10) + 'M';
   if (format === 'h') return Math.round(n) + 'h';
-  return Math.abs(n) >= 1000 ? Math.round(n).toLocaleString() : String(Math.round(n * 10) / 10);
+  if (Math.abs(n) >= 1000) return Math.round(n).toLocaleString();
+  if (Math.abs(n) < 1 && n !== 0) return n.toPrecision(3);
+  return String(Math.round(n * 10) / 10);
 }
 
 // Full metric chart: real line with Y axis (min/mid/max labels), gridlines, X axis
@@ -741,13 +747,17 @@ function MetricChart({ series, labels, format, color }) {
   if (data.length < 2) {
     return <div className="metric-chart-empty">No series yet — run <code>/dashboard</code> to fetch this metric's history.</div>;
   }
-  const W = 580, H = 240, padL = 52, padR = 14, padT = 16, padB = 30;
-  const max = Math.max(...data), min = Math.min(...data), span = (max - min) || 1;
+  const W = 580, H = 240, padL = 56, padR = 14, padT = 16, padB = 30;
+  const rawMax = Math.max(...data), rawMin = Math.min(...data);
+  const rawSpan = rawMax - rawMin;
+  const margin = rawSpan < rawMax * 0.05 ? Math.max(Math.abs(rawMax) * 0.1, 0.001) : rawSpan * 0.08;
+  const max = rawMax + margin, min = rawMin - margin;
+  const span = max - min;
   const X = i => padL + (i / (data.length - 1)) * (W - padL - padR);
   const Y = v => padT + (1 - (v - min) / span) * (H - padT - padB);
   const line = data.map((v, i) => `${i === 0 ? 'M' : 'L'}${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(' ');
   const area = `${line} L${X(data.length - 1).toFixed(1)},${(H - padB).toFixed(1)} L${X(0).toFixed(1)},${(H - padB).toFixed(1)} Z`;
-  const ticks = [max, (max + min) / 2, min];
+  const ticks = [rawMax, (rawMax + rawMin) / 2, rawMin];
   const c = color || 'var(--teal-500)';
   const lab = labels || [];
   const firstLab = lab[0] || `${data.length} pts ago`;

@@ -1160,10 +1160,14 @@ html[data-theme="dark"] body { background: var(--bg-page); color: var(--fg-1); }
 .notif-close { margin-left: auto; border: none; background: transparent; font-size: 18px; cursor: pointer; color: var(--fg-3); line-height: 1; }
 .notif-body { overflow: auto; padding: 6px 0; }
 .notif-empty { padding: 18px 14px; color: var(--fg-2); font-size: 13px; text-align: center; }
-.notif-row { display: flex; flex-direction: column; gap: 1px; padding: 8px 14px; border-bottom: 1px solid var(--border-subtle); }
+.notif-row { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; padding: 8px 14px; border-bottom: 1px solid var(--border-subtle); position: relative; }
 .notif-row:last-child { border-bottom: none; }
 .notif-type { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--fg-3); }
-.notif-label { font-size: 13px; color: var(--fg-1); }
+.notif-label { font-size: 13px; color: var(--fg-1); flex: 1; min-width: 0; }
+.notif-dismiss { background: none; border: none; cursor: pointer; font-size: 14px; color: var(--fg-3); opacity: 0.5; padding: 0 2px; line-height: 1; }
+.notif-dismiss:hover { opacity: 1; color: var(--fg-1); }
+.notif-clear { background: none; border: none; cursor: pointer; font-size: 11px; color: var(--fg-3); margin-left: auto; padding: 2px 6px; border-radius: 4px; }
+.notif-clear:hover { background: var(--grey-100); color: var(--fg-1); }
 
 .task-hidden-row { display: flex; align-items: center; gap: 8px; padding: 6px 4px; border-bottom: 1px dashed var(--border-subtle); font-size: 13px; opacity: 0.7; }
 .task-hidden-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1895,3 +1899,162 @@ html[data-theme="dark"] body { background: var(--bg-page); color: var(--fg-1); }
 .swatch.on { border-color: var(--fg-1); }
 .settings-modules { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; }
 .settings-check { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--fg-1); cursor: pointer; }
+
+/* ==========================================================================
+   DARK MODE — comprehensive overrides (v0.12.2)
+   ========================================================================== */
+
+/* Module cards */
+html[data-theme="dark"] .mod {
+  background: var(--bg-surface);
+  border-color: var(--border-default);
+}
+
+/* Top-3 card */
+html[data-theme="dark"] .top3 {
+  background: var(--bg-surface);
+  border-color: var(--border-default);
+}
+html[data-theme="dark"] .top3-item { border-bottom-color: var(--border-subtle); }
+html[data-theme="dark"] .top3-item.done { opacity: 0.5; }
+html[data-theme="dark"] .badge-star { background: var(--grey-200); }
+html[data-theme="dark"] .badge-star img { filter: invert(1) brightness(0.9); }
+
+/* Task rows */
+html[data-theme="dark"] .task-row { border-bottom-color: var(--border-subtle); }
+html[data-theme="dark"] .task-tick { border-color: var(--grey-400); }
+html[data-theme="dark"] .priority-flag[data-p="3"] { background: var(--grey-200); }
+html[data-theme="dark"] .done-flag { color: var(--green-400, #4ade80); }
+
+/* Calendar */
+html[data-theme="dark"] .cal-event { background: var(--grey-100); border-color: var(--border-subtle); }
+html[data-theme="dark"] .cal-event[data-type="focus"] { background: var(--grey-50); }
+html[data-theme="dark"] .cal-now-line::before { background: var(--red-500); }
+
+/* Slack module */
+html[data-theme="dark"] .slk-row.open { background: var(--grey-100); }
+html[data-theme="dark"] .slk-tabs { border-bottom-color: var(--border-subtle); }
+html[data-theme="dark"] .slk-tab:hover { color: var(--fg-1); }
+html[data-theme="dark"] .slk-unread { background: var(--red-500); color: #fff; }
+html[data-theme="dark"] .slack-compose { background: var(--grey-100); border-color: var(--border-default); }
+html[data-theme="dark"] .slack-compose input { background: transparent; color: var(--fg-1); }
+html[data-theme="dark"] .slack-suggested .sug { background: var(--grey-200); color: var(--fg-1); border-color: var(--border-default); }
+html[data-theme="dark"] .slack-suggested .sug.primary { background: var(--accent, #2f6df6); color: #fff; }
+html[data-theme="dark"] .slack-suggested .sug.armed { background: var(--red-500); color: #fff; }
+html[data-theme="dark"] .slack-section--reply { background: var(--grey-100); border-color: var(--border-subtle); }
+
+/* Ask-Slack box */
+html[data-theme="dark"] .slack-mod > div:first-child + div { border-color: var(--border-default); }
+
+/* KPI / Metrics */
+html[data-theme="dark"] .kpi { background: var(--grey-100); border-color: var(--border-subtle); }
+html[data-theme="dark"] .kpi:hover { background: var(--grey-200); }
+html[data-theme="dark"] .metric-editor { background: var(--grey-100); border-color: var(--border-default); }
+html[data-theme="dark"] .metric-in { background: var(--grey-200); color: var(--fg-1); border-color: var(--border-default); }
+html[data-theme="dark"] .metric-chart-modal { background: var(--bg-surface); }
+html[data-theme="dark"] .mc-grid { stroke: var(--grey-300); }
+html[data-theme="dark"] .mc-ylabel { fill: var(--fg-2); }
+html[data-theme="dark"] .mc-xlabel { fill: var(--fg-2); }
+html[data-theme="dark"] .metric-tf-btn { background: var(--grey-200); color: var(--fg-2); border-color: var(--border-default); }
+html[data-theme="dark"] .metric-tf-btn:hover { background: var(--grey-300); color: var(--fg-1); }
+
+/* Projects / OKR */
+html[data-theme="dark"] .proj-card { background: var(--grey-100); border-color: var(--border-subtle); }
+html[data-theme="dark"] .proj-card:hover { background: var(--grey-200); }
+
+/* Blockers */
+html[data-theme="dark"] .blocker-row { border-bottom-color: var(--border-subtle); }
+
+/* Team / People */
+html[data-theme="dark"] .team-person { border-color: var(--border-subtle); }
+html[data-theme="dark"] .team-person:hover { background: var(--grey-100); }
+
+/* Commitments */
+html[data-theme="dark"] .commit-group-h { background: var(--grey-100); }
+html[data-theme="dark"] .commit-group-h:hover { background: var(--grey-200); }
+html[data-theme="dark"] .commit-row { border-bottom-color: var(--border-subtle); }
+html[data-theme="dark"] .commit-avatar { background: var(--grey-300); color: var(--fg-1); }
+
+/* Inbox */
+html[data-theme="dark"] .inbox-row { border-bottom-color: var(--border-subtle); }
+html[data-theme="dark"] .inbox-row:hover { background: var(--grey-100); }
+
+/* Notifications panel */
+html[data-theme="dark"] .notif-panel { background: var(--bg-surface); border-color: var(--border-default); }
+html[data-theme="dark"] .notif-head { border-bottom-color: var(--border-subtle); }
+html[data-theme="dark"] .notif-row { border-bottom-color: var(--border-subtle); }
+
+/* Settings modal */
+html[data-theme="dark"] .settings-modal { background: var(--bg-surface); }
+html[data-theme="dark"] .settings-head { border-bottom-color: var(--border-subtle); }
+html[data-theme="dark"] .seg-btn { background: var(--grey-200); border-color: var(--border-default); color: var(--fg-2); }
+html[data-theme="dark"] .seg-btn:hover { background: var(--grey-300); }
+
+/* Skill result modal */
+html[data-theme="dark"] .skill-result-modal { background: var(--bg-surface); }
+html[data-theme="dark"] .skill-result-body { background: var(--grey-100); color: var(--fg-1); }
+
+/* Task list modal */
+html[data-theme="dark"] .task-list-modal { background: var(--bg-surface); }
+html[data-theme="dark"] .task-list-head { border-bottom-color: var(--border-subtle); }
+
+/* Share modal */
+html[data-theme="dark"] .share-modal { background: var(--bg-surface); }
+html[data-theme="dark"] .share-preview { background: var(--grey-100); color: var(--fg-1); border-color: var(--border-default); }
+
+/* Log decision modal */
+html[data-theme="dark"] .log-decision-modal { background: var(--bg-surface); }
+html[data-theme="dark"] .log-dec-body input,
+html[data-theme="dark"] .log-dec-body textarea { background: var(--grey-100); color: var(--fg-1); border-color: var(--border-default); }
+
+/* Find modal */
+html[data-theme="dark"] .modal-panel { background: var(--bg-surface); }
+html[data-theme="dark"] .modal-search { border-bottom-color: var(--border-subtle); }
+html[data-theme="dark"] .modal-search input { color: var(--fg-1); }
+html[data-theme="dark"] .modal-results { background: var(--bg-surface); }
+
+/* Stakeholder lens drawer */
+html[data-theme="dark"] .lens-drawer { background: var(--bg-surface); }
+html[data-theme="dark"] .lens-section h3 { border-bottom-color: var(--border-subtle); }
+html[data-theme="dark"] .lens-item { border-bottom-color: var(--border-subtle); }
+
+/* Meeting prep card */
+html[data-theme="dark"] .meeting-prep-card { background: var(--grey-100); border-color: var(--border-default); }
+html[data-theme="dark"] .mp-pill { background: var(--accent, #2f6df6); }
+html[data-theme="dark"] .mp-col-label { color: var(--fg-3); }
+html[data-theme="dark"] .mp-item { color: var(--fg-1); }
+
+/* What-changed strip */
+html[data-theme="dark"] .what-changed-strip { background: var(--grey-100); border-color: var(--border-subtle); }
+
+/* Buttons — ghost/tertiary in dark */
+html[data-theme="dark"] .btn--ghost { color: var(--fg-2); }
+html[data-theme="dark"] .btn--ghost:hover { background: var(--grey-200); color: var(--fg-1); }
+html[data-theme="dark"] .btn--tertiary { color: var(--fg-2); border-color: var(--border-default); }
+html[data-theme="dark"] .btn--tertiary:hover { background: var(--grey-200); color: var(--fg-1); }
+html[data-theme="dark"] .btn--secondary { background: var(--grey-200); color: var(--fg-1); border-color: var(--border-default); }
+
+/* Scrollbar in dark mode */
+html[data-theme="dark"] ::-webkit-scrollbar { width: 8px; }
+html[data-theme="dark"] ::-webkit-scrollbar-track { background: transparent; }
+html[data-theme="dark"] ::-webkit-scrollbar-thumb { background: var(--grey-300); border-radius: 4px; }
+html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover { background: var(--grey-400); }
+
+/* Accent bg tints (pink/blue bg in hero etc.) — very dark on dark */
+html[data-theme="dark"] { --accent-bg: rgba(255, 255, 255, 0.04); }
+html[data-theme="dark"][data-accent="pink"]   { --accent-bg: rgba(236, 72, 153, 0.08); }
+html[data-theme="dark"][data-accent="blue"]   { --accent-bg: rgba(59, 130, 246, 0.08); }
+html[data-theme="dark"][data-accent="teal"]   { --accent-bg: rgba(20, 184, 166, 0.08); }
+html[data-theme="dark"][data-accent="yellow"] { --accent-bg: rgba(234, 179, 8, 0.08); }
+
+/* Icon images — invert dark icons to light */
+html[data-theme="dark"] .icon-btn img,
+html[data-theme="dark"] .d-rail-item img,
+html[data-theme="dark"] .mod-header img,
+html[data-theme="dark"] .hero-right img,
+html[data-theme="dark"] .task-dismiss,
+html[data-theme="dark"] .drag-grip { filter: invert(1) brightness(0.85); }
+
+/* Empty states */
+html[data-theme="dark"] .empty-ok { color: var(--fg-3); }
+html[data-theme="dark"] code { background: var(--grey-200); color: var(--fg-1); }

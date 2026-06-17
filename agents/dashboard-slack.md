@@ -72,9 +72,11 @@ calls for them.
 
 These two are the dashboard's primary Slack surface, so build them first:
 
-- **`dms`** — up to **10** of the user's most recent DM conversations (1:1 and small group
-  DMs), newest/most-important first, taken from the DM-channel results in queries #1–#2.
-  Include a DM even if no reply is strictly owed (the user wants to reply to any DM). Each
+- **`dms`** — **at least 5, up to 10** of the user's most recent DM conversations (1:1 and
+  group DMs), newest/most-important first, taken from the DM-channel results in queries #1–#2.
+  **5 is the minimum** — if queries #1–#2 surface fewer than 5 distinct DM conversations,
+  run one extra search (`is:dm after:<SINCE_30D>`, count ~30) to fill the gap. Include a DM
+  even if no reply is strictly owed (the user wants to see their recent DM activity). Each
   entry: `person` (the other participant's display name, or "Group · A, B, C" for a group
   DM; resolve names from the result — never invent), `permalink`, `unread`, `priority`,
   `updated`, a 1-sentence `summary`, and 2–3 `suggested` replies (`primary:true` on the
@@ -224,7 +226,7 @@ Write the result to `<dataCacheDir>/slack.json` using the **Write tool**. A sing
 - `shipped.meta` — `Slack · today · <theme>` where theme is one of: `brand | product | infra | ops | strategy`.
 
 ## Rules
-- **Cap**: search calls 4 (plus at most 1 retry each) · dms ≤10 · needsReply ≤6 · channels 5–7 · blockers ≤5 · shipped ≤5. (`activeThreads` is always `[]`.) All lists come from the same 4 searches — no extra MCP calls.
+- **Cap**: search calls 4 (plus at most 1 retry each, plus 1 optional `is:dm` backfill if < 5 DMs) · dms 5–10 · needsReply ≤6 · channels 5–7 · blockers ≤5 · shipped ≤5. (`activeThreads` is always `[]`.)
 - **Always include Slack permalinks** — the user needs to jump to the source.
 - **No channel-history or thread reads.** Use only what message search returns. Summary must be YOUR synthesis from the snippets, not invented.
 - **Timezone**: convert message timestamps → human-relative form in the user's timezone from the kickoff prompt (e.g. "2h ago", "yesterday", "4d ago").

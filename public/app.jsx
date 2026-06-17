@@ -2326,12 +2326,14 @@ function NotificationsBell() {
     let last = {};
     try { last = JSON.parse(localStorage.getItem('dash:lastSeen.v1') || '{}'); } catch {}
     const cur = currentNotifItems();
-    const first = !Object.keys(last).length;          // first ever load → no noise
+    const first = !Object.keys(last).length;
     const added = first ? [] : cur.filter(i => !last[i.k]);
     setChanges(added);
     const next = {}; cur.forEach(i => next[i.k] = 1);
     try { localStorage.setItem('dash:lastSeen.v1', JSON.stringify(next)); } catch {}
   }, []);
+  const dismiss = (idx) => setChanges(prev => prev.filter((_, i) => i !== idx));
+  const clearAll = () => setChanges([]);
   return (
     <>
       <button className="d-topbar-icon" title="What changed since last refresh" onClick={() => setOpen(o => !o)}>
@@ -2345,6 +2347,9 @@ function NotificationsBell() {
               <Icon name="bell" size={14}/>
               <span className="notif-title">Since last refresh</span>
               <span className="notif-count">{changes.length}</span>
+              {changes.length > 0 && (
+                <button className="notif-clear" onClick={clearAll} title="Clear all">Clear all</button>
+              )}
               <button className="notif-close" aria-label="Close" onClick={() => setOpen(false)}>×</button>
             </div>
             <div className="notif-body">
@@ -2354,6 +2359,8 @@ function NotificationsBell() {
                     <div key={i} className="notif-row">
                       <span className="notif-type">{c.type}</span>
                       <span className="notif-label">{c.label}</span>
+                      <button className="notif-dismiss" aria-label="Dismiss" title="Dismiss"
+                              onClick={() => dismiss(i)}>×</button>
                     </div>
                   ))}
             </div>

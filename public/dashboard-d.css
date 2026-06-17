@@ -1069,3 +1069,60 @@ html[data-theme="dark"] .layout-d .d-rail-coming-soon-toast {
   background: var(--grey-800);
 }
 @keyframes cst-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+/* ==========================================================================
+   Layout D — DARK MODE overrides (v0.12.2)
+   ========================================================================== */
+html[data-theme="dark"] .layout-d .d-main { background: var(--d-bg, #15141a); }
+html[data-theme="dark"] .layout-d .d-content { color: var(--fg-1); }
+
+/* Top bar */
+html[data-theme="dark"] .layout-d .d-topbar { background: var(--bg-surface); border-bottom-color: var(--d-border); }
+html[data-theme="dark"] .layout-d .d-search { background: var(--grey-100); border-color: var(--d-border); color: var(--fg-2); }
+html[data-theme="dark"] .layout-d .d-search:hover { border-color: var(--d-border-strong); }
+html[data-theme="dark"] .layout-d .d-search kbd { background: var(--grey-200); color: var(--fg-3); border-color: var(--d-border); }
+html[data-theme="dark"] .layout-d .d-topbar-icon { color: var(--fg-2); }
+html[data-theme="dark"] .layout-d .d-topbar-icon:hover { background: var(--grey-200); color: var(--fg-1); }
+html[data-theme="dark"] .layout-d .d-topbar-divider { background: var(--d-border); }
+
+/* Sidebar rail */
+html[data-theme="dark"] .layout-d .d-rail { background: var(--grey-50); border-right-color: var(--d-border); }
+html[data-theme="dark"] .layout-d .d-rail-logo-mark { background: var(--grey-300); }
+html[data-theme="dark"] .layout-d .d-rail-item:hover { background: var(--grey-200); }
+html[data-theme="dark"] .layout-d .d-rail-item[data-active="true"] { background: var(--accent-bg); }
+html[data-theme="dark"] .layout-d .d-rail-section { color: var(--fg-3); }
+html[data-theme="dark"] .layout-d .d-rail-user { border-top-color: var(--d-border); background: var(--grey-50); }
+html[data-theme="dark"] .layout-d .d-rail-toggle { background: var(--grey-200); border-color: var(--d-border); color: var(--fg-2); }
+html[data-theme="dark"] .layout-d .d-rail-resize-handle { border-right-color: var(--d-border); }
+
+/* Greeting hero */
+html[data-theme="dark"] .layout-d .d-greeting h1 { color: var(--fg-1); }
+html[data-theme="dark"] .layout-d .d-greeting h1 em { color: var(--accent); }
+html[data-theme="dark"] .layout-d .d-greeting-sub { color: var(--fg-2); }
+
+/* Stat cards */
+html[data-theme="dark"] .layout-d .d-stat { background: var(--bg-surface); border-color: var(--d-border); }
+html[data-theme="dark"] .layout-d .d-stat:hover { border-color: var(--d-border-strong); }
+html[data-theme="dark"] .layout-d .d-stat-label { color: var(--fg-3); }
+html[data-theme="dark"] .layout-d .d-stat-value { color: var(--fg-1); }
+html[data-theme="dark"] .layout-d .d-stat-item { color: var(--fg-2); }
+html[data-theme="dark"] .layout-d .d-stat-delta { color: var(--fg-3); }
+html[data-theme="dark"] .layout-d .d-stat-delta.up { color: var(--green-400, #4ade80); }
+html[data-theme="dark"] .layout-d .d-stat-delta.down { color: var(--red-400, #f87171); }
+
+/* Canvas bar */
+html[data-theme="dark"] .layout-d .d-canvas-bar { background: var(--bg-surface); border-color: var(--d-border); }
+html[data-theme="dark"] .layout-d .d-canvas-hint { color: var(--fg-3); }
+
+/* Draggable box headers */
+html[data-theme="dark"] .layout-d .box-header { background: var(--bg-surface); border-bottom-color: var(--d-border); }
+
+/* Refresh banner */
+html[data-theme="dark"] .layout-d .d-refresh-bar { background: var(--grey-100); border-color: var(--d-border); }
+
+/* App link icons in topbar */
+html[data-theme="dark"] .layout-d .d-app-links a { opacity: 0.7; }
+html[data-theme="dark"] .layout-d .d-app-links a:hover { opacity: 1; }
+
+/* Pinned people strip */
+html[data-theme="dark"] .layout-d .pinned-strip { border-color: var(--d-border); }
