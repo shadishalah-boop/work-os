@@ -14,6 +14,35 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.12.1 — 2026-06-17
+
+Six quality-of-life improvements:
+
+1. **Scroll on "What actually matters today"** — the Top-3 section now scrolls when content
+   overflows (max-height 340px), matching the Tasks module behavior.
+
+2. **Metrics: client-side timeframe switching** — if the agent pre-fetches multi-timeframe data
+   (`seriesAll` / `seriesLabelsAll`), clicking a timeframe in the chart modal switches the chart
+   instantly without requiring a dashboard refresh. For single-timeframe data, the preference is
+   saved and the footer clarifies "chart updates on next /dashboard refresh."
+
+3. **Slack: 5th DM in demo data** — added a fifth DM (Lena G.) so the DMs tab always shows at
+   least 5 conversations out of the box.
+
+4. **Commitments box now populates** — `CommitmentsMod` used `window.KNOWN_PEOPLE` which was
+   empty when `SEED.knownPeople` hadn't loaded yet. Fixed to fall back to `SEED.knownPeople`
+   directly. Also added demo `knownPeople` entries so the card works with sample data.
+
+5. **Left rail "coming soon" labels** — non-functional sidebar buttons (Tasks, Calendar, Messages,
+   Projects, Metrics, People, Library) now show a subtle "soon" tag and display a brief toast
+   ("Calendar — coming soon") on click, instead of doing nothing.
+
+6. **Slack avatar in sidebar** — both the top logo-mark and the bottom user avatar in the rail
+   now use the Slack profile photo (`SEED.user.avatar`) when available, instead of showing a
+   letter initial or the default avatar SVG.
+
+---
+
 ## v0.12.0 — 2026-06-16
 
 **Settings panel (⚙ in the topbar).** Click the gear (left of the bell) to open Dashboard

@@ -1030,3 +1030,42 @@ body[data-readonly="true"] .box-canvas .box [class*="resize"] { display: none !i
   .share-modal { width: 96vw; }
   .share-sections { grid-template-columns: 1fr; }
 }
+
+/* --- Avatar as logo mark --- */
+.layout-d img.d-rail-logo-avatar {
+  object-fit: cover;
+}
+
+/* --- Coming-soon tag on non-functional rail items --- */
+.layout-d .d-rail-soon { opacity: 0.6; }
+.layout-d .d-rail-soon:hover { opacity: 0.8; }
+.layout-d .d-rail-soon-tag {
+  margin-left: auto;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  color: var(--fg-3, var(--fg-2));
+  background: var(--grey-100);
+  padding: 1px 5px;
+  border-radius: 4px;
+  line-height: 1.4;
+}
+html[data-theme="dark"] .layout-d .d-rail-soon-tag {
+  background: var(--grey-800);
+}
+.layout-d .d-rail-coming-soon-toast {
+  margin: 6px 12px;
+  padding: 7px 10px;
+  font-size: 11px;
+  color: var(--fg-2);
+  background: var(--grey-50);
+  border: 1px solid var(--border-subtle, var(--border-default));
+  border-radius: 6px;
+  text-align: center;
+  animation: cst-in 0.2s ease;
+}
+html[data-theme="dark"] .layout-d .d-rail-coming-soon-toast {
+  background: var(--grey-800);
+}
+@keyframes cst-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }

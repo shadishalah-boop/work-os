@@ -1005,6 +1005,9 @@ function KpiMod({ data }) {
         const goodC = tt.good !== undefined ? tt.good : tt.dir === 'up';
         const color = goodC ? 'var(--teal-500)' : tt.dir === 'flat' ? 'var(--grey-400)' : 'var(--red-500)';
         const tf = k.timeframe || '12w';
+        const hasAllTf = k.seriesAll && typeof k.seriesAll === 'object';
+        const chartSeries = hasAllTf ? (k.seriesAll[tf] || k.series) : k.series;
+        const chartLabels = hasAllTf && k.seriesLabelsAll ? (k.seriesLabelsAll[tf] || k.seriesLabels) : k.seriesLabels;
         return (
           <div className="metric-chart-overlay" onClick={() => { setChartFor(null); setTfMsg(null); }}>
             <div className="metric-chart-modal" onClick={e => e.stopPropagation()}>
@@ -1015,17 +1018,21 @@ function KpiMod({ data }) {
                 </div>
                 <button className="metric-chart-close" aria-label="Close" onClick={() => { setChartFor(null); setTfMsg(null); }}>×</button>
               </div>
-              <MetricChart series={k.series} labels={k.seriesLabels} format={k.format} color={color}/>
+              <MetricChart series={chartSeries} labels={chartLabels} format={k.format} color={color}/>
               <div className="metric-chart-foot">
                 <span className="metric-tf-label">Timeframe</span>
                 <div className="metric-tf-switch">
-                  {TIMEFRAMES.map(t => (
-                    <button key={t.id} className={'metric-tf-btn' + (tf === t.id ? ' on' : '')}
-                            onClick={() => setTimeframe(k.id, t.id)}>{t.label}</button>
-                  ))}
+                  {TIMEFRAMES.map(t => {
+                    const avail = !hasAllTf || (k.seriesAll[t.id] && k.seriesAll[t.id].length);
+                    return (
+                      <button key={t.id} className={'metric-tf-btn' + (tf === t.id ? ' on' : '') + (!avail ? ' dim' : '')}
+                              onClick={() => setTimeframe(k.id, t.id)}
+                              title={avail ? t.label : `${t.label} — updates on next /dashboard refresh`}>{t.label}</button>
+                    );
+                  })}
                 </div>
-                {tfMsg === 'saved' && <span className="metric-save-msg ok">✓ updates next /dashboard</span>}
-                {tfMsg === 'local' && <span className="metric-save-msg">saved locally</span>}
+                {!hasAllTf && tfMsg === 'saved' && <span className="metric-save-msg ok">✓ chart updates on next /dashboard refresh</span>}
+                {!hasAllTf && tfMsg === 'local' && <span className="metric-save-msg">saved locally — refresh to see new data</span>}
               </div>
             </div>
           </div>
@@ -1080,7 +1087,9 @@ function TeamMod({ data }) {
 // blocked, filtered through KNOWN_PEOPLE name-matching against meta and label.
 // Click a recipient row → opens the Stakeholder Lens for them.
 function CommitmentsMod({ state }) {
-  const known = window.KNOWN_PEOPLE || [];
+  const known = (window.KNOWN_PEOPLE && window.KNOWN_PEOPLE.length)
+    ? window.KNOWN_PEOPLE
+    : (window.SEED && Array.isArray(window.SEED.knownPeople) ? window.SEED.knownPeople : []);
 
   // Pull from all open work-item buckets
   const all = []

@@ -309,7 +309,7 @@ function Top3({ data, onToggle, density, okrApi }) {
         </div>
         <div className="top3-stamp">{stamp} · {drag.items.filter(i=>!i.done).length} of 3 left</div>
       </div>
-      <div className="top3-list">
+      <div className="top3-list" style={{maxHeight: 340, overflowY: 'auto'}}>
         {drag.items.map((it, idx) => {
           const s = scored.get(it.id) || { score: 0, reasons: [] };
           return (

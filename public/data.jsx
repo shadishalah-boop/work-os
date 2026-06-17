@@ -10,6 +10,17 @@ window.SEED = {
 
   user: { name: 'Alex', role: 'Senior PM', tz: 'Europe/Kyiv' },
 
+  knownPeople: [
+    { match: 'Sam O.', name: 'Sam O.', note: 'Manager', manager: true },
+    { match: 'Sam', name: 'Sam O.', note: 'Manager', manager: true },
+    { match: 'Priya', name: 'Priya M.', note: 'Recruiting lead' },
+    { match: 'Mia K.', name: 'Mia K.', note: 'Design lead' },
+    { match: 'Mia', name: 'Mia K.', note: 'Design lead' },
+    { match: 'Theo R.', name: 'Theo R.', note: 'Brand designer' },
+    { match: 'Theo', name: 'Theo R.', note: 'Brand designer' },
+    { match: 'Lena G.', name: 'Lena G.', note: 'Operations' },
+  ],
+
   // Today: April 23, 2026 — Thursday
   greeting: {
     morning: 'Morning, <em>Alex</em>.',
@@ -245,6 +256,12 @@ window.SEED = {
           { label: 'Pick #2 and #5', primary: true },
           { label: 'Need more time', primary: false },
         ],
+      },
+      {
+        id: 'dm5', person: 'Lena G.', permalink: 'https://acme.slack.com/archives/D05',
+        unread: 0, priority: 'low', updated: 'yesterday',
+        summary: 'Shared the updated onboarding deck. No action needed, just FYI.',
+        suggested: [],
       },
     ],
     needsReply: [

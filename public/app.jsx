@@ -67,9 +67,12 @@ function Rail() {
     { icon: 'insights' },
     { icon: 'library' },
   ];
+  const _av = window.SEED && window.SEED.user && (window.SEED.user.avatar || window.SEED.user.avatarUrl);
   return (
     <aside className="rail">
-      <div className="rail-logo">{((window.SEED && window.SEED.user && window.SEED.user.name) || 'W')[0].toUpperCase()}</div>
+      {_av
+        ? <img className="rail-logo" src={_av} alt="" style={{width:36,height:36,borderRadius:10,objectFit:'cover'}}/>
+        : <div className="rail-logo">{((window.SEED && window.SEED.user && window.SEED.user.name) || 'W')[0].toUpperCase()}</div>}
       {items.map((it, i) => (
         <div key={i} className="rail-item" data-active={it.active}>
           <Icon name={it.icon} size={22}/>
@@ -79,7 +82,7 @@ function Rail() {
       <div className="rail-spacer"/>
       <div className="rail-item"><Icon name="settings" size={22}/></div>
       <div style={{marginTop:8}}>
-        <span className="pds-avatar size-32"><img src="ds/assets/avatar-default.svg" alt="You"/></span>
+        <span className="pds-avatar size-32"><img src={_av || 'ds/assets/avatar-default.svg'} alt="You"/></span>
       </div>
     </aside>
   );
@@ -1701,18 +1704,25 @@ function SkillsRailSection({ collapsed }) {
 }
 
 function ModernRail({ active = 'home', collapsed, onToggle, onResize }) {
+  const [comingSoon, setComingSoon] = uS(null);
+  const comingSoonTimer = React.useRef(null);
+  const showComingSoon = (label) => {
+    if (comingSoonTimer.current) clearTimeout(comingSoonTimer.current);
+    setComingSoon(label);
+    comingSoonTimer.current = setTimeout(() => setComingSoon(null), 2000);
+  };
   const sections = [
     { label: 'Workspace', items: [
       { key: 'home',     icon: 'home',         label: 'Dashboard' },
-      { key: 'tasks',    icon: 'check-circle', label: 'Tasks',    pill: 11 },
-      { key: 'calendar', icon: 'calendar',     label: 'Calendar' },
-      { key: 'messages', icon: 'messages',     label: 'Messages', pill: 3 },
+      { key: 'tasks',    icon: 'check-circle', label: 'Tasks',    pill: 11, soon: true },
+      { key: 'calendar', icon: 'calendar',     label: 'Calendar', soon: true },
+      { key: 'messages', icon: 'messages',     label: 'Messages', pill: 3,  soon: true },
     ]},
     { label: 'Insights', items: [
-      { key: 'projects', icon: 'progress',   label: 'Projects' },
-      { key: 'metrics',  icon: 'insights',   label: 'Metrics' },
-      { key: 'people',   icon: 'user-group', label: 'People' },
-      { key: 'library',  icon: 'library',    label: 'Library' },
+      { key: 'projects', icon: 'progress',   label: 'Projects', soon: true },
+      { key: 'metrics',  icon: 'insights',   label: 'Metrics',  soon: true },
+      { key: 'people',   icon: 'user-group', label: 'People',   soon: true },
+      { key: 'library',  icon: 'library',    label: 'Library',  soon: true },
     ]},
   ];
   // Drag the right edge to resize the rail freely. Live updates via onResize;
@@ -1747,7 +1757,12 @@ function ModernRail({ active = 'home', collapsed, onToggle, onResize }) {
         aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
       >{collapsed ? '›' : '‹'}</button>
       <div className="d-rail-logo">
-        <div className="d-rail-logo-mark">{((window.SEED && window.SEED.user && window.SEED.user.name) || 'W')[0].toUpperCase()}</div>
+        {(() => {
+          const av = window.SEED && window.SEED.user && (window.SEED.user.avatar || window.SEED.user.avatarUrl);
+          return av
+            ? <img className="d-rail-logo-mark d-rail-logo-avatar" src={av} alt="" />
+            : <div className="d-rail-logo-mark">{((window.SEED && window.SEED.user && window.SEED.user.name) || 'W')[0].toUpperCase()}</div>;
+        })()}
         <div className="d-rail-logo-text">
           {(window.SEED && window.SEED.user && window.SEED.user.name) || 'You'}
           <small>{(window.SEED && window.SEED.user && window.SEED.user.role) || 'Work OS'}</small>
@@ -1757,18 +1772,28 @@ function ModernRail({ active = 'home', collapsed, onToggle, onResize }) {
         <React.Fragment key={i}>
           <div className="d-rail-section">{s.label}</div>
           {s.items.map(it => (
-            <div key={it.key} className="d-rail-item" data-active={it.key === active} title={collapsed ? it.label : undefined}>
+            <div key={it.key} className={'d-rail-item' + (it.soon && it.key !== active ? ' d-rail-soon' : '')}
+                 data-active={it.key === active}
+                 title={collapsed ? it.label : undefined}
+                 onClick={it.soon && it.key !== active ? () => showComingSoon(it.label) : undefined}
+                 style={it.soon && it.key !== active ? {cursor:'default'} : undefined}>
               <Icon name={it.icon} size={16}/>
               <span>{it.label}</span>
               {it.pill != null && <span className="pill">{it.pill}</span>}
+              {it.soon && it.key !== active && !collapsed && <span className="d-rail-soon-tag">soon</span>}
             </div>
           ))}
         </React.Fragment>
       ))}
+      {comingSoon && (
+        <div className="d-rail-coming-soon-toast">
+          {comingSoon} — coming soon
+        </div>
+      )}
       <SkillsRailSection collapsed={collapsed}/>
       <div className="d-rail-user">
         <span className="pds-avatar size-32">
-          <img src={(window.SEED && window.SEED.user && window.SEED.user.avatarUrl) || 'ds/assets/avatar-default.svg'} alt={(window.SEED && window.SEED.user && window.SEED.user.name) || 'You'}/>
+          <img src={(window.SEED && window.SEED.user && (window.SEED.user.avatar || window.SEED.user.avatarUrl)) || 'ds/assets/avatar-default.svg'} alt={(window.SEED && window.SEED.user && window.SEED.user.name) || 'You'}/>
         </span>
         <div className="d-rail-user-meta">
           <div className="d-rail-user-name">{(window.SEED && window.SEED.user && window.SEED.user.fullName) || (window.SEED && window.SEED.user && window.SEED.user.name) || 'You'}</div>

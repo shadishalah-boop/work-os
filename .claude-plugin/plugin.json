@@ -1,6 +1,6 @@
 {
   "name": "work-os",
-  "version": "0.12.0",
+  "version": "0.12.1",
   "description": "A personal Work OS that merges Google Calendar, Gmail, Slack, Drive, and Granola meeting notes into a local React-in-browser view. Includes OKR linking, smart task management, a parallelized orchestrator skill, seven data agents (incl. custom Looker/Snowflake metrics), and a static HTML bundle. User identity, team roster, OKRs, and pins live in a local config file the recipient fills in.",
   "author": {
     "name": "Shadi Shalah"
