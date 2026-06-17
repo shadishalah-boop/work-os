@@ -52,8 +52,9 @@
 (function applyDashboardSettings() {
   var root = document.documentElement;
   function get() { try { return JSON.parse(localStorage.getItem('dashboard.settings.v1') || '{}'); } catch (e) { return {}; } }
+  function isNightHour() { var h = new Date().getHours(); return h >= 19 || h < 7; }
   function resolveDark(theme) {
-    return theme === 'dark' || (theme === 'auto' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    return theme === 'dark' || (theme === 'auto' && isNightHour());
   }
   function applyAll(s) {
     var theme = s.theme || 'auto';
@@ -63,13 +64,11 @@
     root.setAttribute('data-accent', s.accent || 'pink');
   }
   applyAll(get());
-  if (window.matchMedia) {
-    try {
-      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function (e) {
-        if ((root.getAttribute('data-theme-pref') || 'auto') === 'auto') root.setAttribute('data-theme', e.matches ? 'dark' : 'light');
-      });
-    } catch (e) {}
-  }
+  setInterval(function () {
+    if ((root.getAttribute('data-theme-pref') || 'auto') === 'auto') {
+      root.setAttribute('data-theme', isNightHour() ? 'dark' : 'light');
+    }
+  }, 60000);
   window.getDashSettings = get;
   window.applyDashSetting = function (key, val) {
     var s = get(); s[key] = val;
@@ -106,7 +105,7 @@
 <script type="text/babel" src="drive-index.jsx?v=10"></script>
 <script type="text/babel" src="modules-a.jsx?v=23"></script>
 <script type="text/babel" src="modules-b.jsx?v=46"></script>
-<script type="text/babel" src="app.jsx?v=59"></script>
+<script type="text/babel" src="app.jsx?v=60"></script>
 
 <script>
 // =============================================================================

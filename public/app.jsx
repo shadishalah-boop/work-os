@@ -2399,8 +2399,8 @@ function SettingsButton() {
               <div className="settings-group">
                 <div className="settings-label">Theme</div>
                 <div className="settings-seg">
-                  {['auto', 'light', 'dark'].map(t => (
-                    <button key={t} className={'seg-btn' + ((s.theme || 'auto') === t ? ' on' : '')} onClick={() => set('theme', t)}>{t[0].toUpperCase() + t.slice(1)}</button>
+                  {[['auto','Auto (day/night)'],['light','Light'],['dark','Dark']].map(([v,l]) => (
+                    <button key={v} className={'seg-btn' + ((s.theme || 'auto') === v ? ' on' : '')} onClick={() => set('theme', v)}>{l}</button>
                   ))}
                 </div>
               </div>

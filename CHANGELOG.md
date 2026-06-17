@@ -14,6 +14,17 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.13.0 — 2026-06-17
+
+**Time-based auto theme.** The "Auto" theme setting now switches between light
+and dark based on time of day — light from 7 AM to 7 PM, dark from 7 PM to
+7 AM — instead of following the browser's `prefers-color-scheme`. A 60-second
+check ensures the theme flips automatically at the transition hours without
+needing a page reload. The Settings button label now reads "Auto (day/night)"
+to make the behavior clear.
+
+---
+
 ## v0.12.9 — 2026-06-17
 
 **Cross-source deduplication at merge time.** Multiple agents (Granola, Slack,
