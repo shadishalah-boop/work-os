@@ -1126,3 +1126,245 @@ html[data-theme="dark"] .layout-d .d-app-links a:hover { opacity: 1; }
 
 /* Pinned people strip */
 html[data-theme="dark"] .layout-d .pinned-strip { border-color: var(--d-border); }
+
+/* =============================================================================
+   Layout D — DARK MODE extended overrides (v0.13)
+   Fills in .d-stat, .d-greeting, .d-content, .d-main, .d-topbar, .d-rail depth
+   and interactive-state gaps.
+   ============================================================================= */
+
+/* ---- Layout-D token overrides for dark ---- */
+html[data-theme="dark"] .layout-d {
+  --d-border: rgba(255,255,255,0.10);
+  --d-border-strong: rgba(255,255,255,0.16);
+  --d-shadow: 0 1px 3px rgba(0,0,0,0.24), 0 1px 2px rgba(0,0,0,0.18);
+  --d-shadow-hover: 0 2px 6px rgba(0,0,0,0.30), 0 4px 14px rgba(0,0,0,0.22);
+  --d-bg: var(--bg-page, #15141a);
+  --d-bg-muted: var(--grey-100, #26242e);
+  background: var(--d-bg);
+}
+
+/* ---- d-main / d-content ---- */
+html[data-theme="dark"] .layout-d .d-main { background: var(--d-bg); }
+html[data-theme="dark"] .layout-d .d-content { color: var(--fg-1); }
+html[data-theme="dark"] .layout-d .app-d { background: var(--d-bg); }
+
+/* ---- d-topbar extended ---- */
+html[data-theme="dark"] .layout-d .d-topbar {
+  background: var(--bg-surface);
+  border-bottom-color: var(--d-border);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+}
+html[data-theme="dark"] .layout-d .d-search {
+  background: var(--grey-100);
+  border-color: transparent;
+  color: var(--fg-3);
+}
+html[data-theme="dark"] .layout-d .d-search:hover {
+  background: var(--bg-surface);
+  border-color: var(--d-border-strong);
+  color: var(--fg-2);
+}
+html[data-theme="dark"] .layout-d .d-search kbd {
+  background: var(--grey-200);
+  border-color: var(--d-border);
+  color: var(--fg-3);
+}
+html[data-theme="dark"] .layout-d .d-topbar-icon { color: var(--fg-2); }
+html[data-theme="dark"] .layout-d .d-topbar-icon:hover {
+  background: var(--grey-200);
+  color: var(--fg-1);
+}
+html[data-theme="dark"] .layout-d .d-topbar-icon .dot {
+  border-color: var(--bg-surface);
+}
+html[data-theme="dark"] .layout-d .d-topbar-divider { background: var(--d-border); }
+
+/* ---- d-rail extended ---- */
+html[data-theme="dark"] .layout-d .d-rail {
+  background: var(--bg-surface);
+  border-right-color: var(--d-border);
+}
+html[data-theme="dark"] .layout-d .d-rail-logo-mark {
+  background: var(--grey-700);
+  color: var(--grey-0);
+}
+html[data-theme="dark"] .layout-d .d-rail-item { color: var(--fg-2); }
+html[data-theme="dark"] .layout-d .d-rail-item:hover {
+  background: var(--grey-100);
+  color: var(--fg-1);
+}
+html[data-theme="dark"] .layout-d .d-rail-item[data-active="true"] {
+  background: var(--accent-bg);
+  color: var(--accent-ink);
+}
+html[data-theme="dark"] .layout-d .d-rail-item .pill {
+  background: var(--grey-200);
+  color: var(--fg-2);
+}
+html[data-theme="dark"] .layout-d .d-rail-item[data-active="true"] .pill {
+  background: var(--bg-surface);
+  color: var(--accent-ink);
+}
+html[data-theme="dark"] .layout-d .d-rail-user {
+  background: var(--bg-surface);
+  border-color: var(--d-border);
+}
+html[data-theme="dark"] .layout-d .d-rail-toggle {
+  background: var(--grey-200);
+  border-color: var(--d-border);
+  color: var(--fg-2);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+}
+html[data-theme="dark"] .layout-d .d-rail-toggle:hover {
+  color: var(--accent);
+  box-shadow: 0 3px 10px rgba(0,0,0,0.25);
+}
+html[data-theme="dark"] .layout-d .d-rail-resize-handle:hover {
+  background: var(--accent);
+  opacity: 0.45;
+}
+html[data-theme="dark"] .layout-d .d-rail-section { color: var(--fg-3); }
+
+/* ---- d-greeting extended ---- */
+html[data-theme="dark"] .layout-d .d-greeting h1 { color: var(--fg-1); }
+html[data-theme="dark"] .layout-d .d-greeting h1 em { color: var(--accent); }
+html[data-theme="dark"] .layout-d .d-greeting-sub { color: var(--fg-2); }
+
+/* ---- d-stat extended (stat chip cards) ---- */
+html[data-theme="dark"] .layout-d .d-stat {
+  background: var(--bg-surface);
+  border-color: var(--d-border);
+  box-shadow: var(--d-shadow);
+}
+html[data-theme="dark"] .layout-d .d-stat:hover {
+  border-color: var(--d-border-strong);
+  box-shadow: var(--d-shadow-hover);
+}
+html[data-theme="dark"] .layout-d .d-stat-label { color: var(--fg-3); }
+html[data-theme="dark"] .layout-d .d-stat-value { color: var(--fg-1); }
+html[data-theme="dark"] .layout-d .d-stat-delta { color: var(--fg-3); }
+html[data-theme="dark"] .layout-d .d-stat-delta.up { color: var(--green-400, #4ade80); }
+html[data-theme="dark"] .layout-d .d-stat-delta.down { color: var(--red-400, #f87171); }
+html[data-theme="dark"] .layout-d .d-stat-items { border-top-color: var(--d-border); }
+html[data-theme="dark"] .layout-d .d-stat-item { color: var(--fg-2); }
+html[data-theme="dark"] .layout-d .d-stat-item strong { color: var(--fg-1); }
+html[data-theme="dark"] .layout-d .d-stat-item .dim { color: var(--fg-2); }
+html[data-theme="dark"] .layout-d .d-stat-time { color: var(--fg-3); }
+
+/* ---- d-section-title ---- */
+html[data-theme="dark"] .layout-d .d-section-title { color: var(--fg-3); }
+html[data-theme="dark"] .layout-d .d-section-title::after { background: var(--d-border); }
+
+/* ---- Module cards inside layout-d ---- */
+html[data-theme="dark"] .layout-d .mod {
+  background: var(--bg-surface);
+  border-color: var(--d-border);
+  box-shadow: var(--d-shadow);
+}
+html[data-theme="dark"] .layout-d .mod:hover {
+  border-color: var(--d-border-strong);
+  box-shadow: var(--d-shadow-hover);
+}
+html[data-theme="dark"] .layout-d .mod-title .count {
+  background: var(--grey-200);
+  color: var(--fg-2);
+}
+html[data-theme="dark"] .layout-d .icon-btn:hover { background: var(--grey-200); }
+html[data-theme="dark"] .layout-d .link-all:hover { background: var(--grey-200); }
+
+/* ---- Tabs inside layout-d ---- */
+html[data-theme="dark"] .layout-d .tabs-row { border-bottom-color: var(--d-border); }
+html[data-theme="dark"] .layout-d .tab-btn { color: var(--fg-3); }
+html[data-theme="dark"] .layout-d .tab-btn:hover { color: var(--fg-1); }
+html[data-theme="dark"] .layout-d .tab-btn[data-active="true"] { color: var(--fg-1); }
+
+/* ---- Capacity pill in layout-d ---- */
+html[data-theme="dark"] .layout-d .capacity-pill {
+  background: var(--bg-surface);
+  border-color: var(--d-border);
+}
+
+/* ---- Canvas bar ---- */
+html[data-theme="dark"] .layout-d .d-canvas-bar {
+  background: var(--bg-surface);
+  border-color: var(--d-border);
+}
+html[data-theme="dark"] .layout-d .d-canvas-hint { color: var(--fg-3); }
+
+/* ---- Voice / mic button ---- */
+html[data-theme="dark"] .layout-d .d-mic-on {
+  background: var(--accent-bg) !important;
+}
+html[data-theme="dark"] .layout-d .d-voice-live {
+  background: var(--grey-100);
+  color: var(--grey-900);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+}
+html[data-theme="dark"] .layout-d .d-voice-toast {
+  background: var(--grey-100);
+  color: var(--fg-1);
+  border-color: var(--d-border);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.35);
+}
+
+/* ---- Box canvas (draggable) in dark ---- */
+html[data-theme="dark"] .layout-d .box-dragging {
+  box-shadow: 0 20px 48px rgba(0,0,0,0.35), 0 2px 6px rgba(0,0,0,0.2) !important;
+}
+html[data-theme="dark"] .layout-d .box-dragging .mod {
+  border-color: var(--accent-border);
+}
+
+/* ---- Meeting prep card in layout-d ---- */
+html[data-theme="dark"] .layout-d .meeting-prep-card {
+  background: var(--grey-100);
+  border-color: var(--d-border);
+  border-left-color: var(--blue-400, #7c9cf5);
+  box-shadow: var(--d-shadow);
+}
+html[data-theme="dark"] .layout-d .mp-pill {
+  background: rgba(74,108,247,0.15);
+  color: var(--blue-400, #7c9cf5);
+}
+html[data-theme="dark"] .layout-d .mp-grid { border-top-color: var(--d-border); }
+html[data-theme="dark"] .layout-d .mp-empty { border-top-color: var(--d-border); }
+
+/* ---- Pinned people avatars ---- */
+html[data-theme="dark"] .layout-d .d-pinned-people { border-left-color: var(--d-border); }
+html[data-theme="dark"] .layout-d .d-pinned-avatar {
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+html[data-theme="dark"] .layout-d .d-pinned-avatar:hover {
+  box-shadow: 0 3px 10px rgba(0,0,0,0.3);
+}
+
+/* ---- App quick links ---- */
+html[data-theme="dark"] .layout-d .d-app-links {
+  border-right-color: var(--d-border);
+}
+html[data-theme="dark"] .layout-d .d-app-link:hover { background: var(--grey-200); }
+
+/* ---- Readonly banner on dark ---- */
+html[data-theme="dark"] .readonly-banner {
+  background: linear-gradient(90deg, #3b5cc6, #5a7ae4);
+}
+
+/* ---- Grid (layout-d .d-grid) ---- */
+html[data-theme="dark"] .layout-d .d-grid { color: var(--fg-1); }
+
+/* ---- Lens drawer inside layout-d ---- */
+html[data-theme="dark"] .layout-d .lens-drawer {
+  background: var(--grey-100);
+  border-left-color: var(--d-border);
+  box-shadow: -8px 0 32px rgba(0,0,0,0.4);
+}
+
+/* ---- Skills section in sidebar ---- */
+html[data-theme="dark"] .layout-d .d-rail-skill-x:hover { color: var(--red-400, #f87171); }
+html[data-theme="dark"] .layout-d .d-rail-skill-status.ok { color: var(--green-400, #4ade80); }
+html[data-theme="dark"] .layout-d .d-rail-skill-status.err { color: var(--red-400, #f87171); }
+html[data-theme="dark"] .layout-d .d-rail-skill-add .metric-in {
+  background: var(--grey-100);
+  border-color: var(--d-border);
+}

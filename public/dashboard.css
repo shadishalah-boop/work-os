@@ -2058,3 +2058,468 @@ html[data-theme="dark"] .drag-grip { filter: invert(1) brightness(0.85); }
 /* Empty states */
 html[data-theme="dark"] .empty-ok { color: var(--fg-3); }
 html[data-theme="dark"] code { background: var(--grey-200); color: var(--fg-1); }
+
+/* =============================================================================
+   DARK MODE — Extended comprehensive overrides (v0.13)
+   Fills gaps left by the v0.12.2 block above. Covers surfaces, inputs, modals,
+   accent tints, charts, and interactive states that still looked "light" on dark.
+   ============================================================================= */
+
+/* ---- Button token overrides (dark-safe hover/active) ---- */
+html[data-theme="dark"] {
+  --btn-bg-secondary-hover: rgba(255,255,255,0.06);
+  --btn-bg-secondary-active: rgba(255,255,255,0.10);
+  --btn-bg-tertiary-hover: rgba(255,255,255,0.06);
+  --btn-bg-tertiary-active: rgba(255,255,255,0.10);
+  --btn-bg-ghost-hover: rgba(255,255,255,0.06);
+  --btn-bg-ghost-active: rgba(255,255,255,0.10);
+  --btn-border-tertiary-rest: var(--grey-300);
+  --btn-border-tertiary-hover: var(--grey-400);
+  --btn-bg-disabled: var(--grey-200);
+  --btn-border-disabled: var(--grey-300);
+  --btn-text-disabled: var(--grey-400);
+}
+
+/* ---- Module card depth (make .mod feel elevated on the dark page) ---- */
+html[data-theme="dark"] .mod {
+  box-shadow: 0 1px 3px rgba(0,0,0,0.24), 0 1px 2px rgba(0,0,0,0.18);
+}
+html[data-theme="dark"] .mod-title .count {
+  background: var(--grey-200);
+  color: var(--grey-600);
+}
+html[data-theme="dark"] .icon-btn:hover {
+  background: var(--grey-200);
+}
+html[data-theme="dark"] .link-all:hover {
+  background: var(--grey-200);
+}
+
+/* ---- Top-3 card: gradient should remain dark, not white ---- */
+html[data-theme="dark"] .top3 {
+  background: linear-gradient(180deg, var(--grey-100) 0%, var(--grey-200) 100%);
+  border-color: var(--grey-300);
+}
+html[data-theme="dark"] .top3-stamp { color: var(--grey-500); }
+html[data-theme="dark"] .top3-suggest {
+  background: rgba(255,255,255,0.03);
+  border-color: rgba(255,255,255,0.10);
+}
+html[data-theme="dark"] .top3-check { border-color: var(--grey-400); }
+
+/* ---- Greeting hero ---- */
+html[data-theme="dark"] .hero { border-bottom-color: var(--border-default); }
+html[data-theme="dark"] .hero-meta .dot-sep { background: var(--grey-400); }
+
+/* ---- Capacity pill ---- */
+html[data-theme="dark"] .capacity-pill {
+  background: var(--bg-surface);
+  border-color: var(--border-default);
+}
+html[data-theme="dark"] .capacity-pill .bar { background: var(--grey-200); }
+
+/* ---- Input fields (metric editor, compose, attendee) ---- */
+html[data-theme="dark"] .metric-in {
+  background: var(--grey-100);
+  border-color: var(--grey-300);
+  color: var(--fg-1);
+}
+html[data-theme="dark"] .attendee-input {
+  background: var(--grey-100);
+  border-color: var(--grey-300);
+  color: var(--fg-1);
+}
+html[data-theme="dark"] .attendee-suggestions {
+  background: var(--grey-100);
+  border-color: var(--border-default);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.4);
+}
+html[data-theme="dark"] .attendee-row:hover,
+html[data-theme="dark"] .attendee-row.active {
+  background: var(--grey-200);
+}
+
+/* ---- Code / badge surfaces ---- */
+html[data-theme="dark"] .find-row-badge {
+  background: var(--grey-200);
+  color: var(--grey-700);
+}
+html[data-theme="dark"] .slk-tab-n { background: var(--grey-200); }
+
+/* ---- Accent-bg tints: deep, saturated but dark ---- */
+html[data-theme="dark"] .cal-event {
+  background: rgba(236,72,153,0.10);
+}
+html[data-theme="dark"] .what-changed-strip {
+  background: linear-gradient(180deg, rgba(236,72,153,0.08) 0%, rgba(236,72,153,0.04) 100%);
+  border-color: rgba(236,72,153,0.18);
+}
+html[data-theme="dark"] [data-accent="blue"] .cal-event { background: rgba(74,108,247,0.10); }
+html[data-theme="dark"] [data-accent="teal"] .cal-event { background: rgba(20,184,166,0.10); }
+html[data-theme="dark"] [data-accent="blue"] .what-changed-strip {
+  background: linear-gradient(180deg, rgba(74,108,247,0.08) 0%, rgba(74,108,247,0.04) 100%);
+  border-color: rgba(74,108,247,0.18);
+}
+html[data-theme="dark"] [data-accent="teal"] .what-changed-strip {
+  background: linear-gradient(180deg, rgba(20,184,166,0.08) 0%, rgba(20,184,166,0.04) 100%);
+  border-color: rgba(20,184,166,0.18);
+}
+html[data-theme="dark"] .cal-event[data-type="focus"] {
+  background: var(--grey-100);
+  border-left-color: var(--grey-600);
+}
+html[data-theme="dark"] .cal-event[data-type="conflict"] {
+  background: rgba(239,68,68,0.12);
+}
+html[data-theme="dark"] .cal-event[data-type="done"] {
+  background: var(--grey-100);
+  border-left-color: var(--grey-400);
+}
+html[data-theme="dark"] .wellness {
+  background: linear-gradient(180deg, rgba(236,72,153,0.08) 0%, var(--bg-surface) 100%);
+  border-color: rgba(236,72,153,0.18);
+}
+html[data-theme="dark"] .wellness-stat { background: var(--grey-100); }
+html[data-theme="dark"] .wellness-stat .icon { background: rgba(236,72,153,0.12); }
+html[data-theme="dark"] .commit-avatar { background: rgba(236,72,153,0.12); }
+
+/* ---- Overlay / modal backdrops — darken more ---- */
+html[data-theme="dark"] .modal-backdrop { background: rgba(0,0,0,0.58); }
+html[data-theme="dark"] .modal-panel {
+  background: var(--grey-100);
+  border-color: var(--grey-300);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+html[data-theme="dark"] .modal-footer { background: var(--grey-200); }
+html[data-theme="dark"] .modal-tool {
+  background: var(--bg-surface);
+  border-color: var(--grey-300);
+}
+html[data-theme="dark"] .modal-tool:hover { background: var(--grey-200); }
+html[data-theme="dark"] .modal-seg {
+  background: var(--bg-surface);
+  border-color: var(--grey-300);
+}
+html[data-theme="dark"] .modal-seg:hover { background: var(--grey-200); }
+html[data-theme="dark"] .modal-seg[data-active="true"] {
+  background: var(--grey-900);
+  color: var(--grey-0);
+  border-color: var(--grey-900);
+}
+html[data-theme="dark"] .metric-chart-overlay,
+html[data-theme="dark"] .skill-result-overlay,
+html[data-theme="dark"] .task-list-overlay,
+html[data-theme="dark"] .settings-overlay {
+  background: rgba(0,0,0,0.60);
+}
+html[data-theme="dark"] .metric-chart-modal,
+html[data-theme="dark"] .skill-result-modal,
+html[data-theme="dark"] .task-list-modal {
+  background: var(--grey-100);
+  box-shadow: 0 16px 48px rgba(0,0,0,0.50);
+}
+html[data-theme="dark"] .notif-panel {
+  background: var(--grey-100);
+  border-color: var(--grey-300);
+  box-shadow: 0 14px 40px rgba(0,0,0,0.45);
+}
+html[data-theme="dark"] .lens-overlay { background: rgba(0,0,0,0.55); }
+html[data-theme="dark"] .lens-drawer {
+  background: var(--grey-100);
+  border-left-color: var(--grey-300);
+  box-shadow: -8px 0 32px rgba(0,0,0,0.4);
+}
+html[data-theme="dark"] .lens-item {
+  background: var(--bg-surface);
+  border-color: var(--grey-300);
+}
+html[data-theme="dark"] .lens-manager { background: var(--grey-200); }
+html[data-theme="dark"] .lens-count { background: var(--grey-200); }
+
+/* ---- Slack module extended ---- */
+html[data-theme="dark"] .slk-row:hover,
+html[data-theme="dark"] .slack-row:hover { background: var(--grey-100); }
+html[data-theme="dark"] .slack-section--reply {
+  background: rgba(239,68,68,0.08);
+  border-color: rgba(239,68,68,0.15);
+}
+html[data-theme="dark"] .slack-section-head .bubble { background: var(--grey-200); }
+html[data-theme="dark"] .slack-kind-badge { background: var(--grey-200); }
+html[data-theme="dark"] .slack-kind-badge[data-pri="high"] { background: rgba(239,68,68,0.12); }
+html[data-theme="dark"] .slack-kind-badge[data-pri="med"] { background: rgba(245,158,11,0.12); }
+html[data-theme="dark"] .slack-ai { background: var(--grey-100); }
+html[data-theme="dark"] .slack-brand::after { background: var(--bg-surface); }
+html[data-theme="dark"] .slk-read-btn:hover { background: var(--grey-200); }
+html[data-theme="dark"] .mention-chip {
+  background: rgba(245,158,11,0.12);
+  color: var(--yellow-600, #d97706);
+}
+html[data-theme="dark"] .mention-chip[data-pri="high"] {
+  background: rgba(239,68,68,0.12);
+  color: var(--red-400, #f87171);
+}
+html[data-theme="dark"] .mention-chip[data-pri="low"] { background: var(--grey-200); }
+
+/* ---- Settings modal extended ---- */
+html[data-theme="dark"] .settings-modal {
+  background: var(--grey-100);
+  box-shadow: 0 16px 48px rgba(0,0,0,0.50);
+}
+html[data-theme="dark"] .seg-btn {
+  background: var(--bg-surface);
+  border-color: var(--grey-300);
+  color: var(--grey-700);
+}
+html[data-theme="dark"] .seg-btn:hover { background: var(--grey-200); }
+html[data-theme="dark"] .seg-btn.on {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+html[data-theme="dark"] .swatch.on { border-color: var(--grey-900); }
+
+/* ---- Buttons — ghost/tertiary extended ---- */
+html[data-theme="dark"] .btn--tertiary {
+  border-color: var(--grey-300);
+  color: var(--grey-700);
+}
+html[data-theme="dark"] .btn--tertiary:hover {
+  background: var(--grey-200);
+  color: var(--fg-1);
+}
+html[data-theme="dark"] .btn--ghost { color: var(--grey-700); }
+html[data-theme="dark"] .btn--ghost:hover {
+  background: var(--grey-200);
+  color: var(--fg-1);
+}
+html[data-theme="dark"] .btn--secondary {
+  background: var(--grey-200);
+  color: var(--fg-1);
+  border-color: var(--grey-300);
+}
+
+/* ---- SVG chart — text and gridlines ---- */
+html[data-theme="dark"] .metric-chart .mc-grid { stroke: var(--grey-300); }
+html[data-theme="dark"] .metric-chart .mc-ylabel,
+html[data-theme="dark"] .metric-chart .mc-xlabel { fill: var(--grey-600); }
+html[data-theme="dark"] .metric-tf-btn {
+  background: var(--bg-surface);
+  border-color: var(--grey-300);
+  color: var(--grey-600);
+}
+html[data-theme="dark"] .metric-tf-btn:hover { background: var(--grey-200); }
+html[data-theme="dark"] .metric-tf-btn.on {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+/* ---- Sidebar rail (layout A) ---- */
+html[data-theme="dark"] .rail {
+  background: var(--grey-100);
+  color: var(--grey-900);
+}
+html[data-theme="dark"] .rail-logo { color: var(--grey-0); }
+html[data-theme="dark"] .rail-item:hover {
+  background: var(--grey-200);
+  color: var(--grey-900);
+}
+html[data-theme="dark"] .rail-item[data-active="true"] {
+  background: var(--grey-900);
+  color: var(--grey-0);
+}
+html[data-theme="dark"] .rail-item img { filter: none; opacity: 0.8; }
+html[data-theme="dark"] .rail-item[data-active="true"] img { filter: invert(1); }
+html[data-theme="dark"] .rail-item .dot { border-color: var(--grey-100); }
+
+/* ---- App shell ---- */
+html[data-theme="dark"] .app { background: var(--bg-page); }
+
+/* ---- Task rows extended ---- */
+html[data-theme="dark"] .task-row.drag-over { background: rgba(236,72,153,0.08); }
+html[data-theme="dark"] .task-dismiss:hover { background: var(--grey-200); }
+html[data-theme="dark"] .task-tick { background: var(--bg-surface); }
+@keyframes taskDonePulse-dark {
+  0%   { background: rgba(20,184,166,0.15); opacity: 1; }
+  40%  { background: rgba(20,184,166,0.06); opacity: 0.8; }
+  100% { background: transparent; opacity: 0.55; }
+}
+html[data-theme="dark"] .task-row.done { animation-name: taskDonePulse-dark; }
+
+/* ---- Project rows ---- */
+html[data-theme="dark"] .proj-row:hover { background: var(--grey-100); }
+html[data-theme="dark"] .proj-bar { background: var(--grey-200); }
+html[data-theme="dark"] .proj-bar::after { background: var(--grey-700); }
+
+/* ---- Inbox rows ---- */
+html[data-theme="dark"] .inbox-row:hover { background: var(--grey-100); }
+html[data-theme="dark"] .inbox-tag[data-t="mention"] {
+  background: rgba(245,158,11,0.12); color: var(--yellow-600, #d97706);
+}
+html[data-theme="dark"] .inbox-tag[data-t="reply"] {
+  background: rgba(74,108,247,0.12); color: var(--blue-400, #7c9cf5);
+}
+html[data-theme="dark"] .inbox-tag[data-t="draft"] { background: var(--grey-200); }
+html[data-theme="dark"] .inbox-tag[data-t="decision"] {
+  background: rgba(239,68,68,0.12); color: var(--red-400, #f87171);
+}
+
+/* ---- KPI cards ---- */
+html[data-theme="dark"] .kpi {
+  background: var(--bg-surface);
+  border-color: var(--border-default);
+}
+html[data-theme="dark"] .kpi--clickable:hover { background: var(--grey-100); }
+
+/* ---- Pins ---- */
+html[data-theme="dark"] .pin {
+  background: var(--bg-surface);
+  border-color: var(--border-default);
+}
+html[data-theme="dark"] .pin:hover {
+  background: var(--grey-100);
+  border-color: var(--grey-400);
+}
+
+/* ---- Blockers ---- */
+html[data-theme="dark"] .block-row[data-sev="high"] {
+  background: rgba(239,68,68,0.08); border-color: rgba(239,68,68,0.25);
+}
+html[data-theme="dark"] .block-row[data-sev="medium"] {
+  background: rgba(245,158,11,0.08); border-color: rgba(245,158,11,0.25);
+}
+html[data-theme="dark"] .block-row[data-sev="low"] {
+  background: var(--bg-surface); border-color: var(--grey-300);
+}
+html[data-theme="dark"] .block-icon { background: var(--grey-100); }
+
+/* ---- Team ---- */
+html[data-theme="dark"] .team-person { border-color: var(--border-default); }
+html[data-theme="dark"] .team-person[data-out="true"] { background: var(--grey-100); }
+
+/* ---- Countdown ---- */
+html[data-theme="dark"] .countdown { background: var(--grey-100); color: var(--grey-900); }
+
+/* ---- Tweaks panel ---- */
+html[data-theme="dark"] .tweaks-panel { background: var(--grey-100); color: var(--grey-900); }
+html[data-theme="dark"] .tweaks-seg { background: var(--grey-200); }
+html[data-theme="dark"] .tweaks-seg button { color: var(--grey-500); }
+html[data-theme="dark"] .tweaks-seg button[data-active="true"] {
+  background: var(--grey-900); color: var(--grey-0);
+}
+
+/* ---- Priority flags (dark-safe) ---- */
+html[data-theme="dark"] .priority-flag[data-p="1"] {
+  background: rgba(239,68,68,0.15); color: var(--red-400, #f87171);
+}
+html[data-theme="dark"] .priority-flag[data-p="2"] {
+  background: rgba(245,158,11,0.15); color: var(--yellow-600, #d97706);
+}
+
+/* ---- Helper status pill ---- */
+html[data-theme="dark"] .helper-status.on {
+  background: rgba(20,184,166,0.12); color: var(--teal-400, #14b8a6);
+}
+html[data-theme="dark"] .helper-status.off { background: var(--grey-200); }
+
+/* ---- Metric editor rows ---- */
+html[data-theme="dark"] .metric-row {
+  background: var(--grey-100); border-color: var(--grey-300);
+}
+
+/* ---- OKR rows ---- */
+html[data-theme="dark"] .okr-row-head:hover,
+html[data-theme="dark"] .okr-row.is-open .okr-row-head { background: var(--grey-100); }
+html[data-theme="dark"] .okr-row-count { background: var(--grey-200); }
+html[data-theme="dark"] .okr-row-bar { background: var(--grey-200); }
+html[data-theme="dark"] .okr-row-evidence { background: var(--grey-100); }
+html[data-theme="dark"] .okr-picker {
+  background: var(--grey-100);
+  border-color: var(--grey-300);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+}
+html[data-theme="dark"] .okr-picker-row:hover { background: var(--grey-200); }
+html[data-theme="dark"] .okr-picker-row.is-current { background: var(--grey-200); }
+html[data-theme="dark"] .okr-picker-dot-x { background: var(--grey-200); }
+
+/* ---- Commit rows (timeline) ---- */
+html[data-theme="dark"] .commit-row { border-left-color: rgba(255,255,255,0.08); }
+html[data-theme="dark"] .commit-count { background: rgba(255,255,255,0.06); }
+
+/* ---- Log Decision modal ---- */
+html[data-theme="dark"] .log-dec-field input,
+html[data-theme="dark"] .log-dec-field textarea {
+  background: rgba(0,0,0,0.25);
+  border-color: rgba(255,255,255,0.12);
+}
+html[data-theme="dark"] .log-dec-context { background: rgba(255,255,255,0.04); }
+html[data-theme="dark"] .dec-archive-head:hover { background: rgba(255,255,255,0.04); }
+html[data-theme="dark"] .dec-archive-detail { background: rgba(255,255,255,0.02); }
+html[data-theme="dark"] .dec-archive-reasoning { background: rgba(0,0,0,0.25); }
+html[data-theme="dark"] .dec-tab-count { background: rgba(255,255,255,0.08); }
+
+/* ---- Share modal ---- */
+html[data-theme="dark"] .share-sections {
+  background: rgba(255,255,255,0.03);
+  border-color: rgba(255,255,255,0.10);
+}
+html[data-theme="dark"] .share-preview {
+  background: rgba(0,0,0,0.30);
+  border-color: rgba(255,255,255,0.10);
+}
+
+/* ---- Voice summary ---- */
+html[data-theme="dark"] .voice-summary-list li {
+  background: var(--grey-100);
+  border-color: var(--grey-300);
+}
+
+/* ---- Scrollbar (height variant) ---- */
+html[data-theme="dark"] ::-webkit-scrollbar { height: 8px; }
+
+/* ---- Find-anything search highlight ---- */
+html[data-theme="dark"] .hl {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+}
+html[data-theme="dark"] .find-row[data-active="true"] { background: var(--grey-200); }
+
+/* ---- Misc fixes ---- */
+html[data-theme="dark"] .slack-tab[data-active="true"] { border-bottom-color: var(--grey-900); }
+html[data-theme="dark"] .slack-tab .bubble { background: var(--grey-200); }
+html[data-theme="dark"] .slack-tab[data-active="true"] .bubble {
+  background: var(--accent); color: var(--grey-0);
+}
+html[data-theme="dark"] .sub-section-head .bar { background: var(--border-default); }
+html[data-theme="dark"] .done-flag {
+  background: rgba(20,184,166,0.12);
+  color: var(--teal-400, #14b8a6);
+}
+html[data-theme="dark"] .wc-mark-seen:hover { background: rgba(255,255,255,0.06); }
+html[data-theme="dark"] .okr-generate-btn:hover {
+  background: var(--grey-900); color: var(--grey-0); border-color: var(--grey-900);
+}
+html[data-theme="dark"] .divider-thin { background: var(--border-default); }
+html[data-theme="dark"] .now-line-bar { opacity: 0.7; }
+
+/* ---- Meeting prep card ---- */
+html[data-theme="dark"] .meeting-prep-card {
+  background: var(--grey-100);
+  border-color: var(--border-default);
+  border-left-color: var(--blue-400, #7c9cf5);
+}
+html[data-theme="dark"] .mp-pill {
+  background: rgba(74,108,247,0.15);
+  color: var(--blue-400, #7c9cf5);
+}
+
+/* ---- DH toast (bottom-right helper toast) ---- */
+html[data-theme="dark"] .dh-toast {
+  background: var(--grey-100);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.4), 0 2px 8px rgba(0,0,0,0.3);
+}
+
+/* ---- Dash toast (global toast) ---- */
+html[data-theme="dark"] .dash-toast {
+  background: var(--grey-100);
+  border-color: rgba(255,255,255,0.10);
+}
