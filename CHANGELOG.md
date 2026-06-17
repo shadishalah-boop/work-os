@@ -14,6 +14,29 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.9.8 — 2026-06-16
+
+**Slack box redesigned — working tabs + a dense, readable list.** The tabs
+("You missed this / Mentions / Replies owed") only ever filtered the bottom channel
+sublist, so they felt broken now that DMs and the needs-reply queue had their own
+sections. And rows were tall, so few fit the small card.
+
+- **Tabs now filter everything.** DMs, channels, and the needs-reply queue are merged
+  into ONE list (deduped by permalink), each item tagged, and the tabs —
+  **Needs you · Missed · Mentions · Replies owed · DMs** — actually filter that list.
+  Only non-empty tabs show, each with a live count; "Needs you" is the default.
+- **Compact rows.** Each conversation is a single dense line — icon · name · message
+  preview · time · a red dot when it needs you — so many fit at once. Click a row to
+  expand the full summary, @-mentions, and the reply box (send + confirm-chip unchanged).
+- Cleaner tab styling and priority accent stripes (red/amber) for at-a-glance triage.
+
+Verified: 13 DOM checks (tabs render with counts, default "Needs you", DM/needs-reply
+dedupe into one row, tab switching filters, expand→reply sends to the right target,
+channel chip arm→confirm, channels-only fallback) + metrics editor regression. Bumps
+`modules-b.jsx` v=35, `dashboard.css` v=18, plugin 0.9.8.
+
+---
+
 ## v0.9.7 — 2026-06-16
 
 **Round of fixes from real-world testing.**

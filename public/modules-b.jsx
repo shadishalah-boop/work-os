@@ -7,8 +7,8 @@ const { useState: useStateB, useEffect: useEffectB, useMemo: useMemoB } = React;
 
 // --- Slack Module (tabs filter real data; buttons open Slack) ---
 function SlackMod({ data }) {
-  const [activeTab, setActiveTab] = useStateB(data.tabs.find(t=>t.active)?.id || 'missed');
-  const [expanded, setExpanded] = useStateB(data.channels[0]?.id);
+  const [activeTab, setActiveTab] = useStateB(null);   // null → first non-empty tab
+  const [expanded, setExpanded] = useStateB(null);
   const [askQ, setAskQ] = useStateB('');
   const [askState, setAskState] = useStateB({ status: 'idle', results: [], error: null, query: '' });
   const [replyText, setReplyText] = useStateB({});
@@ -104,11 +104,62 @@ function SlackMod({ data }) {
     runAsk(askQ.trim());
   };
 
-  // Filter by active tab (channel must list the tab in c.tabs)
-  const channels = data.channels.filter(c => (c.tabs || []).includes(activeTab));
+  // --- Unify DMs + channels + the needs-reply queue into ONE list, each item tagged
+  // with the tabs it belongs to, deduped by permalink. The tabs then actually filter
+  // this single list (the old tabs only touched the channel sublist). ----------------
+  const items = useMemoB(() => {
+    const byKey = new Map();
+    const add = (raw, base) => {
+      const key = base.permalink || raw.id;
+      let it = byKey.get(key);
+      if (!it) { it = { id: raw.id, key, tags: new Set(), suggested: [], mentions: [] }; byKey.set(key, it); }
+      it.kind = base.kind || it.kind;
+      it.name = it.name || base.name;
+      it.permalink = it.permalink || base.permalink;
+      it.summary = it.summary || base.summary;
+      it.updated = it.updated || base.updated;
+      if (base.suggested && base.suggested.length && !it.suggested.length) it.suggested = base.suggested;
+      if (base.mentions && base.mentions.length && !it.mentions.length) it.mentions = base.mentions;
+      if (base.unread != null) it.unread = Math.max(it.unread || 0, base.unread);
+      // priority: keep the strongest (high > med > low)
+      const rank = { high: 3, med: 2, low: 1 };
+      if (!it.priority || (rank[base.priority] || 0) > (rank[it.priority] || 0)) it.priority = base.priority || it.priority;
+      if (base.chip && !it.chip) it.chip = base.chip;
+      (base.tags || []).forEach(t => it.tags.add(t));
+      return it;
+    };
+    (data.needsReply || []).forEach(nr => add(nr, {
+      kind: nr.kind === 'dm' ? 'dm' : 'channel', name: nr.who, permalink: nr.permalink,
+      summary: nr.summary, suggested: nr.suggested, priority: nr.priority, updated: nr.updated,
+      chip: nr.ask, tags: ['needs', nr.kind === 'mention' ? 'mentions' : nr.kind === 'owed' ? 'owed' : 'owed'],
+    }));
+    (data.dms || []).forEach(dm => add(dm, {
+      kind: 'dm', name: dm.person, permalink: dm.permalink, summary: dm.summary, suggested: dm.suggested,
+      priority: dm.priority, updated: dm.updated, unread: dm.unread,
+      tags: ['dms', ...(dm.unread ? ['missed'] : []), ...(dm.priority === 'high' ? ['needs'] : [])],
+    }));
+    (data.channels || []).forEach(c => add(c, {
+      kind: 'channel', name: c.channel, permalink: c.permalink, summary: c.summary, suggested: c.suggested,
+      priority: c.priority, updated: c.updated, unread: c.unread, mentions: c.mentions,
+      tags: [...(c.tabs || []), ...((c.mentions && c.mentions.length) ? ['mentions'] : []),
+             ...(c.unread ? ['missed'] : []), ...(c.priority === 'high' ? ['needs'] : [])],
+    }));
+    const rank = { high: 3, med: 2, low: 1 };
+    return Array.from(byKey.values()).sort((a, b) => (rank[b.priority] || 0) - (rank[a.priority] || 0) || (b.unread || 0) - (a.unread || 0));
+  }, [data]);
 
-  const dms = data.dms || [];
-  const needsReply = data.needsReply || [];
+  const TAB_DEFS = [
+    { id: 'needs',    label: 'Needs you' },
+    { id: 'missed',   label: 'Missed' },
+    { id: 'mentions', label: 'Mentions' },
+    { id: 'owed',     label: 'Replies owed' },
+    { id: 'dms',      label: 'DMs' },
+  ];
+  const tabCount = {};
+  TAB_DEFS.forEach(t => { tabCount[t.id] = items.filter(it => it.tags.has(t.id)).length; });
+  const tabs = TAB_DEFS.filter(t => tabCount[t.id] > 0);
+  const effectiveTab = (activeTab && tabCount[activeTab]) ? activeTab : (tabs[0] && tabs[0].id);
+  const shown = items.filter(it => it.tags.has(effectiveTab));
 
   // Reusable reply UI (suggested chips + compose box + status), shared by the
   // channel radar, the DM lane, and the "needs your reply" queue. `where` is the
@@ -191,44 +242,42 @@ function SlackMod({ data }) {
     </div>
   );
 
-  // A compact, expandable row used by the DM lane + needs-reply queue. `glyph` is
-  // the little kind badge ("✉" DM, "@" mention, "↩" reply owed).
-  const renderReplyRow = (item, where, glyph, chip) => (
-    <div key={item.id} className="slack-row slack-row--compact" style={{display:'block', cursor:'pointer'}}
-         onClick={()=>setExpanded(expanded===item.id ? null : item.id)}>
-      <div style={{display:'grid', gridTemplateColumns:'auto 1fr auto', gap:10, alignItems:'start'}}>
-        <span className="slack-kind-badge" data-pri={item.priority}>{glyph}</span>
-        <div style={{minWidth:0}}>
-          <div className="slack-channel">
-            <span>{where}</span>
-            {chip && <span className="mention-chip" data-pri={item.priority} style={{marginLeft:'auto'}}>{chip}</span>}
-          </div>
-          <div className="slack-row-meta">
-            {item.unread > 0 ? `${item.unread} unread · ` : ''}updated {item.updated}
-          </div>
-          {item.summary && (
-            <div className="slack-ai">
-              <div className="label"><Icon name="sparkle" size={12}/>Claude summary</div>
-              {item.summary}
-            </div>
-          )}
-          {expanded === item.id && renderReply(item, where)}
+  // One COMPACT row: a single line when collapsed (icon · name · summary · time + a
+  // priority dot), expanding to the full summary + mentions + reply box. Dense by
+  // design so many conversations fit a small window.
+  const renderRow = (it) => {
+    const open = expanded === it.id;
+    const where = it.name;
+    return (
+      <div key={it.key} className={'slk-row' + (open ? ' open' : '')} data-pri={it.priority || 'low'}
+           onClick={() => setExpanded(open ? null : it.id)}>
+        <div className="slk-line">
+          <span className="slk-ic">{it.kind === 'dm' ? '✉' : '#'}</span>
+          <span className="slk-name">{it.kind === 'channel' ? it.name : it.name}</span>
+          {!open && <span className="slk-sum">{it.summary}</span>}
+          {it.unread > 0 && <span className="slk-unread">{it.unread}</span>}
+          <span className="slk-time">{it.updated || ''}</span>
+          {it.tags.has('needs') && <span className="slk-dot" title="Needs you"/>}
         </div>
-        <Icon name={expanded === item.id ? "chevron-down" : "chevron-right"} size={14} style={{opacity: 0.5, marginTop: 6}}/>
+        {open && (
+          <div className="slk-body" onClick={e => e.stopPropagation()}>
+            {it.summary && <div className="slk-sum-full">{it.summary}</div>}
+            {it.mentions && it.mentions.length > 0 && (
+              <div className="slack-mentions">
+                {it.mentions.map((m, i) => <span key={i} className="mention-chip" data-pri={m.pri}>{m.label}</span>)}
+              </div>
+            )}
+            {renderReply(it, where)}
+          </div>
+        )}
       </div>
-    </div>
-  );
-
-  const kindGlyph = (k) => k === 'mention' ? '@' : k === 'owed' ? '↩' : '✉';
+    );
+  };
 
   return (
     <Module
       title={<span style={{display:'inline-flex', alignItems:'center', gap:8}}><span className="slack-brand"/>Slack · what needs you</span>}
-      sub={[
-        needsReply.length ? `${needsReply.length} need a reply` : null,
-        dms.length ? `${dms.length} DMs` : null,
-        `${data.channels.length} channels`,
-      ].filter(Boolean).join(' · ')}
+      sub={`${items.length} conversation${items.length === 1 ? '' : 's'}${tabCount.needs ? ` · ${tabCount.needs} need you` : ''}`}
       right={
         <div style={{display:'flex', alignItems:'center', gap:8}}>
           <span
@@ -324,110 +373,25 @@ function SlackMod({ data }) {
         </div>
       )}
 
-      {/* Needs your reply — the ranked action queue (DMs + mentions + owed) */}
-      {needsReply.length > 0 && (
-        <div className="slack-section slack-section--reply">
-          <div className="slack-section-head">
-            <Icon name="reply" size={12}/>Needs your reply<span className="bubble">{needsReply.length}</span>
-          </div>
-          {needsReply.map(nr => renderReplyRow(nr, nr.who, kindGlyph(nr.kind), nr.ask))}
-        </div>
-      )}
-
-      {/* Direct messages — reply to any DM, not just ones awaiting you */}
-      {dms.length > 0 && (
-        <div className="slack-section slack-section--dms">
-          <div className="slack-section-head">
-            <span className="slack-brand"/>Direct messages<span className="bubble">{dms.length}</span>
-          </div>
-          {dms.map(dm => renderReplyRow(dm, dm.person, '✉', dm.priority === 'high' ? 'Needs you' : null))}
-        </div>
-      )}
-
-      {channels.length > 0 && (
-        <div className="slack-section-head" style={{marginTop: dms.length || needsReply.length ? 14 : 0}}>
-          <Icon name="hash" size={12}/>Channels
-        </div>
-      )}
-
-      <div className="slack-tabs">
-        {data.tabs.map(t => (
-          <button key={t.id} className="slack-tab" data-active={activeTab===t.id} onClick={()=>setActiveTab(t.id)}>
-            {t.label}<span className="bubble">{t.count}</span>
-          </button>
-        ))}
-      </div>
-
-      {channels.map(c => (
-        <div key={c.id} className="slack-row" style={{display:'block', cursor:'pointer'}} onClick={()=>setExpanded(expanded===c.id ? null : c.id)}>
-          <div style={{display:'grid', gridTemplateColumns:'auto 1fr auto', gap:12, alignItems:'start'}}>
-            <span style={{
-              width: 28, height: 28, borderRadius: 6,
-              background: c.priority === 'high' ? 'var(--red-50)' : c.priority === 'med' ? 'var(--yellow-50)' : 'var(--grey-100)',
-              display: 'grid', placeItems: 'center', flexShrink: 0,
-              color: c.priority === 'high' ? 'var(--red-600)' : c.priority === 'med' ? 'var(--yellow-800)' : 'var(--fg-3)',
-              fontWeight: 700, fontSize: 13, fontFamily: 'var(--font-mono)'
-            }}>#</span>
-            <div style={{minWidth:0}}>
-              <div className="slack-channel">
-                <span>{c.channel}</span>
-                <span className="mention-chip" data-pri={c.priority} style={{marginLeft:'auto'}}>
-                  {c.priority === 'high' ? 'Needs you' : c.priority === 'med' ? 'Look soon' : 'FYI'}
-                </span>
-              </div>
-              <div className="slack-row-meta">
-                {c.unread > 0 ? `${c.unread} unread · ` : ''}updated {c.updated}
-                {c.yourMsgsToday ? ` · ${c.yourMsgsToday} msg${c.yourMsgsToday===1?'':'s'} from you today` : ''}
-              </div>
-              <div className="slack-ai">
-                <div className="label"><Icon name="sparkle" size={12}/>Claude summary</div>
-                {c.summary}
-              </div>
-              <div className="slack-mentions">
-                {c.mentions.map((m, i) => (
-                  <span key={i} className="mention-chip" data-pri={m.pri}>{m.label}</span>
-                ))}
-              </div>
-              {expanded === c.id && renderReply(c, c.channel)}
-            </div>
-            <Icon name={expanded === c.id ? "chevron-down" : "chevron-right"} size={14} style={{opacity: 0.5, marginTop: 6}}/>
-          </div>
-        </div>
-      ))}
-      {channels.length === 0 && <div className="empty-ok"><span className="big">All caught up</span>Nothing in this tab right now.</div>}
-
-      {/* Most active threads across Slack */}
-      {(data.activeThreads || []).length > 0 && (
-        <div style={{marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border-subtle)'}}>
-          <div style={{
-            fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em',
-            color: 'var(--fg-3, var(--fg-2))', fontWeight: 700, marginBottom: 8,
-            display: 'flex', alignItems: 'center', gap: 6,
-          }}>
-            <Icon name="sparkle" size={12}/>
-            Most active threads — today
-          </div>
-          {data.activeThreads.map(t => (
-            <div key={t.id} onClick={()=>openInSlack(t.permalink)} style={{
-              display: 'grid', gridTemplateColumns: '1fr auto', gap: 8,
-              padding: '8px 4px', cursor: 'pointer',
-              borderBottom: '1px dashed var(--border-subtle)',
-            }}>
-              <div style={{minWidth:0}}>
-                <div style={{fontSize:13, fontWeight:600, color:'var(--fg-1)'}}>
-                  <span style={{fontFamily:'var(--font-mono)', color:'var(--fg-2)', fontWeight:500, marginRight:8}}>{t.channel}</span>
-                  {t.title}
-                </div>
-                <div style={{fontSize:12, color:'var(--fg-2)', marginTop:2}}>{t.summary}</div>
-                <div style={{fontSize:11, color:'var(--fg-3, var(--fg-2))', marginTop:4, fontFamily:'var(--font-mono)'}}>
-                  {t.starter} · {t.replies} replies · {t.lastActivity}
-                </div>
-              </div>
-              <Icon name="external-link" size={12} style={{opacity:0.5, marginTop:6}}/>
-            </div>
+      {/* Tabs — now filter the whole unified list (DMs + channels + needs-reply) */}
+      {tabs.length > 0 && (
+        <div className="slk-tabs">
+          {tabs.map(t => (
+            <button key={t.id} className="slk-tab" data-active={effectiveTab === t.id}
+                    onClick={() => setActiveTab(t.id)}>
+              {t.label}<span className="slk-tab-n">{tabCount[t.id]}</span>
+            </button>
           ))}
         </div>
       )}
+
+      {/* Compact, dense list for the active tab */}
+      <div className="slk-list">
+        {shown.map(renderRow)}
+        {shown.length === 0 && (
+          <div className="empty-ok"><span className="big">All caught up</span>Nothing here right now.</div>
+        )}
+      </div>
     </Module>
   );
 }
