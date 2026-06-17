@@ -91,16 +91,22 @@ These two are the dashboard's primary Slack surface, so build them first:
 
 ### 0.5. The user's avatar (`userAvatar`)
 
-Fetch the **authed user's own Slack profile photo** for the browser-tab favicon. Be
-thorough — the response shape varies:
-1. Call `mcp__<server>__slack_search_users` with the config `user.email` (then `user.name`),
-   or `mcp__<server>__slack_read_user_profile` for the authed user.
-2. Extract the FIRST present image field, checking **both top level and a nested `profile`
-   object**: `image_512` → `image_192` → `image_72` → `image_1024` → `image_original` →
-   `image_48`. Accept any `https://…` URL (Slack CDN images are public).
-3. Put it in `userAvatar`. Best-effort: if neither tool yields an image, set
-   `userAvatar: ""` and move on — never block the refresh. Don't conclude "no image" after
-   only one field; the URL is usually at `profile.image_192`.
+Fetch the **authed user's own Slack profile photo** for the browser-tab favicon and the
+sidebar avatar. Be thorough — the response shape varies across MCP server versions.
+
+**Preferred order** (based on production results — `slack_read_user_profile` often omits
+the image fields, so start with `slack_search_users`):
+1. Call `mcp__<server>__slack_search_users` with the config `user.email`. If no match,
+   retry with `user.name`. Take the matching user object.
+2. If step 1 returned no image, **then** try `mcp__<server>__slack_read_user_profile`
+   for the authed user as a fallback.
+3. From whichever response you get, extract the FIRST present image field, checking
+   **both the top level and a nested `profile` object**: `image_512` → `image_192` →
+   `image_72` → `image_1024` → `image_original` → `image_48`. Accept any `https://…`
+   URL (Slack CDN images are public).
+4. Put it in `userAvatar`. Best-effort: if neither tool yields an image, set
+   `userAvatar: ""` and move on — never block the refresh. Don't conclude "no image"
+   after only one field; the URL is usually at `profile.image_192`.
 
 ### 1. The channels list
 

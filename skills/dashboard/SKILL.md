@@ -82,15 +82,17 @@ Do this yourself, inline:
    `limit: 20`, and `include_context: false` on every search.
    `to:me after:<SINCE_WINDOW>` · `from:me after:<SINCE_1D>` (questions = those
    containing `?`) · `from:me after:<SINCE_1D>` (shipped) · `incident after:<SINCE_WINDOW>`.
-3b. **Fetch the user's Slack avatar for the tab favicon.** Try hard — the profile shape
-   varies, so check several places:
-   1. `mcp__<MCP_SLACK>__slack_search_users` with the config `user.email` (then `user.name`)
-      → take the matching user; OR `mcp__<MCP_SLACK>__slack_read_user_profile` for the
-      authed user. (Resolve the tool name with the usual `claude_ai_`/bare/ToolSearch fallback.)
-   2. From whatever it returns, pull the FIRST present of these image fields, checking both
+3b. **Fetch the user's Slack avatar for the tab favicon + sidebar.**
+   `slack_read_user_profile` often omits image fields, so prefer `slack_search_users`:
+   1. Call `mcp__<MCP_SLACK>__slack_search_users` with the config `user.email` (then
+      `user.name`). This reliably returns the full profile with image URLs.
+   2. If step 1 returned no image, fall back to `mcp__<MCP_SLACK>__slack_read_user_profile`
+      for the authed user. (Resolve the tool name with the usual `claude_ai_`/bare/ToolSearch
+      fallback.)
+   3. From whatever it returns, pull the FIRST present of these image fields, checking both
       the top level and a nested `profile` object: `image_512`, `image_192`, `image_72`,
       `image_1024`, `image_original`, `image_48`. Accept any `https://…` value.
-   3. Put that URL in `slack.json` as `userAvatar`. If you truly can't find one after both
+   4. Put that URL in `slack.json` as `userAvatar`. If you truly can't find one after both
       tools, set `"userAvatar": ""` and continue (the tab falls back to the default icon).
    Do not give up after a single tool/field — the image is usually under `profile.image_192`.
 4. Build `slack.json` following the schema + scope/classification rules in
