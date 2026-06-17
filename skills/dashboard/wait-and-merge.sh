@@ -72,3 +72,18 @@ esac
 
 # Run the merge — this prints the final confirmation line.
 python3 "$SCRIPT_DIR/build-overrides.py"
+
+# Self-heal a stale local server: if the running serve.py predates this plugin
+# version, it's missing newer endpoints (e.g. /import-org-photo, /metrics-config).
+# A plain /dashboard refresh should bring it up to date too — not just the "open"
+# flow — so restart it here when the recorded server version differs. (Only when a
+# server is known to be running; we never auto-spawn one on a headless refresh.)
+SERVE_VERSION_FILE="$HOME/.claude/dashboard-serve-version"
+PORTFILE="$HOME/.claude/dashboard-serve-port"
+PLUGIN_VERSION="$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('version','0'))" "$SCRIPT_DIR/../../.claude-plugin/plugin.json" 2>/dev/null || echo 0)"
+RUNNING_VERSION="$(cat "$SERVE_VERSION_FILE" 2>/dev/null || echo "")"
+if [ -n "$RUNNING_VERSION" ] && [ "$RUNNING_VERSION" != "$PLUGIN_VERSION" ]; then
+  PORT="$(cat "$PORTFILE" 2>/dev/null || echo 8787)"
+  bash "$SCRIPT_DIR/schedule.sh" serve "$PORT" >/dev/null 2>&1 || true
+  echo "↻ Restarted the local dashboard server (was running an older version)."
+fi

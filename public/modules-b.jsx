@@ -1195,7 +1195,7 @@ function TeamMod({ data }) {
       if (r.status === 202 || r.ok) {
         if (!pollRef.current) pollRef.current = setInterval(pollStatus, 2500);
       } else if (r.status === 404) {
-        setImp({ status: 'err', msg: 'Dashboard server is out of date — run /dashboard once to restart it, then try the import again.' });
+        setImp({ status: 'err', msg: 'Local server is on an older version — in Claude Code say “open the dashboard” (or run /dashboard) to restart it, then retry the import.' });
       } else {
         setImp({ status: 'err', msg: 'Server rejected the image.' });
       }

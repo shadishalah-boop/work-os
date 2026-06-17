@@ -14,6 +14,18 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.12.5 — 2026-06-17
+
+**Photo import "server out of date" fix.** The root cause: `/dashboard` (refresh)
+never restarted the local server — only the "open the dashboard" flow did — so after
+a plugin update the browser loaded the new bundle while `serve.py` kept running the
+old code (missing `/import-org-photo`). Now a refresh self-heals: `wait-and-merge.sh`
+restarts the server whenever the recorded server version differs from the plugin
+version. Also corrected the in-app error to point at the action that actually
+restarts the server ("open the dashboard").
+
+---
+
 ## v0.12.4 — 2026-06-17
 
 Polish pass on the v0.12.3 feedback:
