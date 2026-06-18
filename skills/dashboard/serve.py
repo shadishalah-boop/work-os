@@ -57,13 +57,14 @@ TEAM_FILE = os.path.expanduser("~/.claude/dashboard-team.local.json")
 # = "notion"). The dashboard's done-toggle POSTs to /task-status; the
 # `dashboard-notion-sync` skill pushes pending_sync changes to Notion (source of truth).
 TASKS_FILE = os.path.expanduser("~/.claude/dashboard-tasks.local")
-BUILD = os.path.join(SKILL_DIR, "build-overrides.py")
 
 
 def _set_task_status(sync_key, notion_id, done):
     """Flip a task's done state in dashboard-tasks.local and mark it for Notion sync.
     No-op-safe: only matches tasks that carry a sync_key/notion_id (i.e. Notion-backed).
-    Returns (ok, message)."""
+    Returns (ok, message). Does NOT rebuild data-override.jsx — the dashboard already
+    updated its own UI optimistically, and the next refresh/Notion sync will reconcile.
+    """
     try:
         data = json.loads(open(TASKS_FILE).read())
     except Exception as e:
@@ -85,10 +86,6 @@ def _set_task_status(sync_key, notion_id, done):
             json.dump(data, f, indent=2)
     except Exception as e:
         return False, f"cannot write tasks file: {e}"
-    try:
-        subprocess.run(["python3", BUILD], capture_output=True, text=True, timeout=60)
-    except Exception:
-        pass
     return True, "ok"
 LOGIN_SHELL = "/bin/zsh" if os.path.exists("/bin/zsh") else "/bin/bash"
 

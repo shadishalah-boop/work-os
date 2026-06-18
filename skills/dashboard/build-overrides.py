@@ -311,11 +311,17 @@ MANUAL = load_manual_tasks()
 # manual file + agent tasks, cross-source deduped.
 NOTION_BACKEND = (CFG.get("dashboard", {}).get("tasks", {}) or {}).get("backend") == "notion"
 
+NOTICE = None
 if NOTION_BACKEND:
     top3 = MANUAL["top3"][:3]
     overdue_raw = MANUAL["overdue"]
     duesoon_raw = MANUAL["dueSoon"]
     blocked = MANUAL["blocked"][:5]
+    # Warn when the backend is on but the synced file is empty — almost always
+    # means the dashboard-notion-sync skill hasn't run yet (or failed). Without
+    # this, the user sees empty task lists with no explanation.
+    if not (top3 or overdue_raw or duesoon_raw or blocked):
+        NOTICE = "Notion task backend is enabled but no tasks were loaded — run /dashboard-notion-sync in Claude Code."
 else:
     # All lists below run through cross-source dedup BEFORE truncation/id-assignment
     # so the limit (e.g. blockers[:5]) reflects unique items, not five copies of two.
@@ -460,6 +466,9 @@ jsx = f"""/* global React, window */
 (function () {{
   // Real data is loaded — turn off the sample-data banner from data.jsx.
   window.SEED.demo = false;
+
+  // --- Optional notice (e.g. Notion backend on but no tasks loaded) ----
+  window.SEED.notice = {js_dump(NOTICE)};
 
   // --- User identity (from config) --------------------------------------
   window.SEED.user = {js_dump(STATIC_USER)};

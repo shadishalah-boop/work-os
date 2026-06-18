@@ -14,7 +14,22 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
-## Unreleased — Optional Notion task backend
+## v0.14.1 — 2026-06-18
+
+**Notion task backend follow-up: snappier done-toggle + warning when the sync hasn't run.**
+
+- **`/task-status` no longer rebuilds `data-override.jsx` synchronously.** The previous
+  implementation ran `python3 build-overrides.py` (a 1–3s rebuild) on every checkbox
+  click, blocking the HTTP response. Removed — the dashboard already updates its UI
+  optimistically, and the next refresh / Notion sync reconciles. Result: ticking a
+  task is now instant.
+- **Notice banner when the Notion backend is on but no tasks loaded.** When
+  `dashboard.tasks.backend == "notion"` and `dashboard-tasks.local` is empty/missing
+  (almost always: the user enabled the backend but hasn't run `/dashboard-notion-sync`
+  yet), the dashboard now surfaces a small top banner telling them what to do.
+  Previously they saw empty task lists with no explanation.
+
+## v0.14.0-Notion — 2026-06-18 (PR #22)
 
 **Opt-in: make a personal Notion "Tasks" DB the source of truth for dashboard tasks.**
 Off by default — set `dashboard.tasks.backend: "notion"` in `dashboard-config.local`

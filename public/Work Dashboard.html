@@ -159,6 +159,31 @@
 })();
 
 // =============================================================================
+// Notice banner — surfaced via SEED.notice from build-overrides.py. Used today
+// to warn when the Notion task backend is enabled but no tasks were loaded
+// (almost always means /dashboard-notion-sync hasn't run yet).
+// =============================================================================
+(function noticeBanner() {
+  let tries = 0;
+  const t = setInterval(() => {
+    tries += 1;
+    if (!window.SEED && tries < 100) return;
+    clearInterval(t);
+    if (!window.SEED || !window.SEED.notice) return;
+    const b = document.createElement('div');
+    b.id = 'notice-banner';
+    b.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:9999;background:#8a5a00;color:#fff;padding:9px 16px;border-radius:8px;font:13px/1.4 system-ui,sans-serif;box-shadow:0 4px 16px rgba(0,0,0,.25);display:flex;gap:10px;align-items:center;max-width:560px';
+    b.innerHTML = '<span>⚠ ' + window.SEED.notice + '</span>';
+    const x = document.createElement('button');
+    x.textContent = '✕';
+    x.style.cssText = 'background:none;border:none;color:#fff;opacity:.7;cursor:pointer;font-size:13px;padding:0';
+    x.onclick = () => b.remove();
+    b.appendChild(x);
+    document.body.appendChild(b);
+  }, 200);
+})();
+
+// =============================================================================
 // Auto-reload (v0.4.0): poll Work Dashboard.html every 30s for cache-version
 // bumps. When the dashboard skill rewrites data-override.jsx or drive-index.jsx,
 // it increments their ?v=N suffix here. We detect that and reload so the open
