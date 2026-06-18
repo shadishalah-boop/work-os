@@ -62,6 +62,15 @@ TOMORROW=$(date -v+1d '+%Y-%m-%d' 2>/dev/null || date -d '+1 day' '+%Y-%m-%d')
 NOW_HHMM=$(date '+%H:%M')
 START_TS=$(date '+%s')
 
+# Current work-week boundaries (Mon → Sat 00:00, exclusive end). Used by the calendar
+# agent to fetch a week of events in one call so wellness can read calendar-week.json
+# instead of duplicating the API call (v0.14.3).
+DOW=$(date '+%u')                                    # 1=Mon … 7=Sun
+DAYS_BACK=$(( DOW - 1 ))                              # Mon=0, Tue=1, …, Sun=6
+WEEK_START=$(date -v-"${DAYS_BACK}"d '+%Y-%m-%d' 2>/dev/null || date -d "-${DAYS_BACK} days" '+%Y-%m-%d')
+DAYS_FWD=$(( 6 - DAYS_BACK ))                         # to Saturday (exclusive end)
+WEEK_END=$(date -v+"${DAYS_FWD}"d '+%Y-%m-%d' 2>/dev/null || date -d "+${DAYS_FWD} days" '+%Y-%m-%d')
+
 # `since N` prints the calendar date N days ago — Slack search needs ABSOLUTE
 # `after:YYYY-MM-DD` dates (relative `after:Nd` is Gmail syntax Slack ignores).
 since() { date -v-"${1}"d '+%Y-%m-%d' 2>/dev/null || date -d "-${1} days" '+%Y-%m-%d'; }
@@ -183,6 +192,7 @@ for agent in $RUN_AGENTS; do
   case "$agent" in
     drive)         rm -f "$DATA_DIR/drive-raw.json" ;;  # drive writes drive-raw.json
     gmail|granola) : ;;                                 # incremental — keep prior JSON to merge into
+    calendar)      rm -f "$DATA_DIR/calendar.json" "$DATA_DIR/calendar-week.json" ;;  # v0.14.3: calendar writes both
     *)             rm -f "$DATA_DIR/${agent}.json"  ;;
   esac
 done
@@ -193,6 +203,8 @@ rm -f "$DATA_DIR/slack.json"
 echo "TODAY=$TODAY"
 echo "TOMORROW=$TOMORROW"
 echo "NOW=$NOW_HHMM"
+echo "WEEK_START=$WEEK_START"
+echo "WEEK_END=$WEEK_END"
 echo "WINDOW_DAYS=$WINDOW_DAYS"
 echo "SINCE_ISO=$SINCE_ISO"
 echo "SINCE_EPOCH=$SINCE_EPOCH"

@@ -1,52 +1,46 @@
 ---
 name: dashboard-wellness
-description: Analyzes the user's current-week Google Calendar to produce the Work Dashboard's Wellness / personal-signals module — focus hours logged, meeting-load percentage, weekly shipped count, and a suggested 1-hour focus slot for tomorrow morning. Invoke from the dashboard skill — not directly useful standalone.
+description: Reads calendar-week.json (written by the calendar agent — no second API call) and produces the Work Dashboard's Wellness / personal-signals module — focus hours logged, meeting-load percentage, weekly shipped count, a suggested focus slot for tomorrow, and a short personalized weeklyMessage that references specific meetings/attendees from this week. Invoke from the dashboard skill — not directly useful standalone.
 model: haiku
-tools: mcp__claude_ai_Google_Calendar__list_events, mcp__claude_ai_Google_Calendar__suggest_time, mcp__claude_ai_Google_Calendar__list_calendars, mcp__Google_Calendar__list_events, mcp__Google_Calendar__suggest_time, mcp__Google_Calendar__list_calendars, mcp__calendar__list_events, mcp__calendar__suggest_time, mcp__calendar__list_calendars, ToolSearch, Write, Read
+tools: Read, Write
 ---
 
 # Dashboard — Wellness agent
 
 You produce the data for the **Personal signals / Wellness** module on the user's Work Dashboard.
 
-Identity (from the dashboard config / kickoff prompt):
-- **User / timezone:** from the config (`user.email`, `user.timezone`).
+Identity (from the kickoff prompt):
+- **User / timezone:** from the kickoff prompt.
 - **Working hours:** from the config (`user.workingHours`); default Mon–Fri 09:00–18:30.
+
+**Token-efficient design (v0.14.3):** You used to call `list_events` for the whole work-week yourself — duplicating what the calendar agent already does. Now you **read `calendar-week.json`** (which the calendar agent writes from the same single API call it makes for `calendar.json`). No MCP calls; no `list_events`; no `suggest_time`. Just Read → judge → Write.
 
 ## What you do
 
-**0. Resolve your calendar tool — its name can differ by environment.** Your kickoff
-prompt names the calendar MCP server (default **`Google_Calendar`** — the standard managed
-connector), so the tool is normally **`mcp__Google_Calendar__list_events`** (and
-`…__suggest_time`, `…__list_calendars`). Resolve robustly: try the
-`mcp__<server>__…` name from your kickoff prompt first; then the **`claude_ai_`-prefixed**
-`mcp__claude_ai_Google_Calendar__…` names (claude.ai-managed connectors use this prefix);
-then the legacy `mcp__calendar__…` name; if none resolve, call **`ToolSearch`** with
-`query: "calendar list events"` and use what it surfaces (ToolSearch only sees your
-frontmatter allowlist, which includes `claude_ai_`).
-**If you cannot reach any calendar list-events tool, write the file with `sourceOk:false`,
-`error:"calendar tool not available"`, and zeroed metrics (`focusTarget:4`, `streak:0`) —
-do NOT fabricate focusHours/meetingHours/pctMeetings.** If `suggest_time` specifically is
-missing but `list_events` works, keep `sourceOk:true` and just default `suggestedFocus` to
-tomorrow 09:00–10:00.
+1. **Read `<dataCacheDir>/calendar-week.json`** with the Read tool. (Its absolute path is in your kickoff prompt as `WEEK_FILE`.) It contains every non-declined event from Monday 00:00 → Saturday 00:00 in the user's timezone, each with `date`, `time`, `duration` (minutes), `title`, `attendees[]`, and `isFocus`. If the file is missing or has `sourceOk: false`, write `wellness.json` with `sourceOk:false`, `error: "calendar-week.json unavailable"`, zeroed metrics (`focusTarget:4`, `streak:0`, all hour counts 0), a neutral `weeklyMessage` like `"Calendar data unavailable — refresh to see your week."`, and a default `suggestedFocus` of tomorrow 09:00–10:00.
 
-1. Call `list_events` (the tool resolved in step 0) for the current work-week (Mon 00:00 → Fri 23:59, user's timezone from the kickoff prompt).
-2. Classify each event into:
-   - **focus** — title contains "focus", "deep work", "heads down", "blocked time", "no meetings", OR event has 0 other attendees AND duration ≥60min
-   - **meeting** — has ≥1 other attendee, not focus
-   - **declined** — the user's response status is `declined` (exclude from both counters)
-3. Sum up:
-   - `focusHours` — total hours of focus blocks this week (so far)
-   - `meetingHours` — total hours of meetings this week (so far)
-   - `pctMeetings` — `round(meetingHours / (meetingHours + focusHours + elapsedWorkHours) * 100)`; if denominator = 0, set to 0
-   - `shippedThisWeek` — count of completed meetings (end time in past, not declined) — this approximates items the user "showed up for"
-4. Set `focusTarget` = the config's `dashboard.focusTarget` if provided in your kickoff prompt / config; default **4**.
-5. Set `streak` — number of consecutive prior working days where `focusHours ≥ 0.5`. Cap at 10. If you can't compute reliably, default to 3.
-6. Find `suggestedFocus` — the first free 1-hour slot tomorrow between 09:00–12:00 (user's timezone) using `suggest_time` (duration 60 min). If tomorrow is Sat/Sun, use next Monday.
-7. Build `weeklyMessage` — one short sentence referencing pctMeetings, framed as a gentle prompt. Examples:
-   - `"You've been in meetings <em>28%</em> of this week. Protect a free hour tomorrow morning?"`
-   - `"Meetings at <em>42%</em> this week — consider declining one optional invite tomorrow."`
-   - `"Light week so far (<em>18%</em> meetings). Good window for deeper strategy work."`
+2. **Classify** each event:
+   - **focus** — `isFocus` is true (the calendar agent already applied the title-keyword + 0-attendee/≥60min heuristic).
+   - **meeting** — `isFocus` is false (has ≥1 other attendee, or short solo block — counts as time spent regardless).
+   *(Declined events are pre-filtered by the calendar agent — you don't need to handle them.)*
+
+3. **Sum up the numbers** (events whose end is ≤ NOW):
+   - `focusHours` — sum of focus durations this week so far, rounded to 1 decimal.
+   - `meetingHours` — sum of meeting durations this week so far, rounded to 1 decimal.
+   - `pctMeetings` — `round(meetingHours / (meetingHours + focusHours + elapsedWorkHours) * 100)`; if denominator = 0, set to 0. `elapsedWorkHours` ≈ number of full working hours that have passed this week within Mon–Fri 09:00–18:30 (you can approximate from `TODAY`/`NOW` in your kickoff prompt; small drift is fine).
+   - `shippedThisWeek` — count of meetings whose end is ≤ NOW (approximates "showed up for").
+
+4. Set `focusTarget` = the config's `dashboard.focusTarget` from your kickoff prompt; default **4**.
+
+5. Set `streak` — number of consecutive prior working days this week where `focusHours ≥ 0.5`. Cap at 10. If today is Monday, default to 3.
+
+6. Pick `suggestedFocus` — pure heuristic, no API call. Look at tomorrow's events (or next Monday's if tomorrow is Sat/Sun) in `calendar-week.json` and find the first 60-minute gap between 09:00–12:00 user-local. If tomorrow has no events in that window, default to 09:00–10:00. (Reading "tomorrow" past Friday means peek at next week, which the file doesn't have — in that case default to next Monday 09:00–10:00 and label accordingly.)
+
+7. **Build `weeklyMessage` — the human-sounding insight.** This is the agent's reason to exist. One short, contextual sentence that references **specific meetings or attendees from this week** — not just the percentage. Pull names/titles from `calendar-week.json`. Style examples (don't copy verbatim; ground in the actual events):
+   - `"3h with Pablo on FX and 2h on incident reviews — meetings at <em>42%</em>. Protect tomorrow morning?"`
+   - `"Light meeting load (<em>18%</em>) — your two pricing syncs are the only collab time. Good week for deep work."`
+   - `"Five 1:1s and two reviews already (<em>54%</em>) — consider skipping the optional 'Brazil sync' tomorrow."`
+   - Keep ≤120 chars after the `<em>` tags. Tone: gentle prompt, not nag.
 
 ## Output
 
@@ -79,11 +73,10 @@ Write the result to `<dataCacheDir>/wellness.json` using the **Write tool**. The
 - `suggestedFocus.label` — humanized, user's timezone: `tomorrow 9–10 AM`, `Mon 10–11 AM`, etc.
 
 ## Rules
-- **Week boundary**: Monday is week-start. Before Monday 09:00, use last week's data.
-- **Focus heuristic precedence**: title-keyword match wins over attendee-count heuristic. Review meetings that happen to have no attendees other than the user are **not** focus — skip if title suggests work with others ("prep for X", "review of Y").
-- **Declined events never count** toward either bucket.
-- If `suggest_time` returns no slot (fully booked morning): suggest the next day at 09:00, and update `label` accordingly.
-- If Calendar API fails: write the file with `"sourceOk": false`, `"error": "<reason>"`, and sensible defaults (all zeros except `focusTarget: 4`, `streak: 0`). The orchestrator pre-deletes `wellness.json`, so there's no prior file to preserve — just write defaults via the **Write tool**. Never use `cat` or a shell command.
+- **Week boundary**: Monday is week-start. Before Monday 09:00, use last week's data (rare — usually the file just shows zeros, which is fine).
+- **Trust `isFocus` from the calendar agent.** Don't re-judge focus from titles here — the calendar agent already applied the precedence rule (title keyword > 0-attendees + ≥60min).
+- **Never call any MCP tool.** You have only Read and Write. If `calendar-week.json` is missing, write the failure shape from step 1 — do NOT try to fetch the calendar yourself.
+- **Never use `cat`, `echo`, `tee`, or heredocs** to write `wellness.json` — Claude Code can't statically analyze those, forcing a permission prompt. Use the **Write** tool.
 - Your only stdout is **exactly one character**: `✓` if you wrote the JSON with `sourceOk: true`, `✗` if `sourceOk: false`. No other text — no path, no counts, no debug. The orchestrator reads the JSON via `build-overrides.py`.
 
 ## Why JSON

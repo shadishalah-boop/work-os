@@ -1,6 +1,6 @@
 ---
 name: dashboard-calendar
-description: Fetches today's Google Calendar events for the Split-Brain dashboard's Calendar module. Returns a structured JSON file with the next meeting (countdown block), the day's events classified as event/focus/conflict/done, and the current time for the now-line. Invoke from the dashboard skill — not directly useful standalone.
+description: Fetches the current work-week of Google Calendar events. Writes calendar.json (today only — for the Calendar module's countdown/conflict view) AND calendar-week.json (the full week — read by the wellness agent so it doesn't duplicate the API call). Invoke from the dashboard skill — not directly useful standalone.
 model: haiku
 tools: mcp__claude_ai_Google_Calendar__list_events, mcp__claude_ai_Google_Calendar__list_calendars, mcp__Google_Calendar__list_events, mcp__Google_Calendar__list_calendars, mcp__calendar__list_events, mcp__calendar__list_calendars, ToolSearch, Read, Write
 ---
@@ -43,7 +43,7 @@ connector), so the tool is normally **`mcp__Google_Calendar__list_events`** /
   found no calendar tool. **Never fabricate events or times** when the tool is missing —
   write `events: []` with `sourceOk:false` instead.
 
-1. List today's events via the calendar list-events tool you resolved in step 0b. **Required params:** `startTime` = `{TODAY}T00:00:00`, `endTime` = `{TOMORROW}T00:00:00`, **`timeZone` = the user's timezone from your kickoff prompt**, `orderBy: "startTime"`, `pageSize: 100`. Passing `timeZone` forces the API to return every `dateTime` string with the user's local UTC offset — that offset is authoritative.
+1. List the **current work-week's** events in **one call** via the calendar list-events tool you resolved in step 0b. **Required params:** `startTime` = `{WEEK_START}T00:00:00`, `endTime` = `{WEEK_END}T00:00:00` (Mon → Sat exclusive, both from your kickoff prompt), **`timeZone` = the user's timezone from your kickoff prompt**, `orderBy: "startTime"`, `pageSize: 100`. Passing `timeZone` forces the API to return every `dateTime` string with the user's local UTC offset — that offset is authoritative. **One call covers both files** (today + the week) — never make a second list_events call for today, just filter in memory.
 
    **Timezone rule — read carefully.** Each event has `start: { dateTime, timeZone }`. The `dateTime` string (e.g. `"2026-04-24T15:30:00+02:00"`) already includes the correct local offset because you requested the user's `timeZone`. The `timeZone` field on the event (e.g. `"America/New_York"`) is just metadata about the event's origin — **do NOT use it to convert the time**. Take the `HH:MM` straight out of the `dateTime` string. Treating the `timeZone` field as the source of truth produces wrong times (e.g. 15:30 local becoming 21:30).
 
@@ -69,7 +69,11 @@ connector), so the tool is normally **`mcp__Google_Calendar__list_events`** /
 
 ## Output
 
-Write the result to `<dataCacheDir>/calendar.json` using the **Write tool**. The orchestrator normally deletes this file before you run, so a single Write creates it fresh. **If the Write reports the file already exists** (a stale file from a prior run), **Read it once, then Write again** — you have the Read tool for exactly this; never leave the data unwritten. **Never use `cat`, `echo`, `tee`, or a heredoc (`<< EOF`)** to write the file — Claude Code can't statically analyze those, forcing a permission prompt. Schema:
+Write **TWO** files using the **Write tool** — the orchestrator pre-deletes both, so each Write is a clean CREATE. **Never use `cat`, `echo`, `tee`, or a heredoc (`<< EOF`)** — Claude Code can't statically analyze those, forcing a permission prompt.
+
+### File 1 — `<dataCacheDir>/calendar.json` (today's events only — for the Calendar module)
+
+Filter the week's events down to those whose start `dateTime` falls on `TODAY` (the user's local date), then process them per the classification + extraction rules above. Schema:
 
 ```json
 {
@@ -123,11 +127,38 @@ Write the result to `<dataCacheDir>/calendar.json` using the **Write tool**. The
 }
 ```
 
+### File 2 — `<dataCacheDir>/calendar-week.json` (the full work-week — read by wellness)
+
+Compact list of every non-declined event Mon → Fri from the same single API call. **Do not re-call the API.** Wellness will count focus vs meeting time + craft a contextual message, so include enough to identify each meeting (title, attendees) but skip the dashboard-specific fields (`conflictsWith`, `nextMeeting`). Schema:
+
+```json
+{
+  "weekStart": "2026-06-15",
+  "weekEnd":   "2026-06-20",
+  "events": [
+    {
+      "date":      "2026-06-16",
+      "time":      "09:00",
+      "duration":  30,
+      "title":     "1:1 with Sam",
+      "attendees": [{"name": "Sam Rivera"}],
+      "responseStatus": "accepted",
+      "isFocus":   false
+    }
+  ],
+  "generatedAt": "2026-06-18T10:42:00+02:00",
+  "sourceOk": true,
+  "error": null
+}
+```
+
+`isFocus` applies the same focus rule used in calendar.json (title keyword match OR 0-attendee + ≥60min). Decline filter still applies — don't include events the user declined. No 12-event cap; keep them all.
+
 ## Rules
 - Do NOT include events the user declined (response status: declined).
-- If the calendar API fails: still write the file, with `"sourceOk": false`, `"error": "<reason>"`, `"events": []`, `"nextMeeting": null`.
-- Never write prose, markdown, or explanations to the user. Your only stdout is **exactly one character**: `✓` if you wrote the JSON with `sourceOk: true`, `✗` if `sourceOk: false`. No other text — no path, no counts, no debug. The orchestrator reads the JSON via `build-overrides.py`; the verbose summary was removed in the latency-tuning pass to shrink tool_result size.
-- Cap events at 12 (if more, keep first 12 by time and add a `"truncated": true` flag at top level).
+- If the calendar API fails: still write **both** files, each with `"sourceOk": false`, `"error": "<reason>"`, empty `events: []`, and `"nextMeeting": null` (calendar.json only). Wellness reads calendar-week.json and tolerates `sourceOk:false`.
+- Never write prose, markdown, or explanations to the user. Your only stdout is **exactly one character**: `✓` if you wrote BOTH JSON files with `sourceOk: true`, `✗` if either has `sourceOk: false`. No other text — no path, no counts, no debug. The orchestrator reads the JSON via `build-overrides.py`; the verbose summary was removed in the latency-tuning pass to shrink tool_result size.
+- Cap calendar.json events at 12 (if more, keep first 12 by time and add a `"truncated": true` flag at top level). calendar-week.json has no cap — wellness needs the full week.
 - If `nextMeeting.tag` is unclear, infer from title keywords: "board" → Board, "1:1" → 1:1, "review" → Review, else omit.
 
 ## Why JSON (not HTML)

@@ -14,6 +14,34 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.14.3 — 2026-06-18
+
+**Wellness reads what calendar already fetched — saves ~12k tokens per refresh.**
+The wellness agent used to call `list_events` itself for the whole work-week,
+duplicating what the calendar agent already did for today. Now the calendar agent
+expands its single API call to cover the entire work-week, writes both
+`calendar.json` (today, unchanged) AND a new `calendar-week.json` (the full week),
+and wellness just **reads the week file** — no MCP calls, no `list_events`, no
+`suggest_time`. The human-sounding `weeklyMessage` (the reason wellness has an LLM
+at all) is preserved — wellness still references specific meetings/attendees from
+the week.
+
+- `agents/dashboard-calendar.md` — fetches `WEEK_START` → `WEEK_END` in one
+  list_events call; writes `calendar.json` (today's slice for the Calendar module)
+  and `calendar-week.json` (the full week for wellness).
+- `agents/dashboard-wellness.md` — tools narrowed to `Read, Write` (was 9 MCP
+  tools). Reads `calendar-week.json`, classifies focus vs meetings, sums hours,
+  picks a focus slot heuristically, and writes the contextual weeklyMessage.
+- `prep.sh` — computes `WEEK_START`/`WEEK_END` (Mon → Sat) and pre-deletes both
+  calendar files when calendar runs.
+- `SKILL.md` — Step 3 now uses **two tool blocks**: block 1 spawns calendar +
+  gmail + granola + drive in parallel; block 2 spawns wellness alone after block 1
+  returns (so `calendar-week.json` is guaranteed to be on disk).
+
+Net effect: calendar agent grows ~11.6k → ~14k (week vs today, one call regardless);
+wellness drops ~20k → ~5k (no raw API response in its input). **Save ~12k tokens per
+refresh** while keeping the personalized insight that makes the module worth having.
+
 ## v0.14.2 — 2026-06-18
 
 **Slack refresh: fewer calls, no stale-file Write fallback.**

@@ -111,18 +111,30 @@ Do this yourself, inline:
 > kept, so Slack never blocks the run. The whole refresh is capped by `serve.py`
 > (`REFRESH_TIMEOUT`), so a stuck refresh always resolves and reports a result.
 
-### Step 3 — fetch the other sources, in this session (one tool block)
+### Step 3 — fetch the other sources, in this session (two tool blocks)
 
-In a SINGLE tool-use block, spawn one `Agent` per agent in `RUN_AGENTS`
-(`subagent_type: dashboard-<name>` for calendar / gmail / granola / drive / wellness).
-They run in THIS session, so they can reach the `claude_ai_`-prefixed connectors. Tell
-each its server name and absolute output path. Kickoffs (substitute captured values):
+**Two blocks, not one — `dashboard-wellness` depends on a file `dashboard-calendar`
+writes**, so it must run **after** calendar finishes. The other agents have no
+dependency, so they all run in parallel in the first block.
 
-- `dashboard-calendar`: `Refresh calendar data. TODAY=<TODAY>; TOMORROW=<TOMORROW>; NOW=<NOW>; timezone=<TZNAME>. Your calendar MCP server is named <MCP_CALENDAR> — resolve mcp__<MCP_CALENDAR>__list_events (else ToolSearch "calendar list events"). Write <DATA_DIR>/calendar.json.`
+**Block 1** — single tool-use block, spawn every agent in `RUN_AGENTS` **EXCEPT
+wellness** in parallel (`subagent_type: dashboard-<name>`). They run in THIS session,
+so they can reach the `claude_ai_`-prefixed connectors. Tell each its server name and
+absolute output path.
+
+**Block 2** — once block 1 returns, if `wellness` is in `RUN_AGENTS`, spawn
+`dashboard-wellness` alone. It only Reads `calendar-week.json` (which calendar wrote
+in block 1, OR which an earlier refresh left on disk if calendar is currently cached)
+and Writes `wellness.json` — no MCP calls — so it finishes in ~10s. If `wellness` is
+not in `RUN_AGENTS`, skip block 2 entirely.
+
+Kickoffs (substitute captured values):
+
+- `dashboard-calendar`: `Refresh calendar data. TODAY=<TODAY>; TOMORROW=<TOMORROW>; NOW=<NOW>; WEEK_START=<WEEK_START>; WEEK_END=<WEEK_END>; timezone=<TZNAME>. Your calendar MCP server is named <MCP_CALENDAR> — resolve mcp__<MCP_CALENDAR>__list_events (else ToolSearch "calendar list events"). Fetch the whole work-week in ONE list_events call (WEEK_START → WEEK_END), then write BOTH <DATA_DIR>/calendar.json (today only) AND <DATA_DIR>/calendar-week.json (the full week — wellness will read it).`
 - `dashboard-gmail`: `Refresh gmail INCREMENTALLY. SINCE_EPOCH=<SINCE_EPOCH>; SINCE=<SINCE_WINDOW> (fetch only threads with activity after this; read the existing gmail.json and merge — dedupe by thread id, drop items >14d old; if nothing new, write it back unchanged). Today=<TODAY>; timezone=<TZNAME>. Your gmail MCP server is named <MCP_GMAIL>. Write <DATA_DIR>/gmail.json.`
 - `dashboard-granola`: `Refresh meeting notes INCREMENTALLY from Granola AND Zoom, merged/deduped. SINCE=<SINCE_ISO> (only process meetings started after this; if none are new, write the existing granola.json back unchanged WITHOUT calling get_meetings; otherwise get_meetings for new IDs only and merge into the existing JSON, dropping items >14d old). Today=<TODAY>; timezone=<TZNAME>. Your granola MCP server is named <MCP_GRANOLA>; your zoom MCP server is named <MCP_ZOOM> (optional — skip Zoom silently if it doesn't resolve). Write <DATA_DIR>/granola.json.`
 - `dashboard-drive`: `Refresh drive (files modified last 14 days). Today=<TODAY>. Your drive MCP server is named <MCP_DRIVE>. Write the raw response to <DATA_DIR>/drive-raw.json.`
-- `dashboard-wellness`: `Refresh wellness for this week. Today=<TODAY>; NOW=<NOW>; timezone=<TZNAME>. Your calendar MCP server is named <MCP_CALENDAR>. Write <DATA_DIR>/wellness.json.`
+- `dashboard-wellness`: `Refresh wellness for this week. Today=<TODAY>; NOW=<NOW>; timezone=<TZNAME>; WEEK_FILE=<DATA_DIR>/calendar-week.json. Read WEEK_FILE (the calendar agent writes it from a single API call — do NOT call list_events yourself), classify focus vs meetings, sum hours, and craft a short personalized weeklyMessage that names specific meetings/attendees from this week. Write <DATA_DIR>/wellness.json.`
 
 **Custom Metrics card — REQUIRED when `HAS_METRICS=yes`.** You MUST spawn
 `dashboard-metrics` in this same fan-out block (it's easy to forget — don't). Skipping it
