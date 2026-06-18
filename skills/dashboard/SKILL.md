@@ -77,9 +77,12 @@ Do this yourself, inline:
    `claude_ai_Slack`) → `mcp__claude_ai_Slack__slack_search_public_and_private` →
    `mcp__Slack__slack_search_public_and_private` → else `ToolSearch` with
    `query: "slack search messages"`. Use whatever resolves.
-3. Run the 4 searches (absolute dates). **Keep responses small** to avoid the
-   "result exceeds maximum allowed tokens" error: pass `response_format: "concise"`,
-   `limit: 20`, and `include_context: false` on every search.
+3. Run the 4 searches (absolute dates). **Keep responses small**: pass `limit: 20`
+   and `include_context: false` on every search. **Do NOT pass `response_format:
+   "concise"`** — the concise format strips permalinks (the schema's required
+   `permalink` field), forcing a second round of detailed re-fetches that costs more
+   than the original "savings". The default detailed format already fits comfortably
+   under the response cap at `limit: 20`.
    `to:me after:<SINCE_WINDOW>` · `from:me after:<SINCE_1D>` (questions = those
    containing `?`) · `from:me after:<SINCE_1D>` (shipped) · `incident after:<SINCE_WINDOW>`.
 3b. **Fetch the user's Slack avatar for the tab favicon + sidebar.**

@@ -132,9 +132,11 @@ SINCE_ISO=$(date -u -r "$SINCE_TS" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u 
 SINCE_DAY=$(date -r "$SINCE_TS" '+%Y-%m-%d' 2>/dev/null || date -d "@$SINCE_TS" '+%Y-%m-%d')
 
 # --- Per-agent TTL (same-day cache). Live agents always run; slow ones reuse JSON. ---
-# NOTE: slack is NOT here — it's fetched from the INTERACTIVE session (its MCP
-# search needs user consent the headless subprocess can't give), so its slack.json
-# is produced before this runs and must be preserved, not managed/deleted here.
+# NOTE: slack is NOT in this loop — it's fetched inline by the MAIN interactive
+# session in Step 2 of SKILL.md (its MCP search needs user consent a sub-agent
+# can't give). But slack.json IS pre-deleted below (unconditionally), so the
+# inline Step 2 Write is a clean CREATE instead of the wasteful Read+Write
+# overwrite fallback.
 ttl_for_agent() {
   case "$1" in
     gmail)                echo 0     ;;  # always run (incremental + haiku → cheap)
@@ -184,6 +186,9 @@ for agent in $RUN_AGENTS; do
     *)             rm -f "$DATA_DIR/${agent}.json"  ;;
   esac
 done
+# Slack runs inline in Step 2 — pre-delete so the main session's Write is a clean
+# CREATE (avoids the Read+Write overwrite fallback that costs an extra tool call).
+rm -f "$DATA_DIR/slack.json"
 
 echo "TODAY=$TODAY"
 echo "TOMORROW=$TOMORROW"

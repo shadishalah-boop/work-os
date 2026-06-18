@@ -14,6 +14,20 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.14.2 — 2026-06-18
+
+**Slack refresh: fewer calls, no stale-file Write fallback.**
+
+- **Drop `response_format: "concise"` from the Slack searches.** The concise format
+  strips permalinks, which the schema requires — forcing the orchestrator to re-fetch
+  every search in detailed format. Net result: 8 calls where 4 should suffice. Now
+  uses the default detailed format with the same `limit: 20` and `include_context:
+  false` — fits comfortably under the response cap and keeps real permalinks.
+- **Pre-delete `slack.json` in `prep.sh`.** Slack is the only agent whose output file
+  wasn't being cleared before its run, so the inline Step 2 Write would hit "file
+  exists" and fall back to a Read-then-Write. Now it's a clean CREATE every time —
+  one fewer tool call per refresh.
+
 ## v0.14.1 — 2026-06-18
 
 **Notion task backend follow-up: snappier done-toggle + warning when the sync hasn't run.**
