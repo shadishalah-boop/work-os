@@ -205,6 +205,22 @@ echo "TOMORROW=$TOMORROW"
 echo "NOW=$NOW_HHMM"
 echo "WEEK_START=$WEEK_START"
 echo "WEEK_END=$WEEK_END"
+# Slack profile cache (userAvatar + workspace) — fetched once, reused for 30 days.
+# SLACK_PROFILE_FRESH=yes when the file exists and is < 30 days old → skip the
+# slack_search_users call in Step 2 and reuse the cached fields.
+SLACK_PROFILE_FILE="$HOME/.claude/dashboard-slack-profile.json"
+SLACK_PROFILE_TTL=$(( 30 * 86400 ))
+if [ -f "$SLACK_PROFILE_FILE" ]; then
+  age=$(( START_TS - $(stat -c '%Y' "$SLACK_PROFILE_FILE" 2>/dev/null || stat -f '%m' "$SLACK_PROFILE_FILE" 2>/dev/null || echo 0) ))
+  if [ "$age" -lt "$SLACK_PROFILE_TTL" ]; then
+    echo "SLACK_PROFILE_FRESH=yes"
+  else
+    echo "SLACK_PROFILE_FRESH=no"
+  fi
+else
+  echo "SLACK_PROFILE_FRESH=no"
+fi
+echo "SLACK_PROFILE_FILE=$SLACK_PROFILE_FILE"
 echo "WINDOW_DAYS=$WINDOW_DAYS"
 echo "SINCE_ISO=$SINCE_ISO"
 echo "SINCE_EPOCH=$SINCE_EPOCH"

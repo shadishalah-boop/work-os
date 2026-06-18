@@ -85,19 +85,38 @@ Do this yourself, inline:
    under the response cap at `limit: 20`.
    `to:me after:<SINCE_WINDOW>` · `from:me after:<SINCE_1D>` (questions = those
    containing `?`) · `from:me after:<SINCE_1D>` (shipped) · `incident after:<SINCE_WINDOW>`.
-3b. **Fetch the user's Slack avatar for the tab favicon + sidebar.**
-   `slack_read_user_profile` often omits image fields, so prefer `slack_search_users`:
-   1. Call `mcp__<MCP_SLACK>__slack_search_users` with the config `user.email` (then
-      `user.name`). This reliably returns the full profile with image URLs.
-   2. If step 1 returned no image, fall back to `mcp__<MCP_SLACK>__slack_read_user_profile`
-      for the authed user. (Resolve the tool name with the usual `claude_ai_`/bare/ToolSearch
-      fallback.)
-   3. From whatever it returns, pull the FIRST present of these image fields, checking both
-      the top level and a nested `profile` object: `image_512`, `image_192`, `image_72`,
-      `image_1024`, `image_original`, `image_48`. Accept any `https://…` value.
-   4. Put that URL in `slack.json` as `userAvatar`. If you truly can't find one after both
-      tools, set `"userAvatar": ""` and continue (the tab falls back to the default icon).
-   Do not give up after a single tool/field — the image is usually under `profile.image_192`.
+3b. **Resolve the user's Slack avatar + workspace.** **Cached for 30 days** (v0.14.4)
+   — avatars and workspace slugs almost never change, so we skip the
+   `slack_search_users` call on most refreshes.
+
+   - **If `SLACK_PROFILE_FRESH=yes`** (the orchestrator's prep flag from
+     `SLACK_PROFILE_FILE` mtime < 30 days):
+       1. **Read** `<SLACK_PROFILE_FILE>` — a JSON `{ "userAvatar": "...", "workspace": "..." }`.
+       2. Use those values directly. **Skip the `slack_search_users` call entirely.**
+       3. Move on to step 4. (Saves ~2–3k tokens per refresh and one tool call.)
+
+   - **If `SLACK_PROFILE_FRESH=no`** (no file yet, or > 30 days old):
+       1. Call `mcp__<MCP_SLACK>__slack_search_users` with the config `user.email`
+          (then `user.name`). This reliably returns the full profile with image URLs.
+          (`slack_read_user_profile` often omits image fields — fall back to it only
+          if step 1 returned no image.)
+       2. From whatever it returns, pull the FIRST present of these image fields,
+          checking **both** the top level and a nested `profile` object: `image_512`
+          → `image_192` → `image_72` → `image_1024` → `image_original` → `image_48`.
+          Accept any `https://…` value.
+       3. Derive `workspace` from the result's permalink hostname (e.g.
+          `preply.slack.com` → `"preply"`), the config (`slack.workspace`), or
+          `"slack"` as last resort.
+       4. **Write `<SLACK_PROFILE_FILE>`** with `{ "userAvatar": "...", "workspace":
+          "...", "generatedAt": "..." }` so future refreshes hit the cache.
+       5. Use those values for the rest of this run. If you truly couldn't find any
+          image after both tools, set `"userAvatar": ""` — the tab falls back to the
+          default icon (but **still** write the profile file so we don't retry every
+          refresh; only the next ≥30-day cycle will re-try).
+
+   **To force a re-fetch** (e.g. you changed your Slack photo): delete
+   `~/.claude/dashboard-slack-profile.json` and run `/dashboard` — the next refresh
+   sees no file, fetches fresh, and writes it.
 4. Build `slack.json` following the schema + scope/classification rules in
    `${CLAUDE_PLUGIN_ROOT}/agents/dashboard-slack.md` (Read it for the exact schema —
    apply the scope filter: DMs + channels you posted in + `#incident-*`; include the

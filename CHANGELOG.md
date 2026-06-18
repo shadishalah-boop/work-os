@@ -14,6 +14,22 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.14.4 — 2026-06-18
+
+**Cache the Slack avatar + workspace for 30 days.** These almost never change, so
+calling `slack_search_users` on every refresh was pure waste (~2–3k tokens + one
+tool call). Now:
+
+- First refresh (or every 30 days): fetch the profile, save to
+  `~/.claude/dashboard-slack-profile.json` (`userAvatar` + `workspace`).
+- Subsequent refreshes within 30 days: skip the `slack_search_users` call and read
+  the cached file.
+- To force a re-fetch (changed your photo, joined a different workspace): delete
+  `~/.claude/dashboard-slack-profile.json` and run `/dashboard`.
+
+`prep.sh` exposes `SLACK_PROFILE_FRESH=yes|no` + `SLACK_PROFILE_FILE` so the
+orchestrator's Slack inline step can branch cleanly.
+
 ## v0.14.3 — 2026-06-18
 
 **Wellness reads what calendar already fetched — saves ~12k tokens per refresh.**
