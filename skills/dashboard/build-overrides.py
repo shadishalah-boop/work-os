@@ -292,40 +292,57 @@ def load_manual_tasks():
             "project": t.get("project", ""),
             "done": bool(t.get("done", False)),
             "manual": True,
+            # Carried through for the optional Notion task backend (no-op when absent):
+            # href links the row to its Notion page; sync_key/notion_id drive write-back.
+            "href": t.get("href"),
+            "notion_id": t.get("notion_id"),
+            "sync_key": t.get("sync_key"),
         })
     return out
 
 
 MANUAL = load_manual_tasks()
 
-# All lists below run through cross-source dedup BEFORE truncation/id-assignment
-# so the limit (e.g. blockers[:5]) reflects unique items, not five copies of two.
+# Opt-in Notion task backend. When dashboard.tasks.backend == "notion", tasks come
+# ONLY from the Notion-synced file (dashboard-tasks.local), which the
+# `dashboard-notion-sync` skill keeps in sync with a Notion "Tasks" DB (source of
+# truth). Agent task buckets are then NOT merged here, to avoid duplicating what
+# already flows through Notion. Default ("local") preserves the original behavior:
+# manual file + agent tasks, cross-source deduped.
+NOTION_BACKEND = (CFG.get("dashboard", {}).get("tasks", {}) or {}).get("backend") == "notion"
 
-top3 = dedupe_tagged(
-    (MANUAL["top3"], "manual"), (safe(granola, "top3"), "granola")
-)[:3]
+if NOTION_BACKEND:
+    top3 = MANUAL["top3"][:3]
+    overdue_raw = MANUAL["overdue"]
+    duesoon_raw = MANUAL["dueSoon"]
+    blocked = MANUAL["blocked"][:5]
+else:
+    # All lists below run through cross-source dedup BEFORE truncation/id-assignment
+    # so the limit (e.g. blockers[:5]) reflects unique items, not five copies of two.
+    top3 = dedupe_tagged(
+        (MANUAL["top3"], "manual"), (safe(granola, "top3"), "granola")
+    )[:3]
+    overdue_raw = dedupe_tagged(
+        (MANUAL["overdue"], "manual"),
+        (safe(granola, "overdue"), "granola"),
+        (safe(gmail, "overdue"), "gmail"),
+    )
+    duesoon_raw = dedupe_tagged(
+        (MANUAL["dueSoon"], "manual"),
+        (safe(granola, "dueSoon"), "granola"),
+        (safe(gmail, "dueSoon"), "gmail"),
+    )
+    blocked = dedupe_tagged(
+        (MANUAL["blocked"], "manual"), (safe(granola, "blocked"), "granola")
+    )[:5]
 
-overdue_raw = dedupe_tagged(
-    (MANUAL["overdue"], "manual"),
-    (safe(granola, "overdue"), "granola"),
-    (safe(gmail, "overdue"), "gmail"),
-)
 overdue = []
 for i, item in enumerate(overdue_raw[:5]):
     o = dict(item); o["id"] = f"o{i+1}"; overdue.append(o)
 
-duesoon_raw = dedupe_tagged(
-    (MANUAL["dueSoon"], "manual"),
-    (safe(granola, "dueSoon"), "granola"),
-    (safe(gmail, "dueSoon"), "gmail"),
-)
 duesoon = []
 for i, item in enumerate(duesoon_raw[:10]):
     d = dict(item); d["id"] = f"d{i+1}"; duesoon.append(d)
-
-blocked = dedupe_tagged(
-    (MANUAL["blocked"], "manual"), (safe(granola, "blocked"), "granola")
-)[:5]
 shipped = dedupe(safe(slack, "shipped"), ["slack"] * len(safe(slack, "shipped")))[:5]
 
 blockers_raw = dedupe_tagged(

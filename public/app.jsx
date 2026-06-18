@@ -1304,14 +1304,30 @@ function useDashboardState() {
   const toggleAny = (id) => {
     let label = null;
     let willBeDone = false;
+    let syncKey = null, notionId = null;
     [[top3, setTop3], [overdue, setOverdue], [dueSoon, setDueSoon], [blocked, setBlocked]].forEach(([l, s]) => {
       const task = l.find(t => t.id === id);
       if (task) {
         label = task.label;
         willBeDone = !task.done;
+        syncKey = task.sync_key || null;
+        notionId = task.notion_id || null;
         s(l.map(t => t.id === id ? {...t, done: !t.done} : t));
       }
     });
+
+    // Optional Notion task backend: when a task carries a sync_key/notion_id, push the
+    // status change to Notion (source of truth) via the local server's /task-status
+    // endpoint. No-op for non-Notion tasks; reconciles via dashboard-notion-sync anyway.
+    if (syncKey || notionId) {
+      try {
+        fetch('/task-status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sync_key: syncKey, notion_id: notionId, done: willBeDone }),
+        }).catch(() => {});
+      } catch (e) { /* file:// or offline — reconciles on next sync */ }
+    }
 
     if (willBeDone && label) {
       // Schedule auto-archive after the linger window. Cancel if user un-toggles before then.
