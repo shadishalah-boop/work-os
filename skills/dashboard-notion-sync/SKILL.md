@@ -12,19 +12,27 @@ connectors are reachable (a headless refresh cannot reach managed connectors).
 
 ## Setup (one-time)
 
-1. In `~/.claude/dashboard-config.local`, under `dashboard`, add:
-   ```json
-   "tasks": { "backend": "notion", "notionDataSourceId": "collection://<your-tasks-db>" }
-   ```
-   Leave `backend` as `"local"` (or omit) to keep the default behavior (manual file +
-   agent-sourced tasks).
-2. Your Notion Tasks DB needs these properties (create or adapt): `Task` (title),
-   `Status` (status: e.g. Not started / In progress / Done), `Priority` (select),
-   `Due` (date), plus — added by this skill's first run if missing — `Source`
-   (select), `Sync key` (text, dedup anchor), `Blocked` (checkbox).
+In `~/.claude/dashboard-config.local`, under `dashboard`, add:
+```json
+"tasks": { "backend": "notion", "notionDataSourceId": "" }
+```
+Leave `backend` as `"local"` (or omit) for the default behavior (manual file +
+agent-sourced tasks). Set `notionDataSourceId` to the **data source of whatever Notion
+database you want to use** — paste its `collection://…` id (from the Notion connector's
+`fetch` on the DB), or leave it empty and let the first run create one for you (Step 0).
+Nothing about the DB is hardcoded: you choose it.
 
 ## What it does on each run
 
+0. **Resolve the target database** from `dashboard.tasks.notionDataSourceId`:
+   - If set → use that data source. **Ensure the required properties exist** and add any
+     missing ones (idempotent): `Source` (select), `Sync key` (text, dedup anchor),
+     `Blocked` (checkbox). The DB should also have `Task` (title), `Status` (status),
+     `Priority` (select), `Due` (date) — adapt to the user's existing names if they differ.
+   - If empty → **create** a "Tasks" database (ask the user which page to put it under, or
+     use their tasks/home page), add the properties above, and **write the new
+     `collection://…` id back into the config** so future runs reuse it. Tell the user.
+   All subsequent steps operate on this resolved data source — never a hardcoded id.
 1. **Drain** — read `~/.claude/dashboard-tasks.local`; for any task with
    `pending_sync: true`, update its Notion page `Status` (Done if `done`, else In
    progress) and clear the flag. (This lands dashboard toggles in Notion.)
