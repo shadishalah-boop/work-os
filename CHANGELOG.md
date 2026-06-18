@@ -14,6 +14,23 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## Unreleased — Optional Notion task backend
+
+**Opt-in: make a personal Notion "Tasks" DB the source of truth for dashboard tasks.**
+Off by default — set `dashboard.tasks.backend: "notion"` in `dashboard-config.local`
+to enable; `"local"` (default) keeps the existing behavior unchanged.
+
+- `build-overrides.py` — when enabled, task buckets are sourced only from the
+  Notion-synced `dashboard-tasks.local` (no agent task merge, to avoid duplication);
+  otherwise identical to before. Manual tasks now also carry `href`/`notion_id`/
+  `sync_key` through to the UI.
+- New `skills/dashboard-notion-sync` skill — creates dashboard/Granola/Gmail action
+  items in Notion (deduped by a `Sync key`), pulls open Notion tasks into the
+  dashboard, and pushes status changes back. Runs interactively (needs connectors).
+- `serve.py` — new `POST /task-status` endpoint; the dashboard done-toggle posts the
+  change so it reconciles to Notion on the next sync. No-op for non-Notion tasks.
+- Docs: `tasks` block added to `dashboard-config.local.example`.
+
 ## v0.14.0 — 2026-06-18
 
 **Incremental refresh — only fetch what's new.** Each refresh now uses the **exact

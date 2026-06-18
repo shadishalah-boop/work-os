@@ -53,6 +53,43 @@ SKILLS_FILE = os.path.expanduser("~/.claude/dashboard-skills.local.json")
 # Team roster — populated by dropping a Personio/org-chart photo on the People card.
 # build-overrides.py merges this into SEED.team so it survives /dashboard refreshes.
 TEAM_FILE = os.path.expanduser("~/.claude/dashboard-team.local.json")
+# Optional Notion task backend (off by default; enable with dashboard.tasks.backend
+# = "notion"). The dashboard's done-toggle POSTs to /task-status; the
+# `dashboard-notion-sync` skill pushes pending_sync changes to Notion (source of truth).
+TASKS_FILE = os.path.expanduser("~/.claude/dashboard-tasks.local")
+BUILD = os.path.join(SKILL_DIR, "build-overrides.py")
+
+
+def _set_task_status(sync_key, notion_id, done):
+    """Flip a task's done state in dashboard-tasks.local and mark it for Notion sync.
+    No-op-safe: only matches tasks that carry a sync_key/notion_id (i.e. Notion-backed).
+    Returns (ok, message)."""
+    try:
+        data = json.loads(open(TASKS_FILE).read())
+    except Exception as e:
+        return False, f"cannot read tasks file: {e}"
+    items = data.get("tasks") if isinstance(data, dict) else None
+    if not isinstance(items, list):
+        return False, "tasks file has no 'tasks' list"
+    hit = None
+    for t in items:
+        if (sync_key and t.get("sync_key") == sync_key) or (notion_id and t.get("notion_id") == notion_id):
+            hit = t
+            break
+    if hit is None:
+        return False, "task not found"
+    hit["done"] = bool(done)
+    hit["pending_sync"] = True
+    try:
+        with open(TASKS_FILE, "w") as f:
+            json.dump(data, f, indent=2)
+    except Exception as e:
+        return False, f"cannot write tasks file: {e}"
+    try:
+        subprocess.run(["python3", BUILD], capture_output=True, text=True, timeout=60)
+    except Exception:
+        pass
+    return True, "ok"
 LOGIN_SHELL = "/bin/zsh" if os.path.exists("/bin/zsh") else "/bin/bash"
 
 _state = {"running": False, "last": None, "ok": None, "started_at": None, "tokens": None, "cost": None}
@@ -413,6 +450,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 _state["started_at"] = time.time()
             threading.Thread(target=_run_refresh, daemon=True).start()
             return self._json(202, {"status": "started"})
+        if path == "/task-status":
+            body = self._read_json_body()
+            ok, msg = _set_task_status(body.get("sync_key"), body.get("notion_id"), body.get("done"))
+            return self._json(200 if ok else 404, {"ok": ok, "message": msg})
         if path == "/slack-send":
             body = self._read_json_body()
             text = (body.get("text") or "").strip()

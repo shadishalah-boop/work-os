@@ -116,6 +116,9 @@
 
     "focusTarget": 4,
 
+    "//tasks": "OPTIONAL Notion task backend. backend 'local' (default) = manual file + agent tasks. 'notion' = tasks come only from your Notion Tasks DB, kept in sync by the dashboard-notion-sync skill. See skills/dashboard-notion-sync.",
+    "tasks": { "backend": "local", "notionDataSourceId": "" },
+
     "knownPeople": [
       { "match": "Morgan Chen", "name": "Morgan Chen", "note": "Manager · VP Product", "manager": true },
       { "match": "Priya Shah",  "name": "Priya Shah",  "note": "Sr. PM · Growth" },
