@@ -56,26 +56,53 @@ cd "$WORKDIR" 2>/dev/null || cd /tmp
 # --model sonnet: the orchestration is mechanical (run script, fan out, relay one
 # line) — pinning it keeps refreshes fast and cheap regardless of the user's
 # default model. Sub-agents still use their own frontmatter models.
-OUT=$(sed "s|{{SKILL_DIR}}|$SCRIPT_DIR|g" "$PROMPT_FILE" \
+# --output-format json (v0.14): gives us the run's token usage + cost in a structured
+# envelope, so the dashboard's "Refresh done" banner can report how many tokens the
+# refresh spent. The orchestrator's STEP 4 confirmation line comes back in `.result`.
+ERRFILE="$(mktemp 2>/dev/null || echo "/tmp/refresh-headless.$$.err")"
+RAW=$(sed "s|{{SKILL_DIR}}|$SCRIPT_DIR|g" "$PROMPT_FILE" \
   | claude -p \
       --model sonnet \
+      --output-format json \
       --permission-mode bypassPermissions \
-      --no-session-persistence 2>&1)
+      --no-session-persistence 2>"$ERRFILE")
 status=$?
+ERR=$(cat "$ERRFILE" 2>/dev/null); rm -f "$ERRFILE" 2>/dev/null || true
 
 if [ -n "${WORKDIR:-}" ] && [ "$WORKDIR" != "/tmp" ]; then
   rm -rf "$WORKDIR" 2>/dev/null || true
 fi
 
-if [ "$status" -ne 0 ] && echo "$OUT" | grep -qi "bypass"; then
+if [ "$status" -ne 0 ] && printf '%s\n%s' "$RAW" "$ERR" | grep -qi "bypass"; then
   echo "refresh-headless: your Claude Code settings do not allow bypassPermissions" >&2
   echo "(often disabled by org-managed settings). The dashboard's zero-prompt refresh" >&2
   echo "needs it. Ask your admin about 'disableBypassPermissionsMode', or run the" >&2
   echo "refresh interactively and approve the prompts." >&2
   echo "--- original error: ---" >&2
-  echo "$OUT" >&2
+  printf '%s\n%s\n' "$RAW" "$ERR" >&2
   exit "$status"
 fi
 
-echo "$OUT"
+# Print the orchestrator's confirmation line (from .result), then a machine-readable
+# usage line that serve.py parses out for the banner. If the output isn't JSON (older
+# CLI), pass it through verbatim so nothing is lost.
+printf '%s' "$RAW" | python3 -c '
+import sys, json
+raw = sys.stdin.read()
+try:
+    d = json.loads(raw)
+except Exception:
+    sys.stdout.write(raw)
+    sys.exit(0)
+text = (d.get("result") or d.get("text") or "").strip()
+if text:
+    print(text)
+u = d.get("usage") or {}
+tok = sum(int(u.get(k, 0) or 0) for k in (
+    "input_tokens", "output_tokens",
+    "cache_read_input_tokens", "cache_creation_input_tokens"))
+cost = d.get("total_cost_usd")
+cost_s = ("%.4f" % cost) if isinstance(cost, (int, float)) else ""
+print("__REFRESH_USAGE__ tokens=%d cost=%s" % (tok, cost_s))
+' 2>/dev/null || printf '%s\n' "$RAW"
 exit "$status"

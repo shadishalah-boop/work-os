@@ -27,8 +27,25 @@ only sees your frontmatter allowlist, which includes `claude_ai_`). Only write
 `sourceOk:false` after genuinely trying ToolSearch and finding no Granola tool — never
 fabricate meetings.
 
-1. List meetings from the last **N days** via **a single `list_meetings` call**, where **N is the lookback window the orchestrator specifies in your prompt** (typically 1 on Tue-Fri, 3 on Monday/weekend; default to 7 only if no window is given). `list_meetings` returns titles, dates, participants, and IDs only — **no notes content**. If `list_meetings` fails for a real reason, write the JSON with `sourceOk: false`.
-2. **Fetch the notes/summary for those meetings** via a single `get_meetings` call passing the IDs from step 1 (max 10 per call — if step 1 returned >10, just pass the 10 most recent). `get_meetings` returns the AI-generated summary for each meeting, which contains the action items and decisions you need to extract. **Do NOT** call `get_meeting_transcript` — full transcripts are 10-50× the size and rarely surface items the summary missed. **Do NOT** call `query_granola_meetings` for this purpose either — it's a natural-language search that frequently returns "no meetings found" for very recent meetings that aren't yet indexed, even when `get_meetings` returns rich summaries for the same IDs.
+1. **List meetings via a single `list_meetings` call.** `list_meetings` returns titles, dates,
+   participants, and IDs only — **no notes content**, so it's cheap. If it fails for a real
+   reason, write the JSON with `sourceOk: false`.
+2. **Incremental refresh (v0.14 — the big token saver).** Your kickoff prompt gives `SINCE`
+   (a date/time). From the list in step 1, keep only meetings that **started after `SINCE`** —
+   meetings before that were already processed by the previous refresh and their notes can't
+   have changed. Then:
+   - **Read** the existing `<dataCacheDir>/granola.json` (the orchestrator keeps it for you to
+     merge into; it's absent only on a fresh install).
+   - **If there are NO new meetings since `SINCE` AND the existing file is valid** (`sourceOk:true`):
+     **do NOT call `get_meetings` at all** — that's the expensive call. Just **Write the existing
+     JSON back unchanged** (bump `generatedAt`) so the orchestrator sees a fresh file, output `✓`,
+     and stop. This is the common cheap path on a same-day re-refresh.
+   - **Otherwise**, call `get_meetings` **once** with only the NEW meeting IDs (max 10; if more,
+     the 10 most recent). `get_meetings` returns the AI summary per meeting — that's where the
+     action items/decisions are. **Do NOT** call `get_meeting_transcript` (10–50× larger, rarely
+     adds anything) or `query_granola_meetings` (NL search that misses very recent meetings).
+   When there's no existing file (fresh install), `SINCE` is already 14 days back — process the
+   full list as normal.
 
 2b. **Also pull Zoom meeting notes (if a Zoom MCP is connected).** Some meetings have AI
    notes/transcripts in Zoom instead of — or in addition to — Granola. Resolve a Zoom tool:
@@ -36,11 +53,12 @@ fabricate meetings.
    → `mcp__Zoom_for_Claude__search_meetings` / `…__recordings_list` → else `ToolSearch
    "zoom meetings recordings"`. **If no Zoom tool resolves, skip Zoom silently** (Zoom is
    optional — Granola alone is fine; do NOT set sourceOk:false just because Zoom is absent).
-   List the last **N days** of Zoom meetings/recordings, then fetch each one's **AI summary
-   or transcript** for items (prefer a summary/notes asset via `get_meeting_assets` /
-   `get_recording_resource`; only read a full transcript if no summary exists). Cap at the
-   10 most recent. Extract the same kinds of items (action items for the user, decisions,
-   blockers) from these too.
+   List Zoom meetings/recordings **since `SINCE`** (same incremental rule as Granola — skip
+   anything that started before the cutoff), then fetch each one's **AI summary or transcript**
+   for items (prefer a summary/notes asset via `get_meeting_assets` / `get_recording_resource`;
+   only read a full transcript if no summary exists). Cap at the 10 most recent. Extract the
+   same kinds of items (action items for the user, decisions, blockers). If there are no new
+   Zoom meetings since `SINCE`, skip Zoom for this run.
 
 2c. **Merge + dedupe across the two sources.** A meeting often exists in BOTH apps. Treat
    two meetings as the **same** when their titles match (case-insensitive, ignoring
@@ -65,7 +83,15 @@ fabricate meetings.
 
 ## Output
 
-Write the result to `<dataCacheDir>/granola.json` using the **Write tool**. The orchestrator normally deletes this file before you run, so a single Write creates it fresh. **If the Write reports the file already exists** (a stale file from a prior run), **Read it once, then Write again** — you have the Read tool for exactly this; never leave the data unwritten. **Never use `cat`, `echo`, `tee`, or a heredoc (`<< EOF`)** to write the file — Claude Code can't statically analyze those, forcing a permission prompt. Schema:
+Write the result to `<dataCacheDir>/granola.json` using the **Write tool**. Because the refresh
+is incremental (Steps 1–2), the orchestrator **keeps** your prior `granola.json` so you can merge
+into it — so you normally **Read it first, then Write** (overwrite-after-Read is allowed and never
+prompts). **Merge rule:** start from the prior arrays, fold in the items extracted from the NEW
+meetings, **dedupe** (see Rules — same commitment surfaces once, newest mention wins), and **drop
+items whose source meeting is older than 14 days** so the lists stay bounded. On a fresh install
+there's no prior file and a single Write creates it. **Never use `cat`, `echo`, `tee`, or a
+heredoc (`<< EOF`)** to write the file — Claude Code can't statically analyze those, forcing a
+permission prompt. Schema:
 
 ```json
 {

@@ -10,9 +10,9 @@
 # logic inline in the skill would force a prompt).
 #
 # Prints KEY=VALUE lines for the orchestrator to capture:
-#   TODAY, TOMORROW, NOW (HH:MM), WINDOW_DAYS, SINCE_WINDOW, SINCE_1D, SINCE_30D,
-#   START_TS, TZNAME, DATA_DIR, DASH_DIR, RUN_AGENTS, SKIP_AGENTS, CONFIG, BUNDLE,
-#   MCP_CALENDAR, MCP_GMAIL, MCP_SLACK, MCP_DRIVE, MCP_GRANOLA
+#   TODAY, TOMORROW, NOW (HH:MM), WINDOW_DAYS, SINCE_ISO, SINCE_EPOCH, SINCE_WINDOW,
+#   SINCE_1D, SINCE_30D, START_TS, TZNAME, DATA_DIR, DASH_DIR, RUN_AGENTS, SKIP_AGENTS,
+#   CONFIG, BUNDLE, MCP_CALENDAR, MCP_GMAIL, MCP_SLACK, MCP_DRIVE, MCP_GRANOLA
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -95,9 +95,15 @@ elif [ -f "$CONFIG_FILE" ] && python3 -c "import json,sys; sys.exit(0 if ((json.
   HAS_METRICS=yes
 fi
 
-# --- WINDOW_DAYS = ceil(hours since last successful refresh / 24), clamped [1,7] ---
-# Uses mtime of data-override.jsx — only written on a complete refresh. The
-# bundled STUB (just copied by the sync above on fresh installs) doesn't count.
+# --- Lookback cutoff: the EXACT last-refresh time when recent, else a bounded window.
+# This is the efficiency core (v0.14): each refresh only looks at what arrived since
+# the previous one — the source history before that can't have changed, so re-fetching
+# it just burns tokens. Rules:
+#   • never refreshed (fresh install)   → 14 days   (one-time backfill so it's not empty)
+#   • last refresh was > 7 days ago     → 7 days    (bounded catch-up after a long gap)
+#   • otherwise                         → the exact last-refresh timestamp (down to the minute)
+# LAST = mtime of data-override.jsx, written only on a COMPLETE refresh. The bundled
+# STUB (just copied by the sync above on fresh installs) doesn't count as a refresh.
 # NOTE: GNU stat must be tried FIRST (-c). On Linux, BSD-style `stat -f '%m'`
 # does not fail — it prints filesystem info — so the old `-f || -c` order
 # returned garbage and crashed the arithmetic below under `set -u`.
@@ -105,14 +111,25 @@ LAST=$(stat -c '%Y' "$DASH_DIR/data-override.jsx" 2>/dev/null || stat -f '%m' "$
 if [ -n "${LAST:-}" ] && grep -q "^// Stub" "$DASH_DIR/data-override.jsx" 2>/dev/null; then
   LAST=""   # never actually refreshed
 fi
-if [ -z "$LAST" ]; then
-  WINDOW_DAYS=7   # no prior refresh → safe default
+if [ -z "${LAST:-}" ]; then
+  SINCE_TS=$(( START_TS - 14 * 86400 ))   # fresh install → 14-day backfill
+  WINDOW_DAYS=14
 else
-  HRS=$(( (START_TS - LAST) / 3600 ))
-  WINDOW_DAYS=$(( (HRS + 23) / 24 ))
-  [ "$WINDOW_DAYS" -lt 1 ] && WINDOW_DAYS=1
-  [ "$WINDOW_DAYS" -gt 7 ] && WINDOW_DAYS=7
+  AGE=$(( START_TS - LAST ))
+  if [ "$AGE" -gt $(( 7 * 86400 )) ]; then
+    SINCE_TS=$(( START_TS - 7 * 86400 ))  # long gap → cap catch-up at 7 days
+    WINDOW_DAYS=7
+  else
+    SINCE_TS=$LAST                         # normal case → exact last-refresh moment
+    WINDOW_DAYS=$(( (AGE + 86399) / 86400 ))
+    [ "$WINDOW_DAYS" -lt 1 ] && WINDOW_DAYS=1
+  fi
 fi
+SINCE_EPOCH=$SINCE_TS
+# RFC3339 (UTC) for APIs that filter on a full timestamp (Drive modifiedTime); and the
+# plain date for day-granularity searches (Slack/Granola/Gmail `after:`).
+SINCE_ISO=$(date -u -r "$SINCE_TS" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -d "@$SINCE_TS" '+%Y-%m-%dT%H:%M:%SZ')
+SINCE_DAY=$(date -r "$SINCE_TS" '+%Y-%m-%d' 2>/dev/null || date -d "@$SINCE_TS" '+%Y-%m-%d')
 
 # --- Per-agent TTL (same-day cache). Live agents always run; slow ones reuse JSON. ---
 # NOTE: slack is NOT here — it's fetched from the INTERACTIVE session (its MCP
@@ -120,9 +137,11 @@ fi
 # is produced before this runs and must be preserved, not managed/deleted here.
 ttl_for_agent() {
   case "$1" in
-    calendar|gmail)       echo 0     ;;  # always run
+    gmail)                echo 0     ;;  # always run (incremental + haiku → cheap)
+    calendar)             echo 1800  ;;  # 30m — events don't change minute-to-minute (v0.14)
     granola)              echo 7200  ;;  # 2h
-    drive|wellness)       echo 14400 ;;  # 4h
+    wellness)             echo 14400 ;;  # 4h
+    drive)                echo 28800 ;;  # 8h — recent-files index is slow to go stale (v0.14)
   esac
 }
 
@@ -154,10 +173,15 @@ SKIP_AGENTS="${SKIP_AGENTS# }"
 # The Write tool refuses to OVERWRITE an existing file without a prior Read; agents
 # then fall back to an unparseable `cat > file << EOF`. Removing the stale file first
 # means the agent's Write creates a brand-new file and never reaches that fallback.
+#
+# EXCEPTION (v0.14): gmail + granola refresh INCREMENTALLY — they read their prior
+# JSON, add only what's new since SINCE, and write the merged result. Their file must
+# survive so there's something to merge into; they Read-then-Write (no prompt).
 for agent in $RUN_AGENTS; do
   case "$agent" in
-    drive) rm -f "$DATA_DIR/drive-raw.json" ;;  # drive writes drive-raw.json
-    *)     rm -f "$DATA_DIR/${agent}.json"  ;;
+    drive)         rm -f "$DATA_DIR/drive-raw.json" ;;  # drive writes drive-raw.json
+    gmail|granola) : ;;                                 # incremental — keep prior JSON to merge into
+    *)             rm -f "$DATA_DIR/${agent}.json"  ;;
   esac
 done
 
@@ -165,7 +189,9 @@ echo "TODAY=$TODAY"
 echo "TOMORROW=$TOMORROW"
 echo "NOW=$NOW_HHMM"
 echo "WINDOW_DAYS=$WINDOW_DAYS"
-echo "SINCE_WINDOW=$(since "$WINDOW_DAYS")"
+echo "SINCE_ISO=$SINCE_ISO"
+echo "SINCE_EPOCH=$SINCE_EPOCH"
+echo "SINCE_WINDOW=$SINCE_DAY"
 echo "SINCE_1D=$(since 1)"
 echo "SINCE_30D=$(since 30)"
 echo "START_TS=$START_TS"

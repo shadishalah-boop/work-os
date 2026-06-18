@@ -1,5 +1,6 @@
 ---
 name: dashboard-gmail
+model: haiku
 description: Fetches today's actionable Gmail threads for the Work Dashboard's Inbox, Decisions, and Gmail-sourced Tasks sections. Extracts threads where the user is directly addressed, has an explicit ask awaiting their response, or has been waiting on someone else for >2 days. Invoke from the dashboard skill — not directly useful standalone.
 tools: mcp__claude_ai_Gmail__search_threads, mcp__claude_ai_Gmail__get_thread, mcp__Gmail__search_threads, mcp__Gmail__get_thread, mcp__gmail__search_threads, mcp__gmail__get_thread, ToolSearch, Read, Write
 ---
@@ -32,8 +33,25 @@ Resolve robustly:
   arrays with `sourceOk:false` instead. Wherever this file says `search_threads` or
   `get_thread` below, use the resolved tool.
 
-1. Fetch threads via `search_threads` with the query (substitute **N** with the lookback window the orchestrator specifies in your prompt — typically `1` on Tue-Fri, `3` on Monday/weekend; default to `7` only if unspecified):
-   `(is:unread OR is:important OR to:me) newer_than:Nd -category:promotions -category:social`
+1. **Incremental fetch (v0.14 — read this first).** Your kickoff prompt gives `SINCE_EPOCH`
+   (a Unix timestamp) and `SINCE` (a date). Fetch ONLY threads with activity **after** that
+   moment — everything before it was already captured by the previous refresh and can't have
+   changed, so re-reading it just wastes tokens. Gmail's search accepts the epoch directly:
+   `(is:unread OR is:important OR to:me) after:SINCE_EPOCH -category:promotions -category:social`
+   (if your prompt only gives a date, use `after:YYYY/MM/DD` instead). Then **merge** with what
+   you already had:
+   - **Read** the existing `<dataCacheDir>/gmail.json` if it's there (it is, unless this is a
+     fresh install — the orchestrator deliberately keeps it for you to merge into).
+   - **If the search returns no new threads AND the existing file is valid** (`sourceOk:true`):
+     do not re-classify anything. Just **Write the existing JSON back unchanged** (bump
+     `generatedAt`) so the orchestrator sees a fresh file, then output `✓` and stop. This is
+     the common cheap path on a same-day re-refresh.
+   - **Otherwise:** classify the NEW threads (below), then merge them into the existing arrays —
+     **dedupe by thread `id`** (a new version of a thread replaces the old entry), and **drop any
+     item whose newest message is older than 14 days** so the lists stay bounded. Write the
+     merged result.
+   When there is no existing file (fresh install), the window is already 14 days — just build
+   from the full result.
 2. For any thread that looks actionable (question mark, explicit ask, calendar invite, share request), call `get_thread` to read the latest message and confirm the ask.
 3. Classify each thread into one of:
    - `decision` — explicit yes/no or accept/decline owed by the user (share requests, invites, outreach that wants a reply)
@@ -46,7 +64,12 @@ Resolve robustly:
 
 ## Output
 
-Write the result to `<dataCacheDir>/gmail.json` using the **Write tool**. The orchestrator normally deletes this file before you run, so a single Write creates it fresh. **If the Write reports the file already exists** (a stale file from a prior run), **Read it once, then Write again** — you have the Read tool for exactly this; never leave the data unwritten. **Never use `cat`, `echo`, `tee`, or a heredoc (`<< EOF`)** to write the file — Claude Code can't statically analyze those, forcing a permission prompt. Schema:
+Write the result to `<dataCacheDir>/gmail.json` using the **Write tool**. Because the refresh
+is now incremental (Step 1), the orchestrator **keeps** your prior `gmail.json` so you can merge
+into it — so you will normally **Read it first, then Write** (overwrite-after-Read is allowed and
+never prompts). On a fresh install there's no prior file and a single Write creates it. **Never
+use `cat`, `echo`, `tee`, or a heredoc (`<< EOF`)** to write the file — Claude Code can't
+statically analyze those, forcing a permission prompt. Schema:
 
 ```json
 {

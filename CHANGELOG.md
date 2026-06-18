@@ -14,6 +14,33 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.14.0 — 2026-06-18
+
+**Incremental refresh — only fetch what's new.** Each refresh now uses the **exact
+timestamp of the previous refresh** as its lookback cutoff (`SINCE_ISO` /
+`SINCE_EPOCH` / `SINCE_WINDOW`), instead of re-pulling a fixed 1–7 day window every
+time. The reasoning: source history before the last refresh can't have changed, so
+re-reading it only burns tokens. Fallbacks: a **fresh install backfills 14 days** (so
+it's not empty), and a **gap of >7 days caps catch-up at 7 days**.
+
+- **Gmail + Granola refresh incrementally.** Their prior JSON is kept (not deleted) so
+  they read it, fetch only what's new since `SINCE`, merge (dedupe by id; drop items
+  >14 days old), and write. If nothing is new, they write the existing data back
+  unchanged.
+- **Granola skips its expensive call when idle.** `list_meetings` is cheap; if no
+  meeting started after `SINCE`, the agent does **not** call `get_meetings` (the call
+  that reads full AI summaries) at all.
+- **Lighter models + longer caches.** Gmail now runs on Haiku (joining calendar, drive,
+  wellness; only Granola stays on Sonnet for extraction quality). Per-agent TTLs
+  loosened where safe: calendar 30 min, drive 8 h (was 4 h), granola 2 h, wellness 4 h.
+
+**Token usage in the "Refresh done" banner.** The one-press refresh now reports how
+many tokens the run spent — the headless helper runs with `--output-format json` and
+the dashboard shows `⚡ 48k tokens · $0.08` under the success message. (Tokens are the
+run's reported usage; the cost figure covers the whole run including sub-agents.)
+
+---
+
 ## v0.13.0 — 2026-06-17
 
 **Time-based auto theme.** The "Auto" theme setting now switches between light

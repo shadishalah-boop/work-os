@@ -55,7 +55,7 @@ SKILLS_FILE = os.path.expanduser("~/.claude/dashboard-skills.local.json")
 TEAM_FILE = os.path.expanduser("~/.claude/dashboard-team.local.json")
 LOGIN_SHELL = "/bin/zsh" if os.path.exists("/bin/zsh") else "/bin/bash"
 
-_state = {"running": False, "last": None, "ok": None, "started_at": None}
+_state = {"running": False, "last": None, "ok": None, "started_at": None, "tokens": None, "cost": None}
 _lock = threading.Lock()
 
 REFRESH_TIMEOUT = 300  # seconds — hard cap so a stuck refresh always resolves (~5 min)
@@ -82,20 +82,43 @@ def _run_refresh():
         )
         out = (proc.stdout or "").strip().splitlines()
         err = (proc.stderr or "").strip().splitlines()
-        last = (out[-1] if out else (err[-1] if err else "")).strip()
+        # refresh-headless.sh emits a "__REFRESH_USAGE__ tokens=<N> cost=<C>" line
+        # (v0.14). Pull the token/cost telemetry out of it and keep the real
+        # confirmation line as the human-readable status.
+        tokens, cost, kept = None, None, []
+        for ln in out:
+            s = ln.strip()
+            if s.startswith("__REFRESH_USAGE__"):
+                for part in s.split():
+                    if part.startswith("tokens="):
+                        try: tokens = int(part[len("tokens="):])
+                        except ValueError: pass
+                    elif part.startswith("cost="):
+                        val = part[len("cost="):]
+                        try: cost = float(val) if val else None
+                        except ValueError: pass
+                continue
+            kept.append(s)
+        last = (kept[-1] if kept else (err[-1] if err else "")).strip()
         with _lock:
             _state["last"] = last or "(no output)"
             _state["ok"] = proc.returncode == 0
+            _state["tokens"] = tokens
+            _state["cost"] = cost
     except subprocess.TimeoutExpired:
         with _lock:
             _state["last"] = (f"Refresh timed out after {REFRESH_TIMEOUT // 60} min. "
                               "A headless refresh may stall on connector consent — run /dashboard "
                               "in Claude Code, or check ~/.claude/dashboard-serve.log.")
             _state["ok"] = False
+            _state["tokens"] = None
+            _state["cost"] = None
     except Exception as e:
         with _lock:
             _state["last"] = f"refresh error: {e}"
             _state["ok"] = False
+            _state["tokens"] = None
+            _state["cost"] = None
     finally:
         with _lock:
             _state["running"] = False
@@ -385,6 +408,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 _state["running"] = True
                 _state["ok"] = None
                 _state["last"] = None
+                _state["tokens"] = None
+                _state["cost"] = None
                 _state["started_at"] = time.time()
             threading.Thread(target=_run_refresh, daemon=True).start()
             return self._json(202, {"status": "started"})

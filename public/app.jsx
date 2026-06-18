@@ -2216,28 +2216,35 @@ function RefreshBanner() {
   const [dismissed, setDismissed] = React.useState(false);
   const dismissTimer = React.useRef(null);
   // Auto-dismiss the "done" state after a few seconds (and on data-fresh reload).
-  const finish = (ok, last) => {
-    setSt({ phase: 'done', ok, last });
+  const finish = (ok, last, tokens, cost) => {
+    setSt({ phase: 'done', ok, last, tokens, cost });
     if (dismissTimer.current) clearTimeout(dismissTimer.current);
     dismissTimer.current = setTimeout(() => setDismissed(true), 6000);
   };
   React.useEffect(() => {
     // If the page just auto-reloaded because fresh data landed, the refresh DID
     // complete — resolve the banner instead of showing a lingering "Refreshing…".
+    // The in-memory state was wiped by the reload, so fetch the server's final
+    // status once to recover the result line + token count (v0.14).
     let freshlyReloaded = false;
     try {
       const ts = Number(sessionStorage.getItem('dash:freshReload') || 0);
       if (ts && Date.now() - ts < 20000) { freshlyReloaded = true; }
       sessionStorage.removeItem('dash:freshReload');
     } catch {}
-    if (freshlyReloaded) finish(true, 'Updated just now');
+    if (freshlyReloaded) {
+      fetch('/refresh-status', { cache: 'no-store' })
+        .then(r => r.json())
+        .then(s => { if (!s.running) finish(s.ok !== false, s.last || 'Updated just now', s.tokens, s.cost); else finish(true, 'Updated just now'); })
+        .catch(() => finish(true, 'Updated just now'));
+    }
 
     let wasRunning = false;
     const poll = async () => {
       try {
         const s = await (await fetch('/refresh-status', { cache: 'no-store' })).json();
         if (s.running) { wasRunning = true; setDismissed(false); setSt({ phase: 'running', elapsed: s.elapsed || 0 }); }
-        else if (wasRunning) { wasRunning = false; finish(s.ok !== false, s.last); }
+        else if (wasRunning) { wasRunning = false; finish(s.ok !== false, s.last, s.tokens, s.cost); }
       } catch { /* server has no /refresh-status (file:// or plain server) — ignore */ }
     };
     if (!freshlyReloaded) poll();
@@ -2256,6 +2263,12 @@ function RefreshBanner() {
   const accent = running ? 'var(--blue-500, #2f6df6)' : ok ? 'var(--green-600, #1a7f4b)' : 'var(--red-600, #d23f3f)';
   const icon = running ? '↻' : ok ? '✓' : '⚠';
   const title = running ? 'Refreshing your dashboard…' : (ok ? 'Dashboard refreshed' : 'Refresh didn’t finish');
+  // Compact token/cost readout for the done state (v0.14). tokens reflect the run's
+  // reported usage; cost (when present) covers the whole run incl. sub-agents.
+  const fmtTokens = (n) => n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : `${n}`;
+  const usage = (!running && ok && st.tokens)
+    ? `${fmtTokens(st.tokens)} tokens${(typeof st.cost === 'number' && st.cost > 0) ? ` · $${st.cost.toFixed(2)}` : ''}`
+    : '';
   const detail = running
     ? `Usually about 2 minutes${st.elapsed ? ` · ${st.elapsed}s` : ''}${slow ? ' · almost there' : ''} — you can keep working`
     : (st.last || (ok ? 'Done.' : 'It may need an interactive session — run /dashboard in Claude Code.'));
@@ -2273,6 +2286,7 @@ function RefreshBanner() {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontWeight: 700, marginBottom: 2 }}>{title}</div>
         <div style={{ color: 'var(--fg-2, #5a5a5a)', fontSize: 12, maxHeight: 60, overflow: 'hidden' }}>{detail}</div>
+        {usage ? <div style={{ color: 'var(--fg-3, #999)', fontSize: 11, marginTop: 4, fontVariantNumeric: 'tabular-nums' }}>⚡ {usage}</div> : null}
       </div>
       <button onClick={() => setDismissed(true)} aria-label="Dismiss"
               style={{ position: 'absolute', right: 10, top: 8, background: 'none', border: 'none', color: 'var(--fg-3, #999)', cursor: 'pointer', fontSize: 16, lineHeight: 1 }}>×</button>

@@ -116,8 +116,8 @@ They run in THIS session, so they can reach the `claude_ai_`-prefixed connectors
 each its server name and absolute output path. Kickoffs (substitute captured values):
 
 - `dashboard-calendar`: `Refresh calendar data. TODAY=<TODAY>; TOMORROW=<TOMORROW>; NOW=<NOW>; timezone=<TZNAME>. Your calendar MCP server is named <MCP_CALENDAR> — resolve mcp__<MCP_CALENDAR>__list_events (else ToolSearch "calendar list events"). Write <DATA_DIR>/calendar.json.`
-- `dashboard-gmail`: `Refresh gmail for the last <WINDOW_DAYS> days. Today=<TODAY>; timezone=<TZNAME>. Your gmail MCP server is named <MCP_GMAIL>. Write <DATA_DIR>/gmail.json.`
-- `dashboard-granola`: `Refresh meeting notes (7-day lookback) from Granola AND Zoom, merged/deduped. Today=<TODAY>; timezone=<TZNAME>. Your granola MCP server is named <MCP_GRANOLA>; your zoom MCP server is named <MCP_ZOOM> (optional — skip Zoom silently if it doesn't resolve). Write <DATA_DIR>/granola.json.`
+- `dashboard-gmail`: `Refresh gmail INCREMENTALLY. SINCE_EPOCH=<SINCE_EPOCH>; SINCE=<SINCE_WINDOW> (fetch only threads with activity after this; read the existing gmail.json and merge — dedupe by thread id, drop items >14d old; if nothing new, write it back unchanged). Today=<TODAY>; timezone=<TZNAME>. Your gmail MCP server is named <MCP_GMAIL>. Write <DATA_DIR>/gmail.json.`
+- `dashboard-granola`: `Refresh meeting notes INCREMENTALLY from Granola AND Zoom, merged/deduped. SINCE=<SINCE_ISO> (only process meetings started after this; if none are new, write the existing granola.json back unchanged WITHOUT calling get_meetings; otherwise get_meetings for new IDs only and merge into the existing JSON, dropping items >14d old). Today=<TODAY>; timezone=<TZNAME>. Your granola MCP server is named <MCP_GRANOLA>; your zoom MCP server is named <MCP_ZOOM> (optional — skip Zoom silently if it doesn't resolve). Write <DATA_DIR>/granola.json.`
 - `dashboard-drive`: `Refresh drive (files modified last 14 days). Today=<TODAY>. Your drive MCP server is named <MCP_DRIVE>. Write the raw response to <DATA_DIR>/drive-raw.json.`
 - `dashboard-wellness`: `Refresh wellness for this week. Today=<TODAY>; NOW=<NOW>; timezone=<TZNAME>. Your calendar MCP server is named <MCP_CALENDAR>. Write <DATA_DIR>/wellness.json.`
 
@@ -149,10 +149,15 @@ agent JSON (including the `slack.json` from Step 2) + the config static blocks i
 confirmation line. **Relay that line.** No MCP — allowlistable, never prompts after
 the first approval.
 
-**Window auto-adjusts** to elapsed time since the last refresh (same-day → 1;
-Monday after Friday → 3; >1 week → capped at 7; first-ever → 7). **Per-agent TTL
-cache:** calendar/gmail always run; granola 2h, drive/wellness 4h reuse cached
-JSON, so a 2nd-of-day refresh may run fewer agents.
+**Incremental window (v0.14).** The lookback cutoff (`SINCE_ISO`/`SINCE_EPOCH`/
+`SINCE_WINDOW`) is the **exact moment of the last refresh** — agents fetch only what
+arrived since then and merge into their prior JSON, because the history before that
+can't have changed. Fallbacks: a fresh install backfills **14 days**; a gap of **>7
+days** caps catch-up at 7. gmail + granola refresh incrementally (their prior JSON is
+kept, not deleted, so they can merge); granola skips the expensive `get_meetings`
+entirely when no meeting is newer than `SINCE`. **Per-agent TTL cache:** gmail always
+runs; calendar 30m; granola 2h; wellness 4h; drive 8h reuse cached JSON, so a quick
+re-refresh may run fewer agents.
 
 If any agent fails, its JSON gets `sourceOk:false`, the merge falls back to empty
 arrays for its fields, and the confirmation line appends `· failed: <agents>`.
