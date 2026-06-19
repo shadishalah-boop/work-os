@@ -33,6 +33,15 @@ Each item: `{ id, label, source, target?, format?, goodDirection?, <reference> }
 
 ## 2. Fetch each metric (dispatch by source)
 
+### Connectivity pre-check (Snowflake only — do this FIRST if any metric uses Snowflake)
+
+Before fetching any Snowflake metric, run **one** probe query: `SELECT 1 AS ok`.
+- If it **succeeds** → proceed normally.
+- If it **fails** (auth error, network error, tool not found, any error) → immediately
+  write `metrics.json` with `"sourceOk": false, "kpis": [], "error": "Snowflake connector unavailable: <first line of the error>"` and **stop** — do not attempt any further Snowflake calls. If there are also Looker metrics in the definitions, you may still fetch those; otherwise stop entirely.
+
+This single probe replaces the per-metric discovery + auth retry cycle and exits in one call instead of eight.
+
 ### source = "snowflake"
 Resolve the SQL tool: `mcp__<MCP_SNOWFLAKE>__sql_exec` (server name from the kickoff /
 config `mcp.snowflake`, default `Snowflake`) → `mcp__Snowflake__sql_exec` → else
