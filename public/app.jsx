@@ -2279,11 +2279,16 @@ function RefreshBanner() {
   const accent = running ? 'var(--blue-500, #2f6df6)' : ok ? 'var(--green-600, #1a7f4b)' : 'var(--red-600, #d23f3f)';
   const icon = running ? '↻' : ok ? '✓' : '⚠';
   const title = running ? 'Refreshing your dashboard…' : (ok ? 'Dashboard refreshed' : 'Refresh didn’t finish');
-  // Compact token/cost readout for the done state (v0.14). tokens reflect the run's
-  // reported usage; cost (when present) covers the whole run incl. sub-agents.
+  // Compact cost/token readout for the done state. COST is the headline — it's
+  // billing-correct and covers the whole run incl. sub-agents. tokens (when shown)
+  // are NEW tokens only (input+output); we deliberately exclude cache-read tokens,
+  // which dominate the raw usage sum (~10× inflation, billed at ~0.1×) and would
+  // otherwise make a refresh look like 350k+ "tokens" when the real new work is far less.
   const fmtTokens = (n) => n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : `${n}`;
-  const usage = (!running && ok && st.tokens)
-    ? `${fmtTokens(st.tokens)} tokens${(typeof st.cost === 'number' && st.cost > 0) ? ` · $${st.cost.toFixed(2)}` : ''}`
+  const hasCost = typeof st.cost === 'number' && st.cost > 0;
+  const usage = (!running && ok && (hasCost || st.tokens))
+    ? [hasCost ? `$${st.cost.toFixed(2)}` : '', st.tokens ? `${fmtTokens(st.tokens)} new tokens` : '']
+        .filter(Boolean).join(' · ')
     : '';
   const detail = running
     ? `Usually about 2 minutes${st.elapsed ? ` · ${st.elapsed}s` : ''}${slow ? ' · almost there' : ''} — you can keep working`

@@ -14,6 +14,27 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.14.7 — 2026-06-19
+
+**Fix the misleading "tokens per refresh" readout.** The banner summed all four usage
+categories — `input + output + cache_read + cache_creation` — at face value, which read
+as 350k–400k "tokens" per refresh. That number was real but misleading: cache-read tokens
+dominate it (a multi-turn orchestration re-reads its cached prompt prefix every turn, easily
+300k+) yet bill at only ~0.1×, so the headline overstated the actual work by roughly 10×. It
+also mixed scopes — `total_cost_usd` covers the whole run incl. sub-agents, but the token sum
+reflected only the orchestrator.
+
+- **Cost is now the headline** (`$X.XX`) — billing-correct and whole-run.
+- The token figure, when shown, is **new tokens only** (`input + output`); cache reads/writes
+  are excluded. Typical real figure is tens of k, not hundreds.
+- `refresh-headless.sh` computes the new-tokens sum; `app.jsx` leads with cost and labels the
+  secondary figure "new tokens".
+
+Note: this readout only appears on the button/headless refresh path (via `serve.py`); a plain
+in-session `/dashboard` doesn't emit a usage line.
+
+---
+
 ## v0.14.6 — 2026-06-19
 
 **Retry once on a transient blip, fast-fail on everything else.** v0.14.5's fast-fail was

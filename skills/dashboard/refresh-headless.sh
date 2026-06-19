@@ -98,9 +98,12 @@ text = (d.get("result") or d.get("text") or "").strip()
 if text:
     print(text)
 u = d.get("usage") or {}
-tok = sum(int(u.get(k, 0) or 0) for k in (
-    "input_tokens", "output_tokens",
-    "cache_read_input_tokens", "cache_creation_input_tokens"))
+# Report NEW tokens only (input + output). We deliberately EXCLUDE
+# cache_read_input_tokens / cache_creation_input_tokens: cache reads dominate the
+# raw sum (a multi-turn orchestration re-reads its cached prompt prefix every turn,
+# easily 300k+) yet bill at ~0.1×, so summing all four overstated "tokens per
+# refresh" by ~10×. Cost (total_cost_usd below) is the accurate, whole-run headline.
+tok = sum(int(u.get(k, 0) or 0) for k in ("input_tokens", "output_tokens"))
 cost = d.get("total_cost_usd")
 cost_s = ("%.4f" % cost) if isinstance(cost, (int, float)) else ""
 print("__REFRESH_USAGE__ tokens=%d cost=%s" % (tok, cost_s))
