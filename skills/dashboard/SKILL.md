@@ -85,6 +85,9 @@ Do this yourself, inline:
    under the response cap at `limit: 20`.
    `to:me after:<SINCE_WINDOW>` · `from:me after:<SINCE_1D>` (questions = those
    containing `?`) · `from:me after:<SINCE_1D>` (shipped) · `incident after:<SINCE_WINDOW>`.
+   **Fast-fail:** if the FIRST search errors with an auth/connection error (connector down),
+   do NOT run the other three or retry — Write `slack.json` with `sourceOk:false` and move on
+   (step 5). A dead connector costs one call, not eight.
 3b. **Resolve the user's Slack avatar + workspace.** **Cached for 30 days** (v0.14.4)
    — avatars and workspace slugs almost never change, so we skip the
    `slack_search_users` call on most refreshes.

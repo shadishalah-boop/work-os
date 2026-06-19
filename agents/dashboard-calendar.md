@@ -43,6 +43,19 @@ connector), so the tool is normally **`mcp__Google_Calendar__list_events`** /
   found no calendar tool. **Never fabricate events or times** when the tool is missing —
   write `events: []` with `sourceOk:false` instead.
 
+**0c. Fast-fail on a dead connector — don't grind on a connector that's down.** Once a
+tool is *resolved*, your first call to it (step 1) is also the liveness check. Distinguish
+two failures:
+  - **Tool not found** (resolution failure) → that's step 0b's job: try the next name /
+    ToolSearch. Cheap, expected.
+  - **Tool found but the call errors** — auth error, connection/network error, "connector
+    unavailable", timeout, permission denied — the connector is *down*. Do **NOT** retry it,
+    do **NOT** try other server-name variants (a different name won't fix a dead backend),
+    do **NOT** make any further calendar calls. Immediately write **both** files with
+    `sourceOk:false`, `error:"<server> connector unavailable: <first line of the error>"`,
+    `events: []` (and `nextMeeting: null` in calendar.json), output `✗`, and stop. A dead
+    connector should cost **one** call, not a retry spiral.
+
 1. List the **current work-week's** events in **one call** via the calendar list-events tool you resolved in step 0b. **Required params:** `startTime` = `{WEEK_START}T00:00:00`, `endTime` = `{WEEK_END}T00:00:00` (Mon → Sat exclusive, both from your kickoff prompt), **`timeZone` = the user's timezone from your kickoff prompt**, `orderBy: "startTime"`, `pageSize: 100`. Passing `timeZone` forces the API to return every `dateTime` string with the user's local UTC offset — that offset is authoritative. **One call covers both files** (today + the week) — never make a second list_events call for today, just filter in memory.
 
    **Timezone rule — read carefully.** Each event has `start: { dateTime, timeZone }`. The `dateTime` string (e.g. `"2026-04-24T15:30:00+02:00"`) already includes the correct local offset because you requested the user's `timeZone`. The `timeZone` field on the event (e.g. `"America/New_York"`) is just metadata about the event's origin — **do NOT use it to convert the time**. Take the `HH:MM` straight out of the `dateTime` string. Treating the `timeZone` field as the source of truth produces wrong times (e.g. 15:30 local becoming 21:30).

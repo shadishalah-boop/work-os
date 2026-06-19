@@ -14,6 +14,31 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.14.5 — 2026-06-19
+
+**Fast-fail on a dead connector across every data agent.** When a connector was down
+(auth/connection error), agents used to grind through retries, server-name fallbacks, and
+per-item attempts before giving up — e.g. the metrics agent spent ~8 tool calls and ~11k
+tokens of churn on a Snowflake connector that was simply unreachable. Now every agent
+treats its **first** call to a *resolved* tool as the liveness check and bails on the spot.
+
+- **Distinguishes two failures**: *tool not found* (resolution — still try the next
+  server-name variant / ToolSearch, cheap and expected) vs. *tool found but the call errors*
+  (auth, connection/network, "connector unavailable", timeout, permission denied — the
+  connector is **down**). Only the latter triggers fast-fail.
+- **On a down connector**: no retries, no other-name variants (a different name won't revive
+  a dead backend), no further calls. Write the agent's JSON with `sourceOk:false` +
+  `error:"<server> connector unavailable: …"` and stop. One call, not a spiral.
+- **metrics** adds a one-shot `SELECT 1` Snowflake probe before any discovery/fetch.
+- **granola** applies it per-source: Granola and Zoom are independent, so a dead Granola
+  still tries Zoom (and vice-versa); only both-down sets `sourceOk:false`.
+- **slack** (inline in the orchestrator): if search #1 errors on a down connector, the other
+  three searches are skipped.
+- Applies to calendar, gmail, drive, granola, metrics, and slack. Wellness is unaffected
+  (it makes no MCP calls). A down source no longer slows the whole refresh.
+
+---
+
 ## v0.14.4 — 2026-06-18
 
 **Cache the Slack avatar + workspace for 30 days.** These almost never change, so

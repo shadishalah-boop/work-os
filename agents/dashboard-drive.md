@@ -32,6 +32,16 @@ tedious mimeType→kind / URL / timestamp / dedup math lives in a committed scri
 (`drive-transform.py`) that **the orchestrator runs for you** after you finish — you do
 NOT run it. Your entire job is: **fetch → dump raw → output one character.**
 
+**Fast-fail on a dead connector — don't grind on a connector that's down.** Once the tool is
+*resolved*, your single `list_recent_files` call below is also the liveness check. Distinguish
+**tool not found** (resolution failure — try the next name / ToolSearch above; cheap and
+expected) from **tool found but the call errors** (auth error, connection/network error,
+"connector unavailable", timeout, permission denied — the connector is *down*). On a *down*
+connector do **NOT** retry, do **NOT** try other server-name variants, and do **NOT** make any
+further Drive calls. Immediately write `drive.json` with `sourceOk:false`,
+`error:"<server> connector unavailable: <first line of the error>"`, `files: []`, output `✗`,
+and stop. A dead connector should cost **one** call, not a spiral.
+
 1. Call `list_recent_files` **once** for files the user owned or edited in the **last 14 days**. **Cap at 25 results** — do NOT page for more, and do **NOT** call `get_file_metadata`. The list endpoint returns enough (`id`, `name`, `mimeType`, `modifiedTime`, `owners`). The single call takes 30–45s and is the dominant cost — more calls is the wrong move.
 2. **Write the raw response verbatim** to `<dataCacheDir>/drive-raw.json` using the **Write tool**. Preserve every field — especially `id`, `name`, `mimeType`, `modifiedTime`, and `owners` — for each file. A bare array `[ {...}, {...} ]` is fine, as is `{ "files": [...] }`.
 3. Output `✓` and stop. The orchestrator's `wait-and-merge.sh` then runs `drive-transform.py`, which reads `drive-raw.json`, applies all the mapping/dedup/cap/exclude rules below, and writes `drive.json`. (If your MCP fetch failed, instead Write `drive.json` directly with `sourceOk:false` per the failure rule and output `✗`.)

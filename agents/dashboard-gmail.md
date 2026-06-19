@@ -33,6 +33,16 @@ Resolve robustly:
   arrays with `sourceOk:false` instead. Wherever this file says `search_threads` or
   `get_thread` below, use the resolved tool.
 
+**0b. Fast-fail on a dead connector — don't grind on a connector that's down.** Once a
+tool is *resolved*, your first `search_threads` call (step 1) is also the liveness check.
+Distinguish **tool not found** (resolution failure — try the next name / ToolSearch per 0;
+cheap and expected) from **tool found but the call errors** (auth error, connection/network
+error, "connector unavailable", timeout, permission denied — the connector is *down*). On a
+*down* connector do **NOT** retry, do **NOT** try other server-name variants, and do **NOT**
+make any further Gmail calls (no `get_thread` loop). Immediately write `gmail.json` with
+`sourceOk:false`, `error:"<server> connector unavailable: <first line of the error>"`, all
+arrays empty, output `✗`, and stop. A dead connector should cost **one** call, not a spiral.
+
 1. **Incremental fetch (v0.14 — read this first).** Your kickoff prompt gives `SINCE_EPOCH`
    (a Unix timestamp) and `SINCE` (a date). Fetch ONLY threads with activity **after** that
    moment — everything before it was already captured by the previous refresh and can't have

@@ -27,6 +27,20 @@ only sees your frontmatter allowlist, which includes `claude_ai_`). Only write
 `sourceOk:false` after genuinely trying ToolSearch and finding no Granola tool — never
 fabricate meetings.
 
+**0b. Fast-fail on a dead connector — don't grind, move to the next source.** Once a tool is
+*resolved*, the first call to it is also the liveness check. Distinguish **tool not found**
+(resolution failure — try the next name / ToolSearch; cheap and expected) from **tool found
+but the call errors** (auth error, connection/network error, "connector unavailable",
+timeout, permission denied — that source is *down*). On a *down* source do **NOT** retry it,
+do **NOT** try other server-name variants, and do **NOT** make further calls to it. Because
+Granola and Zoom are **independent sources**, fast-failing one does NOT fail the agent:
+  - **Granola down** → skip the rest of Granola immediately, then still try Zoom (2b). If Zoom
+    produces items, keep `sourceOk:true`.
+  - **Zoom down** → skip Zoom silently (it's optional anyway), keep whatever Granola produced.
+  - **Both down** → write `granola.json` with `sourceOk:false`, `error:"<reason>"`, empty
+    arrays, output `✗`, stop.
+A dead source should cost **one** call, not a retry spiral.
+
 1. **List meetings via a single `list_meetings` call.** `list_meetings` returns titles, dates,
    participants, and IDs only — **no notes content**, so it's cheap. If it fails for a real
    reason, write the JSON with `sourceOk: false`.

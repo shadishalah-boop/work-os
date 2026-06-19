@@ -50,8 +50,17 @@ Use them verbatim; you have no clock or Bash.
 | 3 | `from:me after:<SINCE_1D>` (count ~50) | Everything the user posted today → **shipped** list; matches containing `?` double as **questions awaiting reply** |
 | 4 | `incident after:<SINCE_WINDOW>` (count ~30) | `#incident-*` matches for **blocker** detection (Slack's `in:` has no prefix wildcard, so search the keyword and filter by channel name) |
 
-If a search call errors, retry it once; if it errors again, treat that query's results as
-empty (and if ALL searches fail, write `sourceOk:false`).
+**Fast-fail on a dead connector.** Search #1 is also the liveness check. If it returns an
+**auth error, connection/network error, "connector unavailable", timeout, or permission
+denied** — the connector is *down*, so searches 2–4 will fail the same way. Do **NOT** run
+them, do **NOT** retry, do **NOT** try other server-name variants (a different name won't
+revive a dead backend): immediately write `slack.json` with `sourceOk:false`,
+`error:"Slack connector unavailable: <first line of the error>"`, all arrays empty (and
+`tabs` populated with `count:0`), and stop. A dead connector should cost **one** call.
+
+Otherwise — a single search erroring for a *query-specific* reason (not a connector
+failure) — retry it once; if it errors again, treat that query's results as empty (and if
+ALL searches end up empty/failed, write `sourceOk:false`).
 
 ## Scope filter (the most important rule)
 
