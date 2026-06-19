@@ -33,15 +33,19 @@ Resolve robustly:
   arrays with `sourceOk:false` instead. Wherever this file says `search_threads` or
   `get_thread` below, use the resolved tool.
 
-**0b. Fast-fail on a dead connector — don't grind on a connector that's down.** Once a
-tool is *resolved*, your first `search_threads` call (step 1) is also the liveness check.
-Distinguish **tool not found** (resolution failure — try the next name / ToolSearch per 0;
-cheap and expected) from **tool found but the call errors** (auth error, connection/network
-error, "connector unavailable", timeout, permission denied — the connector is *down*). On a
-*down* connector do **NOT** retry, do **NOT** try other server-name variants, and do **NOT**
-make any further Gmail calls (no `get_thread` loop). Immediately write `gmail.json` with
-`sourceOk:false`, `error:"<server> connector unavailable: <first line of the error>"`, all
-arrays empty, output `✗`, and stop. A dead connector should cost **one** call, not a spiral.
+**0b. On a connector error: one retry for transient blips, else fast-fail.** Once a tool is
+*resolved*, your first `search_threads` call (step 1) is also the liveness check. Classify
+any error:
+  - **Tool not found** (resolution failure) → try the next name / ToolSearch per step 0.
+  - **Transient network error** (`5xx`/`503`, connection reset, `429` rate-limit) → **retry
+    the call once** after a brief pause (honor `Retry-After` on a 429); if it succeeds, continue.
+  - **Deterministic error** — auth (`401`/`403`, token expired, not authorized), permission/
+    consent denied, or a **timeout** (retrying just burns another full timeout window) — the
+    connector is *down*. Do **NOT** retry, do **NOT** try other server-name variants, do **NOT**
+    make further Gmail calls (no `get_thread` loop).
+  After a failed retry OR a deterministic error: write `gmail.json` with `sourceOk:false`,
+  `error:"<server> connector unavailable: <first line of the error>"`, all arrays empty,
+  output `✗`, and stop. A dead connector should cost **one or two** calls, not a spiral.
 
 1. **Incremental fetch (v0.14 — read this first).** Your kickoff prompt gives `SINCE_EPOCH`
    (a Unix timestamp) and `SINCE` (a date). Fetch ONLY threads with activity **after** that

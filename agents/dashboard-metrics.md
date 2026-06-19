@@ -35,12 +35,17 @@ Each item: `{ id, label, source, target?, format?, goodDirection?, <reference> }
 
 ### Connectivity pre-check (Snowflake only — do this FIRST if any metric uses Snowflake)
 
-Before fetching any Snowflake metric, run **one** probe query: `SELECT 1 AS ok`.
-- If it **succeeds** → proceed normally.
-- If it **fails** (auth error, network error, tool not found, any error) → immediately
-  write `metrics.json` with `"sourceOk": false, "kpis": [], "error": "Snowflake connector unavailable: <first line of the error>"` and **stop** — do not attempt any further Snowflake calls. If there are also Looker metrics in the definitions, you may still fetch those; otherwise stop entirely.
+Before fetching any Snowflake metric, run **one** probe query: `SELECT 1 AS ok`. Classify the result:
+- **Succeeds** → proceed normally.
+- **Transient network error** (`5xx`/`503`, connection reset, `429` rate-limit) → **retry the
+  probe once** after a brief pause (honor `Retry-After` on a 429). If the retry succeeds, proceed.
+- **Deterministic error** (auth/`401`/`403`, not authorized, permission denied, tool not found,
+  or a **timeout**) — or a failed retry → immediately write `metrics.json` with
+  `"sourceOk": false, "kpis": [], "error": "Snowflake connector unavailable: <first line of the error>"`
+  and **stop** — do not attempt any further Snowflake calls. If there are also Looker metrics in
+  the definitions, you may still fetch those; otherwise stop entirely.
 
-This single probe replaces the per-metric discovery + auth retry cycle and exits in one call instead of eight.
+This probe replaces the per-metric discovery + auth retry cycle: one (or two) calls instead of eight.
 
 ### source = "snowflake"
 Resolve the SQL tool: `mcp__<MCP_SNOWFLAKE>__sql_exec` (server name from the kickoff /

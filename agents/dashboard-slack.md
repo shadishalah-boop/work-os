@@ -50,17 +50,21 @@ Use them verbatim; you have no clock or Bash.
 | 3 | `from:me after:<SINCE_1D>` (count ~50) | Everything the user posted today → **shipped** list; matches containing `?` double as **questions awaiting reply** |
 | 4 | `incident after:<SINCE_WINDOW>` (count ~30) | `#incident-*` matches for **blocker** detection (Slack's `in:` has no prefix wildcard, so search the keyword and filter by channel name) |
 
-**Fast-fail on a dead connector.** Search #1 is also the liveness check. If it returns an
-**auth error, connection/network error, "connector unavailable", timeout, or permission
-denied** — the connector is *down*, so searches 2–4 will fail the same way. Do **NOT** run
-them, do **NOT** retry, do **NOT** try other server-name variants (a different name won't
-revive a dead backend): immediately write `slack.json` with `sourceOk:false`,
-`error:"Slack connector unavailable: <first line of the error>"`, all arrays empty (and
-`tabs` populated with `count:0`), and stop. A dead connector should cost **one** call.
+**On a connector error: one retry for transient blips, else fast-fail.** Search #1 is also
+the liveness check. Classify its error:
+  - **Transient network error** (`5xx`/`503`, connection reset, `429` rate-limit) → **retry
+    search #1 once** after a brief pause (honor `Retry-After` on a 429); if it succeeds, continue.
+  - **Deterministic connector failure** — auth (`401`/`403`, not authorized), permission/
+    consent denied, "connector unavailable", or a **timeout** — the connector is *down*, so
+    searches 2–4 would fail the same way. Do **NOT** run them, do **NOT** retry, do **NOT**
+    try other server-name variants (a different name won't revive a dead backend).
+  After a failed retry OR a deterministic failure: write `slack.json` with `sourceOk:false`,
+  `error:"Slack connector unavailable: <first line of the error>"`, all arrays empty (and
+  `tabs` populated with `count:0`), and stop. A dead connector should cost one (or two) calls.
 
-Otherwise — a single search erroring for a *query-specific* reason (not a connector
-failure) — retry it once; if it errors again, treat that query's results as empty (and if
-ALL searches end up empty/failed, write `sourceOk:false`).
+A search that errors for a *query-specific* reason (not a connector failure) — retry it once;
+if it errors again, treat that query's results as empty (and if ALL searches end up
+empty/failed, write `sourceOk:false`).
 
 ## Scope filter (the most important rule)
 

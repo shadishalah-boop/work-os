@@ -14,6 +14,27 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.14.6 — 2026-06-19
+
+**Retry once on a transient blip, fast-fail on everything else.** v0.14.5's fast-fail was
+too blunt — it bailed on *any* connector error, including a transient `503`/reset that a
+single retry would have fixed. Retries only pay off for transient failures; for deterministic
+ones (auth, permission, not-found) the recovery rate is ≈0% and a retry is pure waste. So
+every agent now classifies the error:
+
+- **Transient network error** (`5xx`/`503`, connection reset, `429` rate-limit) → **retry
+  once** after a brief pause, honoring `Retry-After` on a 429. The first retry captures the
+  bulk of what ever recovers; further retries have steeply diminishing returns.
+- **Deterministic error** (auth `401`/`403`, permission/consent denied) → fast-fail, 0 retries.
+- **Timeout** → fast-fail too: retrying a timeout just burns another full timeout window,
+  the worst case for a wall-clock-capped refresh.
+- After a failed retry or a deterministic error → write `sourceOk:false` and stop.
+
+Applies to calendar, gmail, drive, granola, metrics, and slack (granola still per-source;
+slack retries only search #1). Worst case is now **two** calls on a dead connector, not eight.
+
+---
+
 ## v0.14.5 — 2026-06-19
 
 **Fast-fail on a dead connector across every data agent.** When a connector was down

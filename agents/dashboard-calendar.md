@@ -43,18 +43,20 @@ connector), so the tool is normally **`mcp__Google_Calendar__list_events`** /
   found no calendar tool. **Never fabricate events or times** when the tool is missing —
   write `events: []` with `sourceOk:false` instead.
 
-**0c. Fast-fail on a dead connector — don't grind on a connector that's down.** Once a
-tool is *resolved*, your first call to it (step 1) is also the liveness check. Distinguish
-two failures:
-  - **Tool not found** (resolution failure) → that's step 0b's job: try the next name /
-    ToolSearch. Cheap, expected.
-  - **Tool found but the call errors** — auth error, connection/network error, "connector
-    unavailable", timeout, permission denied — the connector is *down*. Do **NOT** retry it,
-    do **NOT** try other server-name variants (a different name won't fix a dead backend),
-    do **NOT** make any further calendar calls. Immediately write **both** files with
-    `sourceOk:false`, `error:"<server> connector unavailable: <first line of the error>"`,
-    `events: []` (and `nextMeeting: null` in calendar.json), output `✗`, and stop. A dead
-    connector should cost **one** call, not a retry spiral.
+**0c. On a connector error: one retry for transient blips, else fast-fail.** Once a tool is
+*resolved*, your first call to it (step 1) is also the liveness check. Classify any error:
+  - **Tool not found** (resolution failure) → step 0b's job: try the next name / ToolSearch.
+  - **Transient network error** — `5xx`/`503`, connection reset, or `429` rate-limit — may be a
+    blip. **Retry the call once** after a brief pause (honor `Retry-After` on a 429). If the
+    retry succeeds, continue normally.
+  - **Deterministic error** — auth (`401`/`403`, token expired, not authorized), permission/
+    consent denied, or a **timeout** (retrying just burns another full timeout window) — the
+    connector is *down*. Do **NOT** retry, do **NOT** try other server-name variants (a
+    different name won't fix a dead backend), do **NOT** make further calendar calls.
+  After a failed retry OR a deterministic error: immediately write **both** files with
+  `sourceOk:false`, `error:"<server> connector unavailable: <first line of the error>"`,
+  `events: []` (and `nextMeeting: null` in calendar.json), output `✗`, and stop. A dead
+  connector should cost **one or two** calls, not a retry spiral.
 
 1. List the **current work-week's** events in **one call** via the calendar list-events tool you resolved in step 0b. **Required params:** `startTime` = `{WEEK_START}T00:00:00`, `endTime` = `{WEEK_END}T00:00:00` (Mon → Sat exclusive, both from your kickoff prompt), **`timeZone` = the user's timezone from your kickoff prompt**, `orderBy: "startTime"`, `pageSize: 100`. Passing `timeZone` forces the API to return every `dateTime` string with the user's local UTC offset — that offset is authoritative. **One call covers both files** (today + the week) — never make a second list_events call for today, just filter in memory.
 
