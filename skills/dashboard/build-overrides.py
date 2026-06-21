@@ -342,6 +342,18 @@ else:
         (MANUAL["blocked"], "manual"), (safe(granola, "blocked"), "granola")
     )[:5]
 
+# Cross-bucket: a task promoted into Top-3 (e.g. dragged there on the dashboard, which
+# writes bucket:"top3" into dashboard-tasks.local) must not also linger in another
+# bucket. The live UI hides the duplicate via its localStorage pin, but a machine
+# without that pin relies on this. Exact normalized-label match; Top-3 wins.
+def _bucket_key(t):
+    return re.sub(r"\s+", " ", (t.get("label") or "").strip().lower())
+_top3_keys = {k for k in (_bucket_key(t) for t in top3) if k}
+if _top3_keys:
+    overdue_raw = [t for t in overdue_raw if _bucket_key(t) not in _top3_keys]
+    duesoon_raw = [t for t in duesoon_raw if _bucket_key(t) not in _top3_keys]
+    blocked     = [t for t in blocked if _bucket_key(t) not in _top3_keys]
+
 overdue = []
 for i, item in enumerate(overdue_raw[:5]):
     o = dict(item); o["id"] = f"o{i+1}"; overdue.append(o)

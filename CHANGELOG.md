@@ -14,6 +14,32 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.15.1 — 2026-06-21
+
+**Top-3 promotions are now portable, not just browser-local.** A dragged-in promotion
+(v0.15.0) was localStorage-only — it lived in one browser and Claude Code couldn't see it.
+Now it also writes back to `~/.claude/dashboard-tasks.local`, the same file the
+`dashboard-task` skill manages.
+
+- **New server endpoint** `POST /promote-task` (`{action: "promote"|"unpin", task}`),
+  mirroring `/task-status`: it edits the task file but doesn't rebuild the dashboard —
+  the UI already updated optimistically and the next refresh reconciles.
+  - *promote*: moves an existing file task into the `top3` bucket (remembering its prior
+    bucket), or appends a row for an agent-sourced task that isn't in the file yet
+    (tagged `added_by:"promote"`).
+  - *unpin*: deletes a row we added, or restores a moved task to its previous bucket.
+- **Frontend** fires this best-effort alongside the localStorage write — no-op on
+  `file://` / offline, so the optimistic layer still works everywhere.
+- **Cross-bucket dedup** in `build-overrides.py`: a task in the `top3` bucket is now
+  filtered out of overdue/dueSoon/blocked at merge time (Top-3 wins), so a machine
+  *without* the localStorage pin still shows each task once.
+
+Caveat: localStorage remains the optimistic layer, so an un-pin made on one machine
+won't retroactively clear a stale pin cached in another browser until that browser's
+storage is cleared; the file (and thus a fresh `/dashboard`) is the source of truth.
+
+---
+
 ## v0.15.0 — 2026-06-21
 
 **Drag a task into "What actually matters today."** Grab any task row in the Tasks card

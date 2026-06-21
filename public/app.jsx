@@ -1112,6 +1112,18 @@ function loadTop3Pins() {
 function saveTop3Pins(map) {
   try { localStorage.setItem(TOP3_PINS_KEY, JSON.stringify(map)); } catch {}
 }
+// Best-effort write-back of a promotion to ~/.claude/dashboard-tasks.local via the
+// local server. Fire-and-forget: on file:// or when the server is down it silently
+// no-ops (the localStorage pin still holds the promotion; a refresh reconciles).
+function postPromote(action, task) {
+  try {
+    fetch('/promote-task', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, task }),
+    }).catch(() => {});
+  } catch (e) { /* no server / offline — localStorage persists, refresh reconciles */ }
+}
 
 // =============================================================================
 // OKR linking — Layers 1+2+3 of the OKR-tracking system.
@@ -1424,6 +1436,10 @@ function useDashboardState() {
     };
     setTop3Pins(prev => { const next = { ...prev, [k]: entry }; saveTop3Pins(next); return next; });
     setTop3(prev => prev.some(t => normalizeTaskKey(t.label) === k) ? prev : [{ ...entry, _pinned: true, done: false }, ...prev]);
+    // Best-effort: also persist to ~/.claude/dashboard-tasks.local via the local
+    // server, so the promotion is portable across machines and visible to Claude
+    // Code. localStorage above is the optimistic layer; no-op on file:// / offline.
+    postPromote('promote', { label: entry.label, meta: entry.meta, p: entry.p, project: entry.project, srcBucket: entry.bucket });
   };
   // Reverse a promotion — drop the pin; the task reappears in its source bucket.
   const unpinTop3 = (label) => {
@@ -1431,6 +1447,7 @@ function useDashboardState() {
     if (!k) return;
     setTop3Pins(prev => { const next = { ...prev }; delete next[k]; saveTop3Pins(next); return next; });
     setTop3(prev => prev.filter(t => normalizeTaskKey(t.label) !== k));
+    postPromote('unpin', { label });
   };
   uE(() => {
     const onTaskAdded    = (e) => addTask(e.detail || {});

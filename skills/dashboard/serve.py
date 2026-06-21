@@ -31,6 +31,7 @@ Caveats (honest):
 import http.server
 import json
 import os
+import re
 import shlex
 import subprocess
 import sys
@@ -82,6 +83,84 @@ def _set_task_status(sync_key, notion_id, done):
     hit["done"] = bool(done)
     hit["pending_sync"] = True
     try:
+        with open(TASKS_FILE, "w") as f:
+            json.dump(data, f, indent=2)
+    except Exception as e:
+        return False, f"cannot write tasks file: {e}"
+    return True, "ok"
+
+
+def _task_key(label):
+    return re.sub(r"\s+", " ", (label or "").strip().lower())
+
+
+def _promote_task(action, task):
+    """Persist a Top-3 promotion (or its reversal) into dashboard-tasks.local so it's
+    portable across machines and visible to Claude Code. Mirrors _set_task_status: it
+    edits the file but does NOT rebuild data-override.jsx — the dashboard already
+    updated its own UI optimistically (localStorage), and the next refresh/re-merge
+    reconciles. Returns (ok, message).
+
+      action="promote": move an existing task into the top3 bucket (remembering its
+        previous bucket), or append a new row for an agent-sourced task that isn't in
+        the file yet (tagged so unpin can fully remove it).
+      action="unpin": reverse it — delete a row we added, or restore a moved task to
+        its previous bucket.
+    """
+    label = (task.get("label") or "").strip()
+    if not label:
+        return False, "no label"
+    key = _task_key(label)
+
+    data = None
+    if os.path.exists(TASKS_FILE):
+        try:
+            data = json.loads(open(TASKS_FILE).read())
+        except Exception as e:
+            return False, f"cannot read tasks file: {e}"
+    if data is None:
+        data = {"tasks": []}
+    if isinstance(data, list):          # bare-list form → wrap so we can persist it
+        data = {"tasks": data}
+    items = data.get("tasks")
+    if not isinstance(items, list):
+        items = []
+        data["tasks"] = items
+
+    hit = next((t for t in items if isinstance(t, dict) and _task_key(t.get("label")) == key), None)
+
+    if action == "promote":
+        if hit is None:
+            items.append({
+                "label": label,
+                "bucket": "top3",
+                "p": task.get("p") or 2,
+                "project": task.get("project") or "",
+                "meta": task.get("meta") or "Promoted to today",
+                "done": False,
+                "promoted": True,
+                "added_by": "promote",              # we created this row → unpin deletes it
+                "prev_bucket": task.get("srcBucket") or task.get("_srcBucket"),
+            })
+        else:
+            if hit.get("bucket") != "top3":
+                hit["prev_bucket"] = hit.get("bucket", "dueSoon")
+            hit["bucket"] = "top3"
+            hit["promoted"] = True
+    elif action == "unpin":
+        if hit is None:
+            return True, "nothing to unpin"          # idempotent
+        if hit.get("added_by") == "promote":
+            items[:] = [t for t in items if t is not hit]   # we added it → remove entirely
+        else:
+            hit["bucket"] = hit.get("prev_bucket") or "dueSoon"
+            hit.pop("promoted", None)
+            hit.pop("prev_bucket", None)
+    else:
+        return False, f"unknown action: {action}"
+
+    try:
+        os.makedirs(os.path.dirname(TASKS_FILE), exist_ok=True)
         with open(TASKS_FILE, "w") as f:
             json.dump(data, f, indent=2)
     except Exception as e:
@@ -451,6 +530,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             body = self._read_json_body()
             ok, msg = _set_task_status(body.get("sync_key"), body.get("notion_id"), body.get("done"))
             return self._json(200 if ok else 404, {"ok": ok, "message": msg})
+        if path == "/promote-task":
+            body = self._read_json_body()
+            action = (body.get("action") or "promote").strip()
+            ok, msg = _promote_task(action, body.get("task") or {})
+            return self._json(200 if ok else 400, {"ok": ok, "message": msg})
         if path == "/slack-send":
             body = self._read_json_body()
             text = (body.get("text") or "").strip()
