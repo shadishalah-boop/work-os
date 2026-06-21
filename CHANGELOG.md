@@ -14,6 +14,27 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.15.0 — 2026-06-21
+
+**Drag a task into "What actually matters today."** Grab any task row in the Tasks card
+and drop it onto the Top-3 card to promote it. The `.drag-grip` affordance that was already
+on every task row is now live.
+
+- **Drag source**: task rows are HTML5-draggable and carry the task + its source bucket
+  under a private `application/x-dash-task` MIME type (so the Top-3 drop zone can tell a
+  promotion apart from an internal Top-3 reorder). Done rows aren't draggable.
+- **Drop zone**: the Top-3 card highlights while a task is dragged over it and shows a
+  "Drop to make it matter today" hint. On drop it fires a `dash:promote-top3` window event
+  (same pattern as `dash:task-added`), so it works in every layout without prop plumbing.
+- **Persisted + reversible**: promotions are saved to `localStorage`
+  (`dashboard.top3Pins.v1`, no TTL) so they survive reloads and `/dashboard` refreshes,
+  and the promoted task is filtered out of its original bucket so it never shows twice.
+  Hover a promoted item and click **×** to un-pin it back to its source list.
+- Read-only shared snapshots can't drag/promote (guarded), matching the rest of the
+  read-only behavior.
+
+---
+
 ## v0.14.7 — 2026-06-19
 
 **Fix the misleading "tokens per refresh" readout.** The banner summed all four usage

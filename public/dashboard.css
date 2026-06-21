@@ -725,6 +725,30 @@ html[data-theme="dark"] body { background: var(--bg-page); color: var(--fg-1); }
   border: 2px solid var(--grey-600); cursor: pointer;
   display: grid; place-items: center;
 }
+/* Un-pin "×" on a task that was dragged into Top-3 (reverses the promotion). */
+.top3-unpin {
+  width: 20px; height: 20px; border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.04); color: var(--grey-400);
+  font-size: 14px; line-height: 1; cursor: pointer;
+  display: grid; place-items: center; padding: 0;
+  opacity: 0; transition: opacity .12s ease, color .12s ease, border-color .12s ease;
+}
+.top3-item:hover .top3-unpin { opacity: 1; }
+.top3-unpin:hover { color: var(--grey-0); border-color: rgba(255,255,255,0.4); }
+/* Drop-zone affordance while a task is being dragged over the Top-3 card. */
+.top3.top3-droptarget {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg, rgba(236,72,153,0.25)) inset;
+}
+.top3.top3-droptarget .top3-list::after {
+  content: 'Drop to make it matter today';
+  display: block; text-align: center;
+  font-size: 12px; color: var(--accent);
+  padding: 8px; margin-top: 2px;
+  border: 1px dashed var(--accent); border-radius: 10px;
+}
+body[data-readonly="true"] .top3-unpin { display: none !important; }
 .top3-item.done .top3-check { background: var(--accent); border-color: var(--accent); }
 .top3-item.done .top3-check::after {
   content: ''; width: 10px; height: 6px;

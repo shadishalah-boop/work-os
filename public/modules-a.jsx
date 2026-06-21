@@ -258,10 +258,15 @@ function Module({ title, count, sub, action, actionHref, onAction, right, icon, 
 function useDraggable(initial) {
   const [items, setItems] = useState(initial);
   const dragId = useRef(null);
+  // External task promotions (dragged from the Tasks card) carry this MIME type.
+  // The internal reorder handlers ignore them so the drag bubbles up to the
+  // Top-3 card's own drop zone instead of triggering a spurious reorder.
+  const isExternal = (e) => Array.from(e.dataTransfer.types || []).includes('application/x-dash-task');
   const onDragStart = (id) => (e) => { dragId.current = id; e.dataTransfer.effectAllowed = 'move'; };
-  const onDragOver  = (id) => (e) => { e.preventDefault(); e.currentTarget.classList.add('drag-over'); };
+  const onDragOver  = (id) => (e) => { if (isExternal(e)) return; e.preventDefault(); e.currentTarget.classList.add('drag-over'); };
   const onDragLeave = (e) => { e.currentTarget.classList.remove('drag-over'); };
   const onDrop      = (id) => (e) => {
+    if (isExternal(e)) return;
     e.preventDefault(); e.currentTarget.classList.remove('drag-over');
     const from = items.findIndex(i => i.id === dragId.current);
     const to   = items.findIndex(i => i.id === id);
@@ -280,6 +285,26 @@ function Top3({ data, onToggle, density, okrApi }) {
   useEffect(() => { drag.setItems(data); }, [data]);
   const now = new Date();
   const stamp = now.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase();
+
+  // Drop zone: a task dragged from the Tasks card (carrying the x-dash-task MIME
+  // type) is promoted into Top-3 via a window event the dashboard state listens for.
+  const [dropping, setDropping] = useState(false);
+  const isTaskDrag = (e) => Array.from(e.dataTransfer.types || []).includes('application/x-dash-task');
+  const onZoneDragOver = (e) => {
+    if (!isTaskDrag(e) || document.body.dataset.readonly === 'true') return;
+    e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setDropping(true);
+  };
+  const onZoneDragLeave = (e) => { if (!e.currentTarget.contains(e.relatedTarget)) setDropping(false); };
+  const onZoneDrop = (e) => {
+    if (!isTaskDrag(e)) return;
+    e.preventDefault(); setDropping(false);
+    if (document.body.dataset.readonly === 'true') return;
+    let task = null;
+    try { task = JSON.parse(e.dataTransfer.getData('application/x-dash-task')); } catch {}
+    if (task && task.label) window.dispatchEvent(new CustomEvent('dash:promote-top3', { detail: task }));
+  };
+  const openCount = drag.items.filter(i => !i.done).length;
+  const slots = Math.max(3, drag.items.length);
 
   // Score the live Top-3 items (label-keyed lookup so re-orders don't break it)
   const scored = useMemo(() => {
@@ -301,13 +326,14 @@ function Top3({ data, onToggle, density, okrApi }) {
   }, [drag.items, scored, okrApi]);
 
   return (
-    <div className="top3 mod-focus-survivor">
+    <div className={'top3 mod-focus-survivor' + (dropping ? ' top3-droptarget' : '')}
+         onDragOver={onZoneDragOver} onDragLeave={onZoneDragLeave} onDrop={onZoneDrop}>
       <div className="top3-h">
         <div className="top3-title">
           <span className="badge-star"><Icon name="lightning" size={14} style={{filter:'brightness(0)'}}/></span>
           What actually matters today
         </div>
-        <div className="top3-stamp">{stamp} · {drag.items.filter(i=>!i.done).length} of 3 left</div>
+        <div className="top3-stamp">{stamp} · {openCount} of {slots} left</div>
       </div>
       <div className="top3-list">
         {drag.items.map((it, idx) => {
@@ -327,6 +353,11 @@ function Top3({ data, onToggle, density, okrApi }) {
               </div>
               <div style={{display:'flex', alignItems:'center', gap:8}}>
                 <OkrTagger label={it.label} meta={it.meta} okrApi={okrApi}/>
+                {it._pinned && (
+                  <button className="top3-unpin" title="Remove from today (back to Tasks)"
+                          aria-label="Remove from today"
+                          onClick={(e) => { e.stopPropagation(); window.dispatchEvent(new CustomEvent('dash:unpin-top3', { detail: { label: it.label } })); }}>×</button>
+                )}
                 <div className="top3-check" onClick={() => onToggle(it.id)} role="button" aria-label={it.done ? 'Mark incomplete' : 'Mark complete'}/>
               </div>
             </div>
@@ -347,9 +378,23 @@ function Top3({ data, onToggle, density, okrApi }) {
 }
 
 // --- Simple task row used in tasks module (overdue / due-soon / blocked) ---
-function TaskRow({ t, onToggle, onDismiss, okrApi, projectColor }) {
+// Draggable: drop onto the Top-3 card to promote it into "what actually matters
+// today". The payload carries the task + its source bucket under a private MIME
+// type so the Top-3 drop zone can tell it apart from an internal reorder.
+function TaskRow({ t, onToggle, onDismiss, okrApi, projectColor, bucket }) {
+  const onDragStart = (e) => {
+    if (document.body.dataset.readonly === 'true') { e.preventDefault(); return; }
+    const payload = { id: t.id, label: t.label, meta: t.meta, p: t.p, project: t.project, _srcBucket: bucket };
+    try {
+      e.dataTransfer.setData('application/x-dash-task', JSON.stringify(payload));
+      e.dataTransfer.setData('text/plain', t.label || '');
+    } catch {}
+    e.dataTransfer.effectAllowed = 'copyMove';
+  };
   return (
-    <div className={'task-row' + (t.done ? ' done' : '')}>
+    <div className={'task-row' + (t.done ? ' done' : '')}
+         draggable={!t.done}
+         onDragStart={onDragStart}>
       <div className="task-tick" data-done={t.done} onClick={() => onToggle(t.id)} role="button" aria-label="Toggle"/>
       <div className="task-body">
         <div className="task-title"><TextWithPeople text={t.label}/></div>
@@ -423,7 +468,7 @@ function TasksMod({ state, onToggle }) {
                       <div className="ship-meta">{t.meta}</div>
                     </div>
                   ) : (
-                    <TaskRow key={t.id + (t.done ? '-done' : '')} t={t} onToggle={onToggle} onDismiss={dismiss} okrApi={state.okrApi} projectColor={projColor(t.project)}/>
+                    <TaskRow key={t.id + (t.done ? '-done' : '')} t={t} onToggle={onToggle} onDismiss={dismiss} okrApi={state.okrApi} projectColor={projColor(t.project)} bucket={g.key}/>
                   ))}
                 </div>
               ))}
@@ -456,12 +501,12 @@ function TasksMod({ state, onToggle }) {
       )}
       {state.overdue.length > 0 && <>
         <div className="sub-section-head"><span style={{color:'var(--red-600)'}}>Overdue</span><span className="bar"/><span>{state.overdue.length}</span></div>
-        {state.overdue.map(t => <TaskRow key={t.id + (t.done ? '-done' : '')} t={t} onToggle={onToggle} onDismiss={dismiss} okrApi={state.okrApi} projectColor={projColor(t.project)}/>)}
+        {state.overdue.map(t => <TaskRow key={t.id + (t.done ? '-done' : '')} t={t} onToggle={onToggle} onDismiss={dismiss} okrApi={state.okrApi} projectColor={projColor(t.project)} bucket="overdue"/>)}
       </>}
       <div className="sub-section-head">Due soon<span className="bar"/><span>{state.dueSoon.length}</span></div>
-      {state.dueSoon.map(t => <TaskRow key={t.id + (t.done ? '-done' : '')} t={t} onToggle={onToggle} onDismiss={dismiss} okrApi={state.okrApi} projectColor={projColor(t.project)}/>)}
+      {state.dueSoon.map(t => <TaskRow key={t.id + (t.done ? '-done' : '')} t={t} onToggle={onToggle} onDismiss={dismiss} okrApi={state.okrApi} projectColor={projColor(t.project)} bucket="dueSoon"/>)}
       <div className="sub-section-head">Blocked on others<span className="bar"/><span>{state.blocked.length}</span></div>
-      {state.blocked.map(t => <TaskRow key={t.id + (t.done ? '-done' : '')} t={t} onToggle={onToggle} onDismiss={dismiss} okrApi={state.okrApi} projectColor={projColor(t.project)}/>)}
+      {state.blocked.map(t => <TaskRow key={t.id + (t.done ? '-done' : '')} t={t} onToggle={onToggle} onDismiss={dismiss} okrApi={state.okrApi} projectColor={projColor(t.project)} bucket="blocked"/>)}
       <div className="sub-section-head">Recently shipped<span className="bar"/><span>{state.shipped.length}</span></div>
       {state.shipped.map(s => (
         <div key={s.id} className="ship-row">

@@ -1096,6 +1096,24 @@ function saveUserAddedTasks(tasks) {
 }
 
 // =============================================================================
+// Top-3 promotions — tasks the user drags into "What actually matters today".
+// Persisted (no TTL) so a promotion survives reloads AND /dashboard refreshes
+// (which rewrite SEED). Map: normalizeTaskKey(label) -> { id, label, meta, p,
+// project, bucket }. `bucket` records where it came from so un-pinning restores
+// it. Mirrors the user-added-tasks store; reversible via the item's un-pin "×".
+// =============================================================================
+const TOP3_PINS_KEY = 'dashboard.top3Pins.v1';
+function loadTop3Pins() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(TOP3_PINS_KEY) || '{}');
+    return (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw : {};
+  } catch { return {}; }
+}
+function saveTop3Pins(map) {
+  try { localStorage.setItem(TOP3_PINS_KEY, JSON.stringify(map)); } catch {}
+}
+
+// =============================================================================
 // OKR linking — Layers 1+2+3 of the OKR-tracking system.
 //   • localStorage persists manual tags across /dashboard refreshes
 //   • suggestOkr() runs Layer-3 keyword auto-suggestion at render time
@@ -1230,7 +1248,19 @@ function useDashboardState() {
   // of the agent-sourced SEED tasks. This ensures hand-added tasks survive
   // both page reloads and /dashboard refreshes (which rewrite SEED).
   const _userTasks = loadUserAddedTasks();
-  const [top3, setTop3] = uS(SEED.top3);
+  // Top-3 promotions (drag-dropped tasks) are baked into the live top3 array so
+  // they get toggle/OKR/render for free, and tracked in a pin map for filtering
+  // their source bucket + persistence. SEED.top3 entries already promoted are
+  // de-duped out here at load.
+  const _initPins   = loadTop3Pins();
+  const _pinnedKeys = new Set(Object.keys(_initPins));
+  const _pinnedRows = Object.values(_initPins).map(p => ({ ...p, _pinned: true }));
+  const [top3Pins, setTop3Pins] = uS(_initPins);
+  const [top3, setTop3] = uS([
+    ..._pinnedRows,
+    ...((SEED.top3 || []).filter(t => !_pinnedKeys.has(normalizeTaskKey(t.label)))),
+  ]);
+  const isPinnedTop3 = (label) => normalizeTaskKey(label) in top3Pins;
   const [overdue, setOverdue] = uS([..._userTasks.overdue, ...(SEED.overdue || [])]);
   const [dueSoon, setDueSoon] = uS([..._userTasks.dueSoon, ...(SEED.dueSoon || [])]);
   const [blocked, setBlocked] = uS([..._userTasks.blocked, ...(SEED.blocked || [])]);
@@ -1380,9 +1410,33 @@ function useDashboardState() {
     if (entry.date !== todayISO) return;
     setCalendar(prev => [...prev, entry].sort((a,b) => toMin(a.time) - toMin(b.time)));
   };
+  // Promote a task into "What actually matters today" (drag-drop from Tasks).
+  const promoteToTop3 = (task) => {
+    const k = normalizeTaskKey(task && task.label);
+    if (!k || (k in top3Pins)) return; // empty or already promoted → no-op
+    const entry = {
+      id: task.id || ('pin-' + k),
+      label: task.label,
+      meta: task.meta || '',
+      p: task.p || 2,
+      project: task.project || 'ops',
+      bucket: task._srcBucket || task.bucket || 'dueSoon',
+    };
+    setTop3Pins(prev => { const next = { ...prev, [k]: entry }; saveTop3Pins(next); return next; });
+    setTop3(prev => prev.some(t => normalizeTaskKey(t.label) === k) ? prev : [{ ...entry, _pinned: true, done: false }, ...prev]);
+  };
+  // Reverse a promotion — drop the pin; the task reappears in its source bucket.
+  const unpinTop3 = (label) => {
+    const k = normalizeTaskKey(label);
+    if (!k) return;
+    setTop3Pins(prev => { const next = { ...prev }; delete next[k]; saveTop3Pins(next); return next; });
+    setTop3(prev => prev.filter(t => normalizeTaskKey(t.label) !== k));
+  };
   uE(() => {
     const onTaskAdded    = (e) => addTask(e.detail || {});
     const onMeetingAdded = (e) => addMeeting(e.detail || {});
+    const onPromoteTop3  = (e) => promoteToTop3(e.detail || {});
+    const onUnpinTop3    = (e) => unpinTop3((e.detail && e.detail.label) || '');
     // Cross-tab sync: when another tab (e.g. Hammerspoon Quick Capture)
     // writes to localStorage, refresh user-added tasks from disk.
     const onStorage = (e) => {
@@ -1400,10 +1454,14 @@ function useDashboardState() {
     };
     window.addEventListener('dash:task-added', onTaskAdded);
     window.addEventListener('dash:meeting-added', onMeetingAdded);
+    window.addEventListener('dash:promote-top3', onPromoteTop3);
+    window.addEventListener('dash:unpin-top3', onUnpinTop3);
     window.addEventListener('storage', onStorage);
     return () => {
       window.removeEventListener('dash:task-added', onTaskAdded);
       window.removeEventListener('dash:meeting-added', onMeetingAdded);
+      window.removeEventListener('dash:promote-top3', onPromoteTop3);
+      window.removeEventListener('dash:unpin-top3', onUnpinTop3);
       window.removeEventListener('storage', onStorage);
     };
   }, []);
@@ -1490,14 +1548,18 @@ function useDashboardState() {
     setDoneStore(prev => { const n = { ...prev }; delete n[k]; try { localStorage.setItem(DONE_KEY, JSON.stringify(n)); } catch {} return n; });
   };
 
+  // A promoted task lives in `top3`; hide it from its source bucket so it never
+  // shows in two places at once.
+  const inBucket = (t) => !isHidden(t.label) && !isPinnedTop3(t.label);
   return {
     top3:    top3.filter(t => !isHidden(t.label)),
-    overdue: overdue.filter(t => !isHidden(t.label)),
-    dueSoon: dueSoon.filter(t => !isHidden(t.label)),
-    blocked: blocked.filter(t => !isHidden(t.label)),
+    overdue: overdue.filter(inBucket),
+    dueSoon: dueSoon.filter(inBucket),
+    blocked: blocked.filter(inBucket),
     calendar,
     shipped: (SEED.shipped || []).filter(s => !isHidden(s.title)),
     setTop3, toggleAny, addTask, addMeeting,
+    promoteToTop3, unpinTop3,
     dismissTask,
     restoreHidden,
     // backward-compat alias used by existing callers

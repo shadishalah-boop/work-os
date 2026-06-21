@@ -371,6 +371,10 @@ Due-soon / Blocked modules. Admin it two ways:
   tasks"*. The `dashboard-task` skill edits the file and re-renders instantly (no
   connectors, no full refresh).
 - **Edit the file directly** — each task is `{ "label", "bucket": top3|overdue|dueSoon|blocked, "p": 1-3, "project", "meta", "done" }`. See `templates/dashboard-tasks.local.example`.
+- **Drag it in** — grab any task row and drop it onto the **"What actually matters
+  today"** card to promote it into your Top-3. The promotion is saved locally and
+  survives reloads and `/dashboard` refreshes; hover the promoted item and click its
+  **×** to send it back to its original list.
 
 ### Edit static blocks
 
