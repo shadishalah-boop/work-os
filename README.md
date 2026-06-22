@@ -371,8 +371,9 @@ Due-soon / Blocked modules. Admin it two ways:
   tasks"*. The `dashboard-task` skill edits the file and re-renders instantly (no
   connectors, no full refresh).
 - **Edit the file directly** — each task is `{ "label", "bucket": top3|overdue|dueSoon|blocked, "p": 1-3, "project", "meta", "done" }`. See `templates/dashboard-tasks.local.example`.
-- **Drag it in** — grab any task row and drop it onto the **"What actually matters
-  today"** card to promote it into your Top-3. When the local server is running the
+- **Drag it in (or click ★)** — grab any task row and drop it onto the **"What actually
+  matters today"** card to promote it into your Top-3 — or just hover the row and click the
+  **★** button for the same result without dragging. When the local server is running the
   promotion is written back to `~/.claude/dashboard-tasks.local` (bucket `top3`), so
   it's **portable across machines and visible to Claude Code** — not just this browser.
   It survives reloads and `/dashboard` refreshes; hover the promoted item and click its

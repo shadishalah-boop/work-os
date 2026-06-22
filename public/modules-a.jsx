@@ -402,6 +402,13 @@ function TaskRow({ t, onToggle, onDismiss, okrApi, projectColor, bucket }) {
     e.dataTransfer.effectAllowed = 'copyMove';
   };
   const onDragEnd = () => { window.__dashDraggingTask = false; window.__dashDragTask = null; };
+  // One-click alternative to dragging: promote straight into Top-3. Same window
+  // event the drop zone fires, so it shares the persist/file-write-back path.
+  const promote = (e) => {
+    e.stopPropagation();
+    window.dispatchEvent(new CustomEvent('dash:promote-top3', { detail: {
+      label: t.label, meta: t.meta, p: t.p, project: t.project, _srcBucket: bucket } }));
+  };
   return (
     <div className={'task-row' + (t.done ? ' done' : '')}
          draggable={!t.done}
@@ -420,6 +427,14 @@ function TaskRow({ t, onToggle, onDismiss, okrApi, projectColor, bucket }) {
         {t.done
           ? <span className="done-flag" aria-label="Done">✓ done</span>
           : <span className="priority-flag" data-p={t.p}>P{t.p}</span>}
+        {!t.done && (
+          <button
+            className="task-promote"
+            onClick={promote}
+            title="Move to “What actually matters today”"
+            aria-label="Promote to today"
+          >★</button>
+        )}
         {onDismiss && !t.done && (
           <button
             className="task-dismiss"
@@ -428,7 +443,7 @@ function TaskRow({ t, onToggle, onDismiss, okrApi, projectColor, bucket }) {
             aria-label="Dismiss task"
           >×</button>
         )}
-        <img className="drag-grip" src="ds/assets/icons/drag-and-drop.svg" alt=""/>
+        <img className="drag-grip" src="ds/assets/icons/drag-and-drop.svg" alt="" title="Drag onto “What actually matters today”"/>
       </div>
     </div>
   );

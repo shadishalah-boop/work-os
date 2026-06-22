@@ -273,6 +273,17 @@ html[data-theme="dark"] body { background: var(--bg-page); color: var(--fg-1); }
 }
 .task-row:hover .drag-grip { opacity: 1; }
 
+/* Promote-to-Top-3 ★ button — hover-revealed; one-click alt to dragging the row. */
+.task-promote {
+  background: transparent; border: none; cursor: pointer;
+  color: var(--grey-400); font-size: 15px; line-height: 1;
+  padding: 2px 4px; border-radius: 6px;
+  opacity: 0; transition: opacity 140ms, color 140ms, background-color 140ms;
+}
+.task-row:hover .task-promote { opacity: 1; }
+.task-promote:hover { color: var(--accent); background: var(--accent-bg); }
+body[data-readonly="true"] .task-promote { display: none !important; }
+
 /* Dismiss × button — hover-revealed on task and ship rows */
 .task-dismiss {
   background: transparent;

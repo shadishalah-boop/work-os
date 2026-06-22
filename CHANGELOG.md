@@ -14,6 +14,22 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.15.3 — 2026-06-22
+
+**One-click promote, as a reliable alternative to dragging.** Native HTML5 drag-and-drop
+can be finicky depending on the browser/environment, so every open task row now also shows
+a hover-revealed **★** button that moves it straight into "What actually matters today" —
+no drag required. It fires the same event as the drop, so it shares the persistence +
+`dashboard-tasks.local` write-back path. Dragging still works; this is just a guaranteed
+path. (Bumped `modules-a.jsx?v=25`, `dashboard.css?v=29`.)
+
+> If neither the ★ nor the drag does anything, the browser is still running an **old
+> cached bundle**. The fix only takes effect once the plugin is updated to this version
+> *and* `/dashboard` is run (which re-syncs the bundle and bumps the script `?v=` so the
+> browser refetches). A plain tab reload alone won't pull new code.
+
+---
+
 ## v0.15.2 — 2026-06-22
 
 **Fix: drag-to-promote genuinely works now.** Two bugs kept v0.15.0/v0.15.1 from ever
