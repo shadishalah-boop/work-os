@@ -1441,19 +1441,36 @@ function useDashboardState() {
     // Code. localStorage above is the optimistic layer; no-op on file:// / offline.
     postPromote('promote', { label: entry.label, meta: entry.meta, p: entry.p, project: entry.project, srcBucket: entry.bucket });
   };
-  // Reverse a promotion — drop the pin; the task reappears in its source bucket.
-  const unpinTop3 = (label) => {
+  // Reverse: pull a task OUT of "What actually matters today" and back into Tasks.
+  // Works for any Top-3 item — a promotion made this session (localStorage pin), one
+  // restored from the task file after a refresh, OR the agent's own Top-3 pick.
+  const demoteFromTop3 = (item) => {
+    const label = item && item.label;
     const k = normalizeTaskKey(label);
     if (!k) return;
-    setTop3Pins(prev => { const next = { ...prev }; delete next[k]; saveTop3Pins(next); return next; });
     setTop3(prev => prev.filter(t => normalizeTaskKey(t.label) !== k));
-    postPromote('unpin', { label });
+    if (item._pinned) {
+      // Session promotion: just drop the pin — its source-bucket row (still in state)
+      // reappears in Tasks automatically once it's no longer filtered out.
+      setTop3Pins(prev => { const next = { ...prev }; delete next[k]; saveTop3Pins(next); return next; });
+    } else {
+      // File-/agent-sourced Top-3 item: it isn't in any bucket, so surface it in Due
+      // soon immediately (dedup-guarded inside the updater to avoid stale-state races).
+      setDueSoon(prev => prev.some(t => normalizeTaskKey(t.label) === k) ? prev : [{
+        id: item.id || ('demoted-' + k), label,
+        meta: item.meta || 'Moved from today', p: item.p || 2,
+        project: item.project || 'ops', done: false,
+      }, ...prev]);
+    }
+    // Persist: revert the file row if this was a promotion, else record a Top-3
+    // suppression so the agent's pick stays in Tasks across refreshes.
+    postPromote('demote', { label, meta: item.meta, p: item.p, project: item.project });
   };
   uE(() => {
     const onTaskAdded    = (e) => addTask(e.detail || {});
     const onMeetingAdded = (e) => addMeeting(e.detail || {});
     const onPromoteTop3  = (e) => promoteToTop3(e.detail || {});
-    const onUnpinTop3    = (e) => unpinTop3((e.detail && e.detail.label) || '');
+    const onDemoteTop3   = (e) => demoteFromTop3(e.detail || {});
     // Cross-tab sync: when another tab (e.g. Hammerspoon Quick Capture)
     // writes to localStorage, refresh user-added tasks from disk.
     const onStorage = (e) => {
@@ -1472,13 +1489,13 @@ function useDashboardState() {
     window.addEventListener('dash:task-added', onTaskAdded);
     window.addEventListener('dash:meeting-added', onMeetingAdded);
     window.addEventListener('dash:promote-top3', onPromoteTop3);
-    window.addEventListener('dash:unpin-top3', onUnpinTop3);
+    window.addEventListener('dash:demote-top3', onDemoteTop3);
     window.addEventListener('storage', onStorage);
     return () => {
       window.removeEventListener('dash:task-added', onTaskAdded);
       window.removeEventListener('dash:meeting-added', onMeetingAdded);
       window.removeEventListener('dash:promote-top3', onPromoteTop3);
-      window.removeEventListener('dash:unpin-top3', onUnpinTop3);
+      window.removeEventListener('dash:demote-top3', onDemoteTop3);
       window.removeEventListener('storage', onStorage);
     };
   }, []);

@@ -301,7 +301,22 @@ def load_manual_tasks():
     return out
 
 
+def load_demoted_top3():
+    """Labels the user pulled OUT of Top-3 (the dashboard's reverse button writes a
+    `demotedTop3` list into dashboard-tasks.local). Returned as a set of normalized
+    labels; build-overrides moves any matching Top-3 item back into Due soon."""
+    try:
+        data = json.loads((HOME / ".claude" / "dashboard-tasks.local").read_text())
+    except Exception:
+        return set()
+    arr = data.get("demotedTop3") if isinstance(data, dict) else None
+    if not isinstance(arr, list):
+        return set()
+    return {re.sub(r"\s+", " ", str(x).strip().lower()) for x in arr if str(x).strip()}
+
+
 MANUAL = load_manual_tasks()
+DEMOTED_TOP3 = load_demoted_top3()
 
 # Opt-in Notion task backend. When dashboard.tasks.backend == "notion", tasks come
 # ONLY from the Notion-synced file (dashboard-tasks.local), which the
@@ -342,12 +357,23 @@ else:
         (MANUAL["blocked"], "manual"), (safe(granola, "blocked"), "granola")
     )[:5]
 
+def _bucket_key(t):
+    return re.sub(r"\s+", " ", (t.get("label") or "").strip().lower())
+
+# User-demoted items: pull anything the user moved OUT of Top-3 back into Due soon, so
+# the reversal sticks across refreshes even for the agent's own Top-3 picks.
+if DEMOTED_TOP3:
+    _keep, _moved = [], []
+    for t in top3:
+        (_moved if _bucket_key(t) in DEMOTED_TOP3 else _keep).append(t)
+    top3 = _keep
+    duesoon_raw = [{**t, "p": t.get("p", 2), "meta": t.get("meta", "Moved from today")}
+                   for t in _moved] + duesoon_raw
+
 # Cross-bucket: a task promoted into Top-3 (e.g. dragged there on the dashboard, which
 # writes bucket:"top3" into dashboard-tasks.local) must not also linger in another
 # bucket. The live UI hides the duplicate via its localStorage pin, but a machine
 # without that pin relies on this. Exact normalized-label match; Top-3 wins.
-def _bucket_key(t):
-    return re.sub(r"\s+", " ", (t.get("label") or "").strip().lower())
 _top3_keys = {k for k in (_bucket_key(t) for t in top3) if k}
 if _top3_keys:
     overdue_raw = [t for t in overdue_raw if _bucket_key(t) not in _top3_keys]

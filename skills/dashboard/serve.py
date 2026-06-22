@@ -105,8 +105,10 @@ def _promote_task(action, task):
       action="promote": move an existing task into the top3 bucket (remembering its
         previous bucket), or append a new row for an agent-sourced task that isn't in
         the file yet (tagged so unpin can fully remove it).
-      action="unpin": reverse it — delete a row we added, or restore a moved task to
-        its previous bucket.
+      action="unpin"/"demote": reverse it — delete a row we added, or restore a moved
+        task to its previous bucket. For an agent's OWN top-3 pick (no file row), demote
+        records the label in `demotedTop3` so build-overrides keeps it out of Top-3 and
+        surfaces it in Tasks across refreshes.
     """
     label = (task.get("label") or "").strip()
     if not label:
@@ -131,6 +133,10 @@ def _promote_task(action, task):
     hit = next((t for t in items if isinstance(t, dict) and _task_key(t.get("label")) == key), None)
 
     if action == "promote":
+        # Promoting clears any earlier demotion of the same task.
+        dem = data.get("demotedTop3")
+        if isinstance(dem, list):
+            data["demotedTop3"] = [x for x in dem if _task_key(x) != key]
         if hit is None:
             items.append({
                 "label": label,
@@ -148,15 +154,25 @@ def _promote_task(action, task):
                 hit["prev_bucket"] = hit.get("bucket", "dueSoon")
             hit["bucket"] = "top3"
             hit["promoted"] = True
-    elif action == "unpin":
-        if hit is None:
-            return True, "nothing to unpin"          # idempotent
-        if hit.get("added_by") == "promote":
-            items[:] = [t for t in items if t is not hit]   # we added it → remove entirely
+    elif action in ("unpin", "demote"):
+        if hit is not None:
+            if hit.get("added_by") == "promote":
+                items[:] = [t for t in items if t is not hit]   # we added it → remove entirely
+            else:
+                hit["bucket"] = hit.get("prev_bucket") or "dueSoon"
+                hit.pop("promoted", None)
+                hit.pop("prev_bucket", None)
+        elif action == "demote":
+            # No file row → it's the agent's own Top-3 pick. Record a suppression so
+            # build-overrides moves it out of Top-3 and into Tasks on every refresh.
+            dem = data.get("demotedTop3")
+            if not isinstance(dem, list):
+                dem = []
+                data["demotedTop3"] = dem
+            if not any(_task_key(x) == key for x in dem):
+                dem.append(label)
         else:
-            hit["bucket"] = hit.get("prev_bucket") or "dueSoon"
-            hit.pop("promoted", None)
-            hit.pop("prev_bucket", None)
+            return True, "nothing to unpin"          # idempotent
     else:
         return False, f"unknown action: {action}"
 

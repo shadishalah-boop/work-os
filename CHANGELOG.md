@@ -14,6 +14,26 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.15.4 — 2026-06-22
+
+**Reverse it: move any task out of "What actually matters today" back to Tasks.** The
+reverse control (now a **↩** on every Top-3 row, hover-revealed) previously only showed on
+items promoted in the current browser session, so after a refresh — or for the agent's own
+Top-3 picks — there was no way back. Now it works for all three cases and persists:
+
+- **Session promotion** (localStorage pin) → drops the pin; the task returns to its source
+  bucket.
+- **Promotion restored from the task file** (after a refresh) → the file row is reverted
+  (removed if we added it, or moved back to its previous bucket).
+- **The agent's own Top-3 pick** → recorded in a new `demotedTop3` list in
+  `dashboard-tasks.local`; `build-overrides.py` then moves it out of Top-3 and into Due soon
+  on every refresh, so the reversal sticks. Re-promoting later clears the demotion.
+
+Server `/promote-task` gains a `demote` action; the frontend surfaces the item in Tasks
+immediately. (Bumped `modules-a.jsx?v=26`, `app.jsx?v=63`.)
+
+---
+
 ## v0.15.3 — 2026-06-22
 
 **One-click promote, as a reliable alternative to dragging.** Native HTML5 drag-and-drop

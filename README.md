@@ -376,8 +376,10 @@ Due-soon / Blocked modules. Admin it two ways:
   **★** button for the same result without dragging. When the local server is running the
   promotion is written back to `~/.claude/dashboard-tasks.local` (bucket `top3`), so
   it's **portable across machines and visible to Claude Code** — not just this browser.
-  It survives reloads and `/dashboard` refreshes; hover the promoted item and click its
-  **×** to send it back to its original list.
+  It survives reloads and `/dashboard` refreshes. **To reverse it**, hover any item in
+  "What actually matters today" and click the **↩** button — it moves back to Tasks. This
+  works for anything in Top-3 (your promotions *and* the agent's own picks) and sticks
+  across refreshes.
 
 ### Edit static blocks
 

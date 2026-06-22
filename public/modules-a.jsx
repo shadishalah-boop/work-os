@@ -358,11 +358,10 @@ function Top3({ data, onToggle, density, okrApi }) {
               </div>
               <div style={{display:'flex', alignItems:'center', gap:8}}>
                 <OkrTagger label={it.label} meta={it.meta} okrApi={okrApi}/>
-                {it._pinned && (
-                  <button className="top3-unpin" title="Remove from today (back to Tasks)"
-                          aria-label="Remove from today"
-                          onClick={(e) => { e.stopPropagation(); window.dispatchEvent(new CustomEvent('dash:unpin-top3', { detail: { label: it.label } })); }}>×</button>
-                )}
+                <button className="top3-unpin" title="Move back to Tasks"
+                        aria-label="Move back to Tasks"
+                        onClick={(e) => { e.stopPropagation(); window.dispatchEvent(new CustomEvent('dash:demote-top3', { detail: {
+                          label: it.label, meta: it.meta, p: it.p, project: it.project, id: it.id, _pinned: !!it._pinned } })); }}>↩</button>
                 <div className="top3-check" onClick={() => onToggle(it.id)} role="button" aria-label={it.done ? 'Mark incomplete' : 'Mark complete'}/>
               </div>
             </div>
