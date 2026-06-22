@@ -33,6 +33,7 @@ import json
 import os
 import re
 import shlex
+import socket
 import subprocess
 import sys
 import tempfile
@@ -688,6 +689,20 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         return super().do_GET()
 
 
+class _ThreadingHTTPServerV6(http.server.ThreadingHTTPServer):
+    """IPv6 variant so the `localhost` bookmark works when it resolves to ::1."""
+    address_family = socket.AF_INET6
+
+
 if __name__ == "__main__":
     os.makedirs(DASH_DIR, exist_ok=True)
+    # Serve on BOTH loopback stacks (IPv4 127.0.0.1 + IPv6 ::1) on the same port, so
+    # http://localhost:<port> works regardless of whether `localhost` resolves to
+    # 127.0.0.1 or ::1. Loopback-only — never exposed to the network. If IPv6 is
+    # unavailable, the IPv4 listener below still serves everything.
+    try:
+        v6 = _ThreadingHTTPServerV6(("::1", PORT), Handler)
+        threading.Thread(target=v6.serve_forever, daemon=True).start()
+    except OSError:
+        pass  # no IPv6 loopback — IPv4 below covers it
     http.server.ThreadingHTTPServer(("127.0.0.1", PORT), Handler).serve_forever()

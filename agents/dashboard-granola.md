@@ -88,7 +88,7 @@ A dead source should cost **one or two** calls, not a retry spiral.
    the same commitment must appear once. Reflect the origin in each item's `meta`
    (e.g. `Zoom · Acme sync · today`, `Granola+Zoom · pricing review`).
 3. Extract **action items assigned to the user** (spoken by him as a commitment, or explicitly assigned to him in notes). For each, classify:
-   - `top3` — the 3 highest-leverage items due today or tomorrow (visible stakeholder pressure + concrete deliverable)
+   - `top3` — up to 3 of the highest-leverage items due today or tomorrow (visible stakeholder pressure + concrete deliverable). **Group by project/initiative:** if two or more of your top-3 candidates belong to the **same project or workstream** (e.g. two Unico-partnership steps), combine them into a **single** line covering both deliverables (e.g. "Onboard to Unico: join Slack + review materials, then draft project plan") rather than listing them separately — one project occupies at most one top-3 line.
    - `overdue` — deadline already passed, still open
    - `dueSoon` — deadline within 7 days, not yet overdue
    - `blocked` — the user is waiting on someone else (a counterparty's proposal, a contract, legal clarification, etc.)
@@ -154,7 +154,7 @@ permission prompt. Schema:
 - `icon` (blockers) — `!` for high severity, `•` for medium.
 
 ## Rules
-- **Cap**: top3 exactly 3 items · overdue ≤3 · dueSoon ≤8 · blocked ≤5 · projects ≤8 · blockers ≤5 · decisions ≤5.
+- **Cap**: top3 up to 3 items (fewer is fine — one line per project after same-project grouping) · overdue ≤3 · dueSoon ≤8 · blocked ≤5 · projects ≤8 · blockers ≤5 · decisions ≤5.
 - **Dedupe**: if the same commitment surfaces across multiple meetings, keep the most recent mention and collapse.
 - **Only include items where the user is the assignee**. Meetings often have action items for others — skip those.
 - **Keep labels ≤70 chars** — the dashboard truncates anyway.

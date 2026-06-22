@@ -163,6 +163,20 @@ treats its **first** call to a *resolved* tool as the liveness check and bails o
 - Applies to calendar, gmail, drive, granola, metrics, and slack. Wellness is unaffected
   (it makes no MCP calls). A down source no longer slows the whole refresh.
 
+Also shipped in 0.14.5 (**dual-stack local server + same-project grouping**):
+
+- **`serve.py` now listens on both loopback stacks** — IPv4 `127.0.0.1` *and* IPv6
+  `::1` — on the same port. A `http://localhost:<port>` bookmark broke when the OS
+  resolved `localhost` to `::1` (the server only bound IPv4), leaving that tab stuck
+  on stale data while `http://127.0.0.1:<port>` updated. Now both names work. Still
+  loopback-only (never exposed to the network); falls back to IPv4-only if a machine
+  has no IPv6.
+- **Top-3 groups by project.** The granola agent now combines multiple top-3
+  candidates from the **same project/initiative** into a single line (one project →
+  at most one "matters today" line), and the cap relaxed from "exactly 3" to "up to
+  3." Two near-duplicate steps of the same workstream (e.g. "join Unico Slack" +
+  "draft Unico project plan") now render as one item.
+
 ---
 
 ## v0.14.4 — 2026-06-18
