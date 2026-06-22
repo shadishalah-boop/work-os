@@ -14,6 +14,15 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.16.1 — 2026-06-22
+
+**Reverted v0.16.0 (warm auto-refresh / `schedule.sh warm` + docs).** It added an opt-in
+`/loop` setup helper but didn't speed up the refresh anyone actually runs, so it's removed.
+The granola→haiku fan-out speedup from v0.15.7 stays. (Net: `schedule.sh` is back to its
+prior commands; the automation docs revert to their prior wording.)
+
+---
+
 ## v0.15.7 — 2026-06-22
 
 **Refresh speed — the functionality-neutral wins.** Two changes that make refreshes faster
