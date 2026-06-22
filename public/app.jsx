@@ -1593,7 +1593,7 @@ function useDashboardState() {
     calendar,
     shipped: (SEED.shipped || []).filter(s => !isHidden(s.title)),
     setTop3, toggleAny, addTask, addMeeting,
-    promoteToTop3, unpinTop3,
+    promoteToTop3, demoteFromTop3,
     dismissTask,
     restoreHidden,
     // backward-compat alias used by existing callers

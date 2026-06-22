@@ -14,6 +14,17 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.15.5 — 2026-06-22
+
+**Hotfix: blank dashboard after v0.15.4.** The reverse refactor renamed `unpinTop3` →
+`demoteFromTop3` but left a stale `unpinTop3` reference in the state object that
+`useDashboardState()` returns. That threw a `ReferenceError` on every render, so React
+rendered nothing — a blank page. Fixed the reference; bumped `app.jsx?v=64` so browsers
+refetch the corrected script. (Babel only catches syntax errors, not references to an
+undefined name, which is why the earlier parse check passed.)
+
+---
+
 ## v0.15.4 — 2026-06-22
 
 **Reverse it: move any task out of "What actually matters today" back to Tasks.** The
