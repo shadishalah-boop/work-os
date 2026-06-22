@@ -32,7 +32,7 @@ if [ -z "$EXPECTED" ]; then
 fi
 
 TIMEOUT_S=300       # hard cap: 5 minutes
-POLL_INTERVAL=2
+POLL_INTERVAL=1     # detect agent completion within ~1s (was 2s)
 deadline=$(( $(date +%s) + TIMEOUT_S ))
 all_ready=false
 

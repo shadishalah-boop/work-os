@@ -14,6 +14,28 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.15.7 — 2026-06-22
+
+**Refresh speed — the functionality-neutral wins.** Two changes that make refreshes faster
+without changing what the dashboard shows or how it behaves:
+
+- **`granola` agent runs on haiku** (it was silently inheriting sonnet). It's a task-
+  extraction agent like `gmail`/`calendar`, which already run on haiku — same JSON output,
+  same cards, just faster. Since the agent fan-out's wall-time is bounded by its slowest
+  member and granola is often that member, this is the biggest safe win.
+- **`wait-and-merge.sh` polls every 1s instead of 2s**, so a finished fan-out is detected
+  ~1s sooner.
+
+Deliberately **not** changed (each would trade correctness/quality/robustness, i.e. touch
+functionality): `metrics` stays on sonnet (haiku risks wrong nl→SQL → wrong numbers); the
+wellness weekly-message stays LLM-crafted (a Python template would flatten it); Slack stays
+sequentially tool-resolved (parallelizing it would drop the connector-name fallback); the
+orchestrator stays on sonnet (haiku would weaken Slack synthesis). The real path to ~30s
+is refreshing from a warm, already-authenticated session (a Claude Code scheduled task)
+rather than the cold headless subprocess, which pays ~20s of MCP startup every run.
+
+---
+
 ## v0.15.6 — 2026-06-22
 
 **Fix: checking one Top-3 task marked them all done.** Every task bucket gets fresh unique

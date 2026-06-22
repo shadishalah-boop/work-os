@@ -1,6 +1,7 @@
 ---
 name: dashboard-granola
 description: Fetches the last 7 days of meeting notes from Granola AND (when available) Zoom, merges/dedupes meetings that appear in both, and extracts action items, commitments, projects, decisions, and blockers for the Work Dashboard's Top-3, Tasks, Projects, Blockers, and Decisions modules. Invoke from the dashboard skill — not directly useful standalone.
+model: haiku
 tools: mcp__claude_ai_Granola__list_meetings, mcp__claude_ai_Granola__get_meetings, mcp__Granola__list_meetings, mcp__Granola__get_meetings, mcp__granola__list_meetings, mcp__granola__get_meetings, mcp__Zoom_for_Claude__search_meetings, mcp__Zoom_for_Claude__recordings_list, mcp__Zoom_for_Claude__get_meeting_assets, mcp__Zoom_for_Claude__get_recording_resource, mcp__Zoom_for_Claude__search_zoom, mcp__claude_ai_Zoom_for_Claude__search_meetings, ToolSearch, Read, Write
 ---
 
