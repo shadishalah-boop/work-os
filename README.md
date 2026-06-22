@@ -308,38 +308,28 @@ session because that's where your claude.ai-managed connectors live. So:
   alternative: add rules like `mcp__claude_ai_Google_Calendar__list_events`,
   `mcp__claude_ai_Gmail__search_threads`,
   `mcp__claude_ai_Slack__slack_search_public_and_private` to `permissions.allow`.)
-- **Warm auto-refresh (recommended, fastest).** One command sets it up:
-  ```bash
-  bash <plugin>/skills/dashboard/schedule.sh warm --every 30m
-  ```
-  It applies the allow-rules, then prints a `/loop` command to paste in an open
-  Claude Code session:
-  ```
-  /loop 30m /work-os:dashboard
-  ```
-  Because this runs *inside* your already-authenticated session it **skips the ~20s
-  headless cold-start every run, has your claude.ai connectors available, and writes
-  to your local dashboard.** The trade: it runs only while that session stays open
-  (re-paste after reopening Claude Code). This is the path to a ~30s refresh.
-- **Unattended (machine/session closed): a cloud Routine.** Create one at
-  [claude.ai/code/routines](https://claude.ai/code/routines) with a *Schedule* trigger
-  and a prompt like *"Run /work-os:dashboard"*. Your connectors are included — but a
-  routine runs on Anthropic's cloud and **can't write to your local dashboard files**,
-  so it's only useful if you adapt the flow to publish results somewhere your machine
-  reads. For a local dashboard, prefer the warm `/loop` above.
-- **Reminders (when Claude Code is closed):** a notification at set times nudging you to
-  run `/dashboard` (a nudge, not an auto-fetch):
+- **Automatic refresh while Claude Code is open.** Every automated refresh needs an
+  open Claude Code session (that's where the connectors live), so all of these run
+  while the app is open. Two ways:
+  - **Exact times** — a **Claude Code scheduled task** running `/work-os:dashboard` at
+    e.g. 9:00 / 14:00 / 17:00. Fires at those times while Claude Code is open. (Session
+    scheduled tasks may auto-expire ~7 days and need re-arming.)
+  - **Never expires** — a **`/loop`**: `/loop 3h /work-os:dashboard` refreshes every
+    few hours for as long as the session stays open, no re-arming. Best if you keep
+    Claude Code open during the day and don't need exact clock times.
+
+  Run `allowlist.sh` first so the automated refresh never stops on a prompt.
+- **Reminders (works even when Claude Code is closed):** a notification at set times
+  nudging you to run `/dashboard` (a nudge, not an auto-fetch):
   ```bash
   bash <plugin>/skills/dashboard/schedule.sh remind --times "09:00 14:00 17:00"
   bash <plugin>/skills/dashboard/schedule.sh unremind
   ```
 
-> **Why not a launchd/cron `claude -p` job?** A raw `claude -p` subprocess does **not**
-> load your claude.ai-managed connectors (they require an interactive, claude.ai-
-> authenticated session), so it can't fetch Calendar/Gmail/Slack/etc. The deprecated
-> `schedule.sh install` path is the launchd/cron `claude -p` runner — useful only if
-> your connectors are local `claude mcp add` servers. For managed connectors, use the
-> warm `/loop` (local) or a cloud Routine (unattended).
+> A launchd/cron job that spawns a fresh `claude -p` is a *different* thing from a
+> Claude Code scheduled task — the raw subprocess may not carry your claude.ai
+> connectors, so prefer the scheduled task. (`schedule.sh install` is the launchd/cron
+> path, useful only if your connectors load headlessly.)
 
 ## Uninstalling
 

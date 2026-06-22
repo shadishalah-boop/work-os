@@ -32,14 +32,11 @@ React-in-browser dashboard. All per-user identity and paths come from
 > **Why in-session?** claude.ai-managed MCP connectors (named like
 > `claude_ai_Google_Calendar`, `claude_ai_Slack`) live in the Claude Code session
 > context, not in a raw `claude -p` subprocess spawned by launchd/cron. So the refresh
-> runs here, in the session. **To automate it (warm, fastest):** run
-> `bash ${CLAUDE_PLUGIN_ROOT}/skills/dashboard/schedule.sh warm` once (it applies the
-> allow-rules and prints a `/loop 30m /work-os:dashboard` command). The `/loop` runs the
-> refresh inside this authenticated session on an interval — no `claude -p` cold-start,
-> connectors available, writes locally — while the session stays open. The deprecated
-> `refresh-headless.sh` (raw `claude -p`) does NOT carry claude.ai connectors, so it
-> can't fetch them; for unattended runs a cloud Routine has connectors but writes to the
-> cloud, not your local dashboard. Prefer the in-session flow below / the warm `/loop`.
+> runs here, in the session. **To automate it**, a *Claude Code scheduled task* that
+> runs `/work-os:dashboard` works great — it executes in an authenticated session, so
+> the connectors are available (run `allowlist.sh` first so it doesn't stop on a
+> prompt). The deprecated `refresh-headless.sh` (raw `claude -p`) is the thing that may
+> not carry the connectors — prefer the in-session flow below / a scheduled task.
 >
 > **First-run prompts:** the first refresh asks you to approve each connector tool
 > once — choose **"don't ask again"** and subsequent refreshes are prompt-free. To
