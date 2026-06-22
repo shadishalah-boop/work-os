@@ -14,6 +14,36 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.16.0 — 2026-06-22
+
+**Warm auto-refresh — the real path to a ~30s refresh.** New one-liner:
+
+```bash
+bash <plugin>/skills/dashboard/schedule.sh warm [--every 30m]
+```
+
+It applies the read-only allow-rules and prints a `/loop 30m /work-os:dashboard`
+command to paste into an open Claude Code session. Running the refresh *inside* your
+already-authenticated session (instead of the headless `claude -p` subprocess) skips
+the **~20s MCP cold-start every run**, keeps your **claude.ai connectors available**,
+and writes to your **local dashboard** — it just needs the session left open.
+
+Docs corrected to match how Claude Code actually scopes connectors:
+
+- A raw `claude -p` subprocess (the launchd/cron `schedule.sh install` path) does **not**
+  load claude.ai-managed connectors, so it can't fetch Calendar/Gmail/Slack/etc. — only
+  useful for local `claude mcp add` servers.
+- Cloud **Routines** (claude.ai/code/routines) *do* have your connectors and run
+  unattended, but execute in the cloud and can't write to your local dashboard files —
+  so for a local view, the warm `/loop` is the right choice.
+- `schedule.sh status` now points at the warm path.
+
+Pairs with v0.15.7 (granola on haiku): a warm refresh with the lighter fan-out is where
+the everyday ~30s target is realistic. A full cold refresh is still bounded by Drive's
+single 30–45s API call.
+
+---
+
 ## v0.15.7 — 2026-06-22
 
 **Refresh speed — the functionality-neutral wins.** Two changes that make refreshes faster

@@ -9,6 +9,7 @@
 # Usage:
 #   bash schedule.sh serve [PORT]                          # permanent localhost server (default 8787)
 #   bash schedule.sh unserve                               # stop & remove the server
+#   bash schedule.sh warm [--every 30m]                    # WARM in-session auto-refresh (allowlist + /loop cmd)
 #   bash schedule.sh remind [--times "09:00 14:00 17:00"]  # notify at times to run /dashboard
 #   bash schedule.sh unremind                              # remove reminders
 #   bash schedule.sh install [--times "08:00 13:00"]       # headless auto-refresh (headless-capable connectors only)
@@ -113,6 +114,43 @@ unremind() {
   else
     echo "No reminders installed."
   fi
+}
+
+# --------------------------------------------------------------------------
+# warm — set up the WARM, in-session auto-refresh (the fast path).
+#
+# A `/loop` runs /work-os:dashboard on an interval INSIDE your already-open,
+# already-authenticated Claude Code session. Versus the headless button/launchd
+# refresh this:
+#   • skips the ~20s `claude -p` cold-start every run, and
+#   • actually has your claude.ai-managed connectors (Calendar/Gmail/Slack/…),
+#     which a raw `claude -p` subprocess does NOT load, and
+#   • writes straight to your LOCAL dashboard files.
+# The trade: it runs only while that Claude Code session stays open.
+#
+# A script can't start a `/loop` inside your session for you, so this applies the
+# allow-rules (so the loop never stops on a permission prompt) and prints the one
+# command to paste.
+# --------------------------------------------------------------------------
+warm() {
+  local every="${1:-30m}"
+  [[ "$every" =~ ^[0-9]+[mh]$ ]] || { echo "warm: bad interval '$every' (use e.g. 30m or 2h)" >&2; exit 2; }
+  echo "Applying read-only allow-rules so the looped refresh never stops on a prompt…"
+  bash "$SCRIPT_DIR/allowlist.sh"
+  echo ""
+  echo "✅ Warm auto-refresh is ready. In an OPEN Claude Code session, paste:"
+  echo ""
+  echo "    /loop $every /work-os:dashboard"
+  echo ""
+  echo "→ Refreshes every $every with NO headless cold-start (~20s saved per run),"
+  echo "  with your claude.ai connectors available, writing to your local dashboard."
+  echo "  Runs while that session stays open; re-paste it after reopening Claude Code."
+  echo ""
+  echo "Unattended (machine/session closed)? Create a cloud Routine at"
+  echo "https://claude.ai/code/routines — Schedule trigger + a prompt like"
+  echo "\"Run /work-os:dashboard\". Connectors are included, BUT a routine runs in the"
+  echo "cloud and can't write to your local dashboard files — so for a local view,"
+  echo "the /loop above is the right choice."
 }
 
 # --------------------------------------------------------------------------
@@ -291,6 +329,8 @@ status_all() {
     [ -f "$PLIST" ] && echo "installed ($LABEL)" || echo "not installed"
   fi
   command -v crontab >/dev/null 2>&1 && crontab -l 2>/dev/null | grep "$CRON_TAG" || true
+  echo "— warm auto-refresh (recommended) —"
+  echo "in-session /loop — set up with: bash $SCRIPT_DIR/schedule.sh warm [--every 30m]"
   echo "— last refresh log ($LOG) —"
   tail -5 "$LOG" 2>/dev/null || echo "(no log yet)"
 }
@@ -301,9 +341,11 @@ shift || true
 
 TIMES="08:00 13:00"   # default for `install`
 TIMES_SET=""          # set only if the user passed --times (so `remind` can use its own default)
+EVERY="30m"           # default interval for `warm`
 while [ $# -gt 0 ]; do
   case "$1" in
     --times) TIMES="${2:?--times needs a value like \"09:00 14:00 17:00\"}"; TIMES_SET="$2"; shift 2 ;;
+    --every) EVERY="${2:?--every needs a value like 30m or 2h}"; shift 2 ;;
     *) break ;;
   esac
 done
@@ -311,6 +353,7 @@ done
 case "$CMD" in
   serve)    serve "${1:-}" ;;
   unserve)  unserve ;;
+  warm)     warm "$EVERY" ;;
   remind)   remind "${TIMES_SET:-}" ;;
   unremind) unremind ;;
   install)
@@ -321,5 +364,5 @@ case "$CMD" in
     echo "Log: $LOG · check with: bash $SCRIPT_DIR/schedule.sh status" ;;
   uninstall) uninstall_all ;;
   status)    status_all ;;
-  *) echo "usage: schedule.sh serve [PORT] | unserve | remind [--times \"09:00 14:00 17:00\"] | unremind | install [--times \"...\"] | uninstall | status" >&2; exit 2 ;;
+  *) echo "usage: schedule.sh serve [PORT] | unserve | warm [--every 30m] | remind [--times \"09:00 14:00 17:00\"] | unremind | install [--times \"...\"] | uninstall | status" >&2; exit 2 ;;
 esac
