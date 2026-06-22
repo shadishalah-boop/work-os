@@ -14,6 +14,25 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.15.6 — 2026-06-22
+
+**Fix: checking one Top-3 task marked them all done.** Every task bucket gets fresh unique
+IDs at merge time (overdue→`o{i}`, dueSoon→`d{i}`, …) — except **Top-3, which kept its
+source IDs**. The done-toggle matches by ID, so whenever two Top-3 rows arrived with the
+same (or missing) ID — e.g. several dragged-in/agent items — checking one flipped all of
+them. Fixed in three places:
+
+- `build-overrides.py` now assigns Top-3 unique `top{i}` IDs like every other bucket.
+- The frontend de-collides Top-3 IDs at load (so a plain reload fixes an already-built
+  `data-override.jsx` without a re-merge).
+- Promoted pins now always get a label-derived `pin-<label>` ID, guaranteed unique among
+  Top-3 rows.
+
+(IDs are ephemeral; persistence is keyed by label, so reassigning them is safe. Bumped
+`app.jsx?v=65`.)
+
+---
+
 ## v0.15.5 — 2026-06-22
 
 **Hotfix: blank dashboard after v0.15.4.** The reverse refactor renamed `unpinTop3` →

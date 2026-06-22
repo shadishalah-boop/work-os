@@ -1268,10 +1268,22 @@ function useDashboardState() {
   const _pinnedKeys = new Set(Object.keys(_initPins));
   const _pinnedRows = Object.values(_initPins).map(p => ({ ...p, _pinned: true }));
   const [top3Pins, setTop3Pins] = uS(_initPins);
-  const [top3, setTop3] = uS([
+  // Guarantee every Top-3 row has a UNIQUE id. The done-toggle matches by id, so a
+  // duplicate/missing id (e.g. an older data-override.jsx built before ids were
+  // normalized) would make checking one item flip all of them. De-collide here so a
+  // plain reload fixes it without waiting for a re-merge.
+  const _rawTop3 = [
     ..._pinnedRows,
     ...((SEED.top3 || []).filter(t => !_pinnedKeys.has(normalizeTaskKey(t.label)))),
-  ]);
+  ];
+  const _seenTop3Ids = new Set();
+  const _initTop3 = _rawTop3.map((t, i) => {
+    let id = t.id || ('top' + (i + 1));
+    while (_seenTop3Ids.has(id)) id += '_' + i;
+    _seenTop3Ids.add(id);
+    return t.id === id ? t : { ...t, id };
+  });
+  const [top3, setTop3] = uS(_initTop3);
   const isPinnedTop3 = (label) => normalizeTaskKey(label) in top3Pins;
   const [overdue, setOverdue] = uS([..._userTasks.overdue, ...(SEED.overdue || [])]);
   const [dueSoon, setDueSoon] = uS([..._userTasks.dueSoon, ...(SEED.dueSoon || [])]);
@@ -1427,7 +1439,7 @@ function useDashboardState() {
     const k = normalizeTaskKey(task && task.label);
     if (!k || (k in top3Pins)) return; // empty or already promoted → no-op
     const entry = {
-      id: task.id || ('pin-' + k),
+      id: 'pin-' + k,   // label-derived → always unique among Top-3 rows
       label: task.label,
       meta: task.meta || '',
       p: task.p || 2,

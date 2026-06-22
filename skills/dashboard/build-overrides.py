@@ -380,6 +380,12 @@ if _top3_keys:
     duesoon_raw = [t for t in duesoon_raw if _bucket_key(t) not in _top3_keys]
     blocked     = [t for t in blocked if _bucket_key(t) not in _top3_keys]
 
+# Top-3 is the one bucket that historically kept its source IDs; if two items
+# arrived with the same (or missing) id, the dashboard's done-toggle — which matches
+# by id — would flip all of them at once. Give it fresh unique ids like every other
+# bucket. (Persistence is keyed by label, not id, so reassigning is safe.)
+top3 = [{**item, "id": f"top{i+1}"} for i, item in enumerate(top3)]
+
 overdue = []
 for i, item in enumerate(overdue_raw[:5]):
     o = dict(item); o["id"] = f"o{i+1}"; overdue.append(o)
