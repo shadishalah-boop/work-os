@@ -258,10 +258,11 @@ function Module({ title, count, sub, action, actionHref, onAction, right, icon, 
 function useDraggable(initial) {
   const [items, setItems] = useState(initial);
   const dragId = useRef(null);
-  // External task promotions (dragged from the Tasks card) carry this MIME type.
+  // External task promotions (dragged from the Tasks card) set a global flag.
   // The internal reorder handlers ignore them so the drag bubbles up to the
   // Top-3 card's own drop zone instead of triggering a spurious reorder.
-  const isExternal = (e) => Array.from(e.dataTransfer.types || []).includes('application/x-dash-task');
+  const isExternal = (e) => window.__dashDraggingTask === true
+    || Array.from(e.dataTransfer.types || []).includes('application/x-dash-task');
   const onDragStart = (id) => (e) => { dragId.current = id; e.dataTransfer.effectAllowed = 'move'; };
   const onDragOver  = (id) => (e) => { if (isExternal(e)) return; e.preventDefault(); e.currentTarget.classList.add('drag-over'); };
   const onDragLeave = (e) => { e.currentTarget.classList.remove('drag-over'); };
@@ -289,7 +290,10 @@ function Top3({ data, onToggle, density, okrApi }) {
   // Drop zone: a task dragged from the Tasks card (carrying the x-dash-task MIME
   // type) is promoted into Top-3 via a window event the dashboard state listens for.
   const [dropping, setDropping] = useState(false);
-  const isTaskDrag = (e) => Array.from(e.dataTransfer.types || []).includes('application/x-dash-task');
+  // Key off the global flag set by TaskRow's dragstart (cross-browser reliable),
+  // falling back to the custom MIME type if present.
+  const isTaskDrag = (e) => window.__dashDraggingTask === true
+    || Array.from(e.dataTransfer.types || []).includes('application/x-dash-task');
   const onZoneDragOver = (e) => {
     if (!isTaskDrag(e) || document.body.dataset.readonly === 'true') return;
     e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setDropping(true);
@@ -300,7 +304,8 @@ function Top3({ data, onToggle, density, okrApi }) {
     e.preventDefault(); setDropping(false);
     if (document.body.dataset.readonly === 'true') return;
     let task = null;
-    try { task = JSON.parse(e.dataTransfer.getData('application/x-dash-task')); } catch {}
+    try { const raw = e.dataTransfer.getData('application/x-dash-task'); if (raw) task = JSON.parse(raw); } catch {}
+    if (!task) task = window.__dashDragTask || null; // payload stash (Safari getData quirks)
     if (task && task.label) window.dispatchEvent(new CustomEvent('dash:promote-top3', { detail: task }));
   };
   const openCount = drag.items.filter(i => !i.done).length;
@@ -385,16 +390,23 @@ function TaskRow({ t, onToggle, onDismiss, okrApi, projectColor, bucket }) {
   const onDragStart = (e) => {
     if (document.body.dataset.readonly === 'true') { e.preventDefault(); return; }
     const payload = { id: t.id, label: t.label, meta: t.meta, p: t.p, project: t.project, _srcBucket: bucket };
+    // Global flag + stashed payload: dataTransfer.types isn't reliably readable
+    // during `dragover` in every browser (notably Safari), so the Top-3 drop zone
+    // keys off this instead of the custom MIME type.
+    window.__dashDraggingTask = true;
+    window.__dashDragTask = payload;
     try {
       e.dataTransfer.setData('application/x-dash-task', JSON.stringify(payload));
       e.dataTransfer.setData('text/plain', t.label || '');
     } catch {}
     e.dataTransfer.effectAllowed = 'copyMove';
   };
+  const onDragEnd = () => { window.__dashDraggingTask = false; window.__dashDragTask = null; };
   return (
     <div className={'task-row' + (t.done ? ' done' : '')}
          draggable={!t.done}
-         onDragStart={onDragStart}>
+         onDragStart={onDragStart}
+         onDragEnd={onDragEnd}>
       <div className="task-tick" data-done={t.done} onClick={() => onToggle(t.id)} role="button" aria-label="Toggle"/>
       <div className="task-body">
         <div className="task-title"><TextWithPeople text={t.label}/></div>

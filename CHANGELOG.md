@@ -14,6 +14,27 @@ Local timestamped backups also live at `~/Documents/Claude/backups/work-os-vX.Y.
 
 ---
 
+## v0.15.2 — 2026-06-22
+
+**Fix: drag-to-promote genuinely works now.** Two bugs kept v0.15.0/v0.15.1 from ever
+working in the browser:
+
+1. **Stale cached JS (the big one).** The dashboard cache-busts its scripts with `?v=N`
+   in the HTML, but v0.15.0/v0.15.1 changed `app.jsx` / `modules-a.jsx` / `dashboard.css`
+   without bumping those numbers — so browsers kept serving the *old* cached bundle that
+   had no drag code at all. Bumped `modules-a.jsx?v=24`, `app.jsx?v=62`, `dashboard.css?v=28`.
+2. **`dataTransfer.types` during `dragover`.** The Top-3 drop zone only called
+   `preventDefault()` (which is what *allows* a drop) when the custom `application/x-dash-task`
+   MIME type was visible during `dragover` — but Safari and some setups don't expose custom
+   types until `drop`, so the drop was silently rejected. Now a global flag set on the task
+   row's `dragstart` (with the payload stashed as a fallback) drives the zone, which is
+   reliable across browsers.
+
+If a drag still doesn't take after updating, re-run `/dashboard` so the bundle re-syncs
+(the `?v=` bump then forces the browser to fetch the new scripts).
+
+---
+
 ## v0.15.1 — 2026-06-21
 
 **Top-3 promotions are now portable, not just browser-local.** A dragged-in promotion
